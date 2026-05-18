@@ -1,31 +1,23 @@
 cff-version: 1.0.1
 message: Please cite this software using these metadata.
-title: 
+title: MontaControl
 authors:
-  - family-names: 
-    given-names: 
-  - family-names: 
-    given-names: 
-  - family-names: 
-    given-names: 
-  - family-names: 
-    given-names: 
-  - family-names: 
-    given-names: 
-  - family-names: 
-    given-names:
+  - family-names: Salles de Oliveira
+    given-names: Vinicius
+  - family-names: Dias Pinto
+    given-names: David
   - name-suffix: Professor
     affiliation: PUC Minas
-    family-names: 
-    given-names: 
+    family-names: Vilela Cardoso
+    given-names: Lenardo
   - name-suffix: Professor
     affiliation: PUC Minas
-    family-names: 
-    given-names: 
+    family-names: Pedro Oliveira Batisteli
+    given-names: João
 keywords:
-  - 
-  - 
-repository-code: 
+  - Controle de peças
+  - Montadora
+repository-code: https://github.com/ICEI-PUC-Minas-PMGES-TI/pmg-es-2026-1-tcci-6583100-dev-montacontrol-3
 license: CC-BY-4.0
 version: 1.0.0
-date-released: 2022-07-14
+date-released: 2026-05-17
