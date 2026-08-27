@@ -1,0 +1,380 @@
+// Schema Prisma do MontaControl — 20 entidades em 7 domínios de negócio.
+// Fonte: DER (Figura 38) e Glossário (Seção 5) do Documento de Projeto v1.7.
+//
+// Autenticação delegada ao Supabase Auth (GoTrue): `usuario` não guarda hash
+// de senha, apenas `authUserId`, o elo com `auth.users.id`. A FK entre
+// schemas (`auth.users` não é modelável pelo Prisma sem `multiSchema`) é
+// adicionada via SQL cru numa migração dedicada — ver Codigo/README.md.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  directUrl         = env("DIRECT_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum Perfil {
+  GESTOR
+  RH
+  MONTADOR
+  DEPOSITO
+}
+
+enum StatusPedido {
+  AGUARDANDO
+  EM_TRIAGEM
+  RECEBIDO
+  EM_ENTREGA
+  ENTREGUE
+}
+
+enum StatusAmbiente {
+  PENDENTE
+  EM_PROGRESSO
+  COMPLETO
+}
+
+enum StatusPeca {
+  TRIADA
+  CARREGADA
+  ENTREGUE
+}
+
+enum StatusAvaria {
+  REPORTADA
+  EM_ANALISE
+  REPOSICAO_SOLICITADA
+  RESOLVIDA
+}
+
+enum StatusJornada {
+  EM_ANDAMENTO
+  PAUSADA
+  FINALIZADA
+}
+
+enum StatusAtestado {
+  PENDENTE
+  VALIDADO
+  REJEITADO
+}
+
+// ─── Usuário e Autenticação ──────────────────────────────────────────────────
+
+model Usuario {
+  id         Int      @id @default(autoincrement())
+  nome       String
+  email      String   @unique
+  authUserId String   @unique @map("auth_user_id") @db.Uuid
+  perfil     Perfil
+  ativo      Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  jornadas           Jornada[]
+  atestados          Atestado[]        @relation("AtestadoUsuario")
+  atestadosValidados Atestado[]        @relation("AtestadoValidador")
+  bancosHoras        BancoHoras[]
+  pedidosMontador    PedidoMontador[]
+  pecasTriadas       Peca[]            @relation("PecaTriadaPor")
+  pecasConferidas    Peca[]            @relation("PecaConferidaPor")
+  avariasRegistradas Avaria[]
+  cautelas           Cautela[]
+  epis               Epi[]
+
+  @@map("usuario")
+}
+
+// ─── Logística: Clientes e Pedidos ───────────────────────────────────────────
+
+model Cliente {
+  id        Int      @id @default(autoincrement())
+  nome      String
+  endereco  String
+  cidade    String
+  estado    String
+  cep       String
+  latitude  Decimal  @db.Decimal(10, 7)
+  longitude Decimal  @db.Decimal(10, 7)
+  telefone  String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  pedidos Pedido[]
+
+  @@map("cliente")
+}
+
+model Pedido {
+  id           Int          @id @default(autoincrement())
+  clienteId    Int          @map("cliente_id")
+  numeroPedido String       @unique @map("numero_pedido")
+  status       StatusPedido @default(AGUARDANDO)
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  cliente    Cliente          @relation(fields: [clienteId], references: [id])
+  ambientes  Ambiente[]
+  montadores PedidoMontador[]
+  jornadas   Jornada[]
+
+  @@map("pedido")
+}
+
+model PedidoMontador {
+  id        Int @id @default(autoincrement())
+  pedidoId  Int @map("pedido_id")
+  usuarioId Int @map("usuario_id")
+
+  pedido  Pedido  @relation(fields: [pedidoId], references: [id])
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@unique([pedidoId, usuarioId])
+  @@map("pedido_montador")
+}
+
+// ─── Logística: Ambientes e Peças ────────────────────────────────────────────
+
+model Ambiente {
+  id       Int            @id @default(autoincrement())
+  pedidoId Int            @map("pedido_id")
+  nome     String
+  status   StatusAmbiente @default(PENDENTE)
+
+  pedido Pedido @relation(fields: [pedidoId], references: [id])
+  pecas  Peca[]
+
+  @@map("ambiente")
+}
+
+model Peca {
+  id           Int        @id @default(autoincrement())
+  ambienteId   Int        @map("ambiente_id")
+  codigoBarras String     @unique @map("codigo_barras")
+  descricao    String
+  status       StatusPeca @default(TRIADA)
+  triadaPor    Int?       @map("triada_por")
+  conferidaPor Int?       @map("conferida_por")
+  conferidaAt  DateTime?  @map("conferida_at")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  ambiente   Ambiente @relation(fields: [ambienteId], references: [id])
+  triador    Usuario? @relation("PecaTriadaPor", fields: [triadaPor], references: [id])
+  conferente Usuario? @relation("PecaConferidaPor", fields: [conferidaPor], references: [id])
+  avarias    Avaria[]
+
+  @@map("peca")
+}
+
+// ─── Avarias ─────────────────────────────────────────────────────────────────
+
+model TipoAvaria {
+  id        Int    @id @default(autoincrement())
+  nome      String
+  descricao String
+
+  avarias Avaria[]
+
+  @@map("tipo_avaria")
+}
+
+model Avaria {
+  id            Int          @id @default(autoincrement())
+  pecaId        Int          @map("peca_id")
+  tipoAvariaId  Int          @map("tipo_avaria_id")
+  registradaPor Int          @map("registrada_por")
+  descricao     String
+  status        StatusAvaria @default(REPORTADA)
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  peca        Peca         @relation(fields: [pecaId], references: [id])
+  tipoAvaria  TipoAvaria   @relation(fields: [tipoAvariaId], references: [id])
+  registrador Usuario      @relation(fields: [registradaPor], references: [id])
+  fotos       AvariaFoto[]
+
+  @@map("avaria")
+}
+
+model AvariaFoto {
+  id           Int      @id @default(autoincrement())
+  avariaId     Int      @map("avaria_id")
+  storagePath  String   @map("storage_path")
+  mimeType     String   @map("mime_type")
+  tamanhoBytes Int      @map("tamanho_bytes")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  avaria Avaria @relation(fields: [avariaId], references: [id])
+
+  @@map("avaria_foto")
+}
+
+// ─── Jornada e Horas ─────────────────────────────────────────────────────────
+
+model Jornada {
+  id                Int           @id @default(autoincrement())
+  usuarioId         Int           @map("usuario_id")
+  pedidoId          Int?          @map("pedido_id")
+  checkinLatitude   Decimal?      @map("checkin_latitude") @db.Decimal(10, 7)
+  checkinLongitude  Decimal?      @map("checkin_longitude") @db.Decimal(10, 7)
+  checkinAt         DateTime?     @map("checkin_at")
+  checkoutLatitude  Decimal?      @map("checkout_latitude") @db.Decimal(10, 7)
+  checkoutLongitude Decimal?      @map("checkout_longitude") @db.Decimal(10, 7)
+  checkoutAt        DateTime?     @map("checkout_at")
+  status            StatusJornada @default(EM_ANDAMENTO)
+  createdAt         DateTime      @default(now()) @map("created_at")
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+  pedido  Pedido? @relation(fields: [pedidoId], references: [id])
+  pausas  Pausa[]
+
+  @@map("jornada")
+}
+
+model Pausa {
+  id        Int       @id @default(autoincrement())
+  jornadaId Int       @map("jornada_id")
+  inicio    DateTime
+  fim       DateTime?
+
+  jornada Jornada @relation(fields: [jornadaId], references: [id])
+
+  @@map("pausa")
+}
+
+model BancoHoras {
+  id               Int      @id @default(autoincrement())
+  usuarioId        Int      @map("usuario_id")
+  mes              Int
+  ano              Int
+  horasTrabalhadas Decimal  @map("horas_trabalhadas") @db.Decimal(7, 2)
+  horasPrevistas   Decimal  @map("horas_previstas") @db.Decimal(7, 2)
+  saldo            Decimal  @db.Decimal(7, 2)
+  calculadoAt      DateTime @default(now()) @map("calculado_at")
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@unique([usuarioId, mes, ano])
+  @@map("banco_horas")
+}
+
+// ─── Atestados ───────────────────────────────────────────────────────────────
+
+model Atestado {
+  id             Int            @id @default(autoincrement())
+  usuarioId      Int            @map("usuario_id")
+  dataInicio     DateTime       @map("data_inicio") @db.Date
+  dataFim        DateTime       @map("data_fim") @db.Date
+  status         StatusAtestado @default(PENDENTE)
+  motivoRejeicao String?        @map("motivo_rejeicao")
+  validadoPor    Int?           @map("validado_por")
+  validadoAt     DateTime?      @map("validado_at")
+  createdAt      DateTime       @default(now()) @map("created_at")
+
+  usuario   Usuario        @relation("AtestadoUsuario", fields: [usuarioId], references: [id])
+  validador Usuario?       @relation("AtestadoValidador", fields: [validadoPor], references: [id])
+  fotos     AtestadoFoto[]
+
+  @@map("atestado")
+}
+
+model AtestadoFoto {
+  id           Int      @id @default(autoincrement())
+  atestadoId   Int      @map("atestado_id")
+  storagePath  String   @map("storage_path")
+  mimeType     String   @map("mime_type")
+  tamanhoBytes Int      @map("tamanho_bytes")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  atestado Atestado @relation(fields: [atestadoId], references: [id])
+
+  @@map("atestado_foto")
+}
+
+// ─── Recursos: Ferramentas, Cautelas e EPIs ──────────────────────────────────
+
+model TipoFerramenta {
+  id        Int    @id @default(autoincrement())
+  nome      String
+  descricao String
+
+  ferramentas Ferramenta[]
+
+  @@map("tipo_ferramenta")
+}
+
+model Ferramenta {
+  id               Int      @id @default(autoincrement())
+  tipoFerramentaId Int      @map("tipo_ferramenta_id")
+  codigoPatrimonio String   @unique @map("codigo_patrimonio")
+  disponivel       Boolean  @default(true)
+  ativo            Boolean  @default(true)
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  tipoFerramenta TipoFerramenta @relation(fields: [tipoFerramentaId], references: [id])
+  cautelas       Cautela[]
+
+  @@map("ferramenta")
+}
+
+model Cautela {
+  id                    Int       @id @default(autoincrement())
+  ferramentaId          Int       @map("ferramenta_id")
+  usuarioId             Int       @map("usuario_id")
+  dataRetirada          DateTime  @map("data_retirada")
+  dataDevolucaoPrevista DateTime  @map("data_devolucao_prevista") @db.Date
+  dataDevolucaoReal     DateTime? @map("data_devolucao_real")
+  devolvida             Boolean   @default(false)
+
+  ferramenta Ferramenta @relation(fields: [ferramentaId], references: [id])
+  usuario    Usuario    @relation(fields: [usuarioId], references: [id])
+
+  @@map("cautela")
+}
+
+model TipoEpi {
+  id            Int    @id @default(autoincrement())
+  nome          String
+  descricao     String
+  validadeMeses Int    @map("validade_meses")
+
+  epis Epi[]
+
+  @@map("tipo_epi")
+}
+
+model Epi {
+  id           Int      @id @default(autoincrement())
+  tipoEpiId    Int      @map("tipo_epi_id")
+  usuarioId    Int      @map("usuario_id")
+  dataEntrega  DateTime @map("data_entrega") @db.Date
+  dataValidade DateTime @map("data_validade") @db.Date
+  ativo        Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  tipoEpi TipoEpi @relation(fields: [tipoEpiId], references: [id])
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@map("epi")
+}
+
+// ─── Normas ──────────────────────────────────────────────────────────────────
+
+model Norma {
+  id        Int      @id @default(autoincrement())
+  titulo    String
+  conteudo  String
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("norma")
+}

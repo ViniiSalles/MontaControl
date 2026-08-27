@@ -98,6 +98,10 @@ banco onde possa rodar `CREATE`/`DROP` livremente, e o role do Supabase gerencia
 — o erro clássico é `P3014`. O shadow local resolve isso e não precisa estar na mesma região do
 banco de destino.
 
+Da raiz de `Codigo/`: `pnpm shadow:up` sobe o container (porta `55432`, dados em `tmpfs`); `pnpm
+shadow:down` derruba e descarta o volume. Copie `apps/api/.env.example` para `apps/api/.env` — o
+`SHADOW_DATABASE_URL` já aponta para essa porta.
+
 **As três connection strings do Supabase, e por que cada uma existe:**
 
 | Variável | Host / porta | Modo | Uso |

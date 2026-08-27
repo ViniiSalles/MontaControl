@@ -1,0 +1,16 @@
+# Shadow database do Prisma — usado só por `prisma migrate dev`.
+# Nunca é o alvo de `DATABASE_URL`/`DIRECT_URL`: o role do Supabase gerenciado
+# não é superuser (CREATE/DROP livre falha com P3014), daí este Postgres local
+# descartável. tmpfs porque nada aqui precisa sobreviver a um restart.
+services:
+  shadow-db:
+    image: postgres:17-alpine
+    restart: "no"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: shadow
+    ports:
+      - "55432:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
