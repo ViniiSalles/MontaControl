@@ -16,11 +16,11 @@
     "mobile:start": "pnpm --filter @montacontrol/mobile start"
   },
   "devDependencies": {
-    "@eslint/js": "^9.15.0",
-    "eslint": "^9.15.0",
-    "eslint-config-prettier": "^9.1.0",
-    "prettier": "^3.3.3",
-    "typescript": "^5.7.2",
-    "typescript-eslint": "^8.15.0"
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.9.1",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.9.6",
+    "typescript": "^7.0.2",
+    "typescript-eslint": "^8.68.0"
   }
 }
