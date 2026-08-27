@@ -1,0 +1,82 @@
+# ---------------------------------------------------------------------------
+# Dependências
+# ---------------------------------------------------------------------------
+node_modules/
+.pnpm-store/
+
+# ---------------------------------------------------------------------------
+# Build
+# ---------------------------------------------------------------------------
+dist/
+build/
+*.tsbuildinfo
+
+# Prisma Client gerado
+Codigo/apps/api/generated/
+Codigo/apps/api/src/generated/
+
+# ---------------------------------------------------------------------------
+# Segredos e ambiente
+#
+# Nenhum arquivo .env entra no repositório. Os .example são versionados e
+# servem de contrato: quem clona copia para .env e preenche.
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# ---------------------------------------------------------------------------
+# Testes e cobertura
+# ---------------------------------------------------------------------------
+coverage/
+.nyc_output/
+junit.xml
+
+# ---------------------------------------------------------------------------
+# Expo / React Native
+# ---------------------------------------------------------------------------
+.expo/
+.expo-shared/
+# android/ e ios/ são gerados por `expo prebuild` e não são versionados
+# enquanto o projeto usa Continuous Native Generation.
+Codigo/apps/mobile/android/
+Codigo/apps/mobile/ios/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+
+# ---------------------------------------------------------------------------
+# Vite
+# ---------------------------------------------------------------------------
+.vite/
+
+# ---------------------------------------------------------------------------
+# Logs
+# ---------------------------------------------------------------------------
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---------------------------------------------------------------------------
+# Ferramentas locais de agentes de IA (índices por máquina, não versionar)
+# ---------------------------------------------------------------------------
+.codegraph/
+.serena/
+
+# ---------------------------------------------------------------------------
+# Editores e sistema operacional
+# ---------------------------------------------------------------------------
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.shared.json
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
