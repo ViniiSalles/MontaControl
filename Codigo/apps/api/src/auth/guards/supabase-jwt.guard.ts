@@ -1,8 +1,9 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import { createRemoteJWKSet, jwtVerify, JWTPayload, JWTVerifyGetKey } from 'jose';
 import { UsuariosRepository } from '../../usuarios/usuarios.repository';
+import { TokenInvalidoException } from '../../common/exceptions/token-invalido.exception';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { UsuarioAutenticado } from '../usuario-autenticado';
 
@@ -39,14 +40,14 @@ export class SupabaseJwtGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest<RequisicaoAutenticavel>();
     const token = this.extrairToken(request.headers.authorization);
-    if (!token) throw new UnauthorizedException('Token ausente');
+    if (!token) throw new TokenInvalidoException('Token ausente');
 
     const payload = await this.verificarAssinatura(token);
-    if (!payload.sub) throw new UnauthorizedException('Token sem identificador de usuário');
+    if (!payload.sub) throw new TokenInvalidoException('Token sem identificador de usuário');
 
     const usuario = await this.usuarios.buscarPorAuthUserId(payload.sub);
     if (!usuario || !usuario.ativo) {
-      throw new UnauthorizedException('Usuário inválido ou inativo');
+      throw new TokenInvalidoException('Usuário inválido ou inativo');
     }
 
     request.user = usuario;
@@ -67,7 +68,7 @@ export class SupabaseJwtGuard implements CanActivate {
       });
       return payload;
     } catch {
-      throw new UnauthorizedException('Token inválido ou expirado');
+      throw new TokenInvalidoException('Token inválido ou expirado');
     }
   }
 }

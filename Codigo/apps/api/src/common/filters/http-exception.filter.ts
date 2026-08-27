@@ -14,11 +14,17 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const status = exception.getStatus();
 
     const corpo: CorpoErroPadrao = {
-      codigo: exception.constructor.name,
+      codigo: this.extrairCodigo(exception),
       message: this.extrairMensagem(exception.getResponse(), exception.message),
     };
 
     response.status(status).json(corpo);
+  }
+
+  /** Exceções de domínio (ex.: `CredenciaisInvalidasException`) carregam um `codigo` explícito. */
+  private extrairCodigo(exception: HttpException): string {
+    const codigo = (exception as HttpException & { codigo?: string }).codigo;
+    return codigo ?? exception.constructor.name;
   }
 
   private extrairMensagem(respostaExcecao: string | object, mensagemPadrao: string): string {

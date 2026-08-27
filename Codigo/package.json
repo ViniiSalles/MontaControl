@@ -13,9 +13,7 @@
     "test": "pnpm -r test",
     "api:dev": "pnpm --filter @montacontrol/api start:dev",
     "web:dev": "pnpm --filter @montacontrol/web dev",
-    "mobile:start": "pnpm --filter @montacontrol/mobile start",
-    "shadow:up": "docker compose -f docker-compose.shadow.yml up -d",
-    "shadow:down": "docker compose -f docker-compose.shadow.yml down -v"
+    "mobile:start": "pnpm --filter @montacontrol/mobile start"
   },
   "devDependencies": {
     "@eslint/js": "^9.15.0",

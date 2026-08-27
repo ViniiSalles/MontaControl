@@ -16,7 +16,23 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   accessToken: string;
+  refreshToken: string;
+  expiresIn: number;
   usuario: UsuarioDTO;
+}
+
+export interface RefreshRequest {
+  refreshToken: string;
+}
+
+export interface RecuperarSenhaRequest {
+  email: string;
+}
+
+export interface RedefinirSenhaRequest {
+  email: string;
+  token: string;
+  novaSenha: string;
 }
 
 export interface UsuarioDTO {

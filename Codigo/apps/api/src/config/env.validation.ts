@@ -42,6 +42,10 @@ class EnvironmentVariables {
 
   @IsUrl({ require_tld: false })
   SUPABASE_JWT_ISSUER!: string;
+
+  /** `redirectTo` do `resetPasswordForEmail` — o fluxo usa o código OTP do e-mail, não o link. */
+  @IsUrl({ require_tld: false })
+  PASSWORD_RESET_REDIRECT_URL!: string;
 }
 
 export function validate(config: Record<string, unknown>): EnvironmentVariables {

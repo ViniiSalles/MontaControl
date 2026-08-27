@@ -26,7 +26,6 @@ chegam nas fases seguintes da Sprint 1. Esta seção é atualizada à medida que
 
 - Node.js `>=22` (ver `.nvmrc`)
 - pnpm `>=11` (`corepack enable` ativa a versão fixada em `packageManager`)
-- Docker (para o shadow database local do Prisma — ver seção de migrações)
 
 ## Scripts
 
@@ -85,46 +84,56 @@ então rodar a suíte de testes nunca depende de um build prévio do `shared`.
 > `schema.prisma` existir neste repositório, para que a primeira pessoa a mexer em banco não
 > redescubra os mesmos problemas.
 
-Três ambientes com papéis distintos — **não são intercambiáveis**:
+Dois ambientes, ambos na nuvem (Supabase) — **não são intercambiáveis**:
 
 | Ambiente | O que é | Papel |
 | --- | --- | --- |
-| `MontaControlDev` (nuvem, Supabase) | Projeto de desenvolvimento | Alvo do `migrate dev` e dos testes de integração (GoTrue real) |
-| `MontaControl` (nuvem, Supabase) | Projeto de produção/demo | Alvo do `migrate deploy` |
-| Shadow (local, Docker) | `postgres:17-alpine`, `docker-compose.shadow.yml` | **Só** o `shadowDatabaseUrl` do `prisma migrate dev` |
+| `MontaControlDev` | Projeto de desenvolvimento | Alvo do fluxo de migração abaixo e dos testes de integração (GoTrue real) |
+| `MontaControl` | Projeto de produção/demo | Alvo só de `migrate deploy` |
 
-**O shadow database é obrigatório e não pode ser o próprio Supabase.** `migrate dev` precisa de um
-banco onde possa rodar `CREATE`/`DROP` livremente, e o role do Supabase gerenciado não é superuser
-— o erro clássico é `P3014`. O shadow local resolve isso e não precisa estar na mesma região do
-banco de destino.
+**Sem shadow database.** `prisma migrate dev` normalmente usa um shadow database para detectar
+drift, e isso exige um role com `CREATE`/`DROP` — o role gerenciado do Supabase não é superuser, o
+que dá o clássico `P3014`. Em vez de manter um Postgres local só para isso, o fluxo de migração
+deste projeto não usa `migrate dev`:
 
-Da raiz de `Codigo/`: `pnpm shadow:up` sobe o container (porta `55432`, dados em `tmpfs`); `pnpm
-shadow:down` derruba e descarta o volume. Copie `apps/api/.env.example` para `apps/api/.env` — o
-`SHADOW_DATABASE_URL` já aponta para essa porta.
+1. Editar `prisma/schema.prisma`.
+2. `pnpm --filter @montacontrol/api exec prisma db push` — aplica o schema direto no
+   `MontaControlDev` para iterar (sem gerar arquivo de migração, sem shadow database).
+3. Quando o schema estiver estável, gerar o SQL da migração a partir do diff e commitar como
+   migração real:
 
-**As três connection strings do Supabase, e por que cada uma existe:**
+   ```bash
+   pnpm --filter @montacontrol/api exec prisma migrate diff \
+     --from-empty --to-schema-datamodel prisma/schema.prisma \
+     --script > prisma/migrations/<timestamp>_<nome>/migration.sql
+   ```
+
+4. Marcar a migração como já aplicada no `MontaControlDev` (o `db push` do passo 2 já criou os
+   objetos — `migrate resolve` só registra o histórico, sem tocar no schema):
+
+   ```bash
+   pnpm --filter @montacontrol/api exec prisma migrate resolve --applied <timestamp>_<nome>
+   ```
+
+5. Promover para produção com `migrate deploy` (não usa shadow database em nenhum cenário):
+
+   ```bash
+   pnpm --filter @montacontrol/api exec dotenv -e .env.production -- prisma migrate deploy
+   ```
+
+**As duas connection strings do Supabase, e por que cada uma existe:**
 
 | Variável | Host / porta | Modo | Uso |
 | --- | --- | --- | --- |
 | `DATABASE_URL` | `aws-0-<região>.pooler.supabase.com:6543` + `?pgbouncer=true&connection_limit=1` | transaction pooler | Runtime da API |
-| `DIRECT_URL` | `aws-0-<região>.pooler.supabase.com:5432` | session pooler, IPv4 | Migrações |
-| `SHADOW_DATABASE_URL` | `localhost:55432` (Docker) | local, superuser | Só `migrate dev` |
+| `DIRECT_URL` | `aws-0-<região>.pooler.supabase.com:5432` | session pooler, IPv4 | Migrações (`db push`, `migrate diff`, `migrate deploy`, `migrate resolve`) |
 
 DDL pelo transaction pooler (`:6543`) **falha silenciosamente ou trava** — nunca rodar migração
 apontando para ele. Evitar também `db.<ref>.supabase.co:5432` direto: resolve só IPv6, o que quebra
 em quem não tiver IPv6 funcional.
 
-**Se `migrate deploy` recusar porque o schema já tem objetos** (baseline de um banco pré-existente):
-
-```bash
-pnpm --filter @montacontrol/api exec prisma migrate diff \
-  --from-empty --to-schema-datamodel prisma/schema.prisma
-# inspecionar o diff, então:
-pnpm --filter @montacontrol/api exec prisma migrate resolve --applied <nome_da_migracao_init>
-```
-
-**Nunca** rodar `migrate dev` (que pode gerar `DROP`) apontando para o ambiente de produção — ele é
-alvo só de `migrate deploy`.
+**Nunca** rodar `prisma db push` apontando para o ambiente de produção — ele é alvo só de
+`migrate deploy`.
 
 **Testes de integração usam um banco compartilhado na nuvem, não um container descartável.**
 `TRUNCATE` global é **proibido** no harness de e2e. Cada execução isola seus próprios dados por

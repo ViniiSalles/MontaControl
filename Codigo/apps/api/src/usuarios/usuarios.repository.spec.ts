@@ -3,11 +3,11 @@ import { Perfil } from '../../generated/prisma';
 import { UsuariosRepository } from './usuarios.repository';
 
 describe('UsuariosRepository', () => {
-  let prisma: { usuario: { findUnique: jest.Mock } };
+  let prisma: { usuario: { findUnique: jest.Mock; findMany: jest.Mock } };
   let repository: UsuariosRepository;
 
   beforeEach(() => {
-    prisma = { usuario: { findUnique: jest.fn() } };
+    prisma = { usuario: { findUnique: jest.fn(), findMany: jest.fn() } };
     repository = new UsuariosRepository(prisma as unknown as PrismaService);
   });
 
@@ -46,6 +46,23 @@ describe('UsuariosRepository', () => {
       const usuario = await repository.buscarPorAuthUserId('inexistente');
 
       expect(usuario).toBeNull();
+    });
+  });
+
+  describe('listar', () => {
+    it('retorna os usuários ordenados por nome, sem o authUserId', async () => {
+      const usuarios = [
+        { id: 1, nome: 'Ana RH', email: 'ana@montacontrol.local', perfil: Perfil.RH, ativo: true },
+      ];
+      prisma.usuario.findMany.mockResolvedValue(usuarios);
+
+      const resultado = await repository.listar();
+
+      expect(resultado).toEqual(usuarios);
+      expect(prisma.usuario.findMany).toHaveBeenCalledWith({
+        select: { id: true, nome: true, email: true, perfil: true, ativo: true },
+        orderBy: { nome: 'asc' },
+      });
     });
   });
 });
