@@ -12,7 +12,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
-    "test:e2e": "jest --config ./test/jest-e2e.config.ts",
+    "test:e2e": "jest --config ./test/jest-e2e.config.ts --runInBand",
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
     "prisma:migrate:dev": "prisma migrate dev",
@@ -76,9 +76,20 @@
       "<rootDir>/../generated/"
     ],
     "collectCoverageFrom": [
-      "**/*.(t|j)s"
+      "**/*.(t|j)s",
+      "!**/*.module.ts"
     ],
     "coverageDirectory": "../coverage",
+    "coverageThreshold": {
+      "./src/auth/**/*.ts": {
+        "branches": 85,
+        "lines": 90
+      },
+      "./src/usuarios/**/*.ts": {
+        "branches": 85,
+        "lines": 90
+      }
+    },
     "testEnvironment": "node",
     "moduleNameMapper": {
       "^@montacontrol/shared$": "<rootDir>/../../../packages/shared/src/index.ts"
