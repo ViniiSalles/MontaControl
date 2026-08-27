@@ -1,0 +1,16 @@
+{
+  "name": "@montacontrol/shared",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Contrato de fio entre API, Web e Mobile: enums, DTOs e eventos de domínio.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint \"src/**/*.ts\""
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}
