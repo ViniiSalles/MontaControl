@@ -6,7 +6,7 @@
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "strictPropertyInitialization": false,
-    "incremental": true
+    "types": ["node", "jest"]
   },
   "include": ["src"]
 }
