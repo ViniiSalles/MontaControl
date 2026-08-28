@@ -8,6 +8,7 @@
     "@montacontrol/ui-contracts": "workspace:*",
     "expo": "~57.0.18",
     "expo-font": "~57.0.2",
+    "expo-linear-gradient": "~57.0.1",
     "expo-splash-screen": "~57.0.8",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
