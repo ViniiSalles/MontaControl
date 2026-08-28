@@ -11,6 +11,10 @@
     },
     "ios": {
       "bundleIdentifier": "br.pucminas.montacontrol"
-    }
+    },
+    "plugins": [
+      "expo-font",
+      "expo-splash-screen"
+    ]
   }
 }
