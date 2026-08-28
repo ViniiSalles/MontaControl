@@ -3,7 +3,7 @@
   "compilerOptions": {
     "jsx": "react-native",
     "moduleResolution": "bundler",
-    "types": ["react-native"]
+    "types": ["react-native", "jest"]
   },
   "include": ["**/*.ts", "**/*.tsx"],
   "exclude": ["node_modules"]

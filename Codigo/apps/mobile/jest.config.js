@@ -24,5 +24,5 @@ module.exports = {
     '^@montacontrol/design-tokens/(.*)$': '<rootDir>/../../packages/design-tokens/src/$1.ts',
     '^@montacontrol/ui-contracts/(.*)$': '<rootDir>/../../packages/ui-contracts/src/$1.ts',
   },
-  setupFilesAfterEach: [],
+  setupFilesAfterEnv: [],
 };
