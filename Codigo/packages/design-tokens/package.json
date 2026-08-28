@@ -18,7 +18,10 @@
     "./icones": "./src/icones.ts",
     "./tipos": "./src/tipos.ts",
     "./web/preset": "./src/web/preset.ts",
-    "./web/variaveis": "./src/web/variaveis.ts"
+    "./web/variaveis": "./src/web/variaveis.ts",
+    "./native": "./src/native/index.ts",
+    "./native/texto": "./src/native/texto.ts",
+    "./native/sombra": "./src/native/sombra.ts"
   },
   "scripts": {
     "test": "tsx scripts/smoke-test.ts",
