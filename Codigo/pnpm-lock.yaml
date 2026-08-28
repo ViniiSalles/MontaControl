@@ -111,6 +111,9 @@ importers:
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@26.3.0)(supports-color@8.1.1)(ts-node@10.9.2(@types/node@26.3.0)(typescript@6.0.3))
+      jest-environment-node:
+        specifier: 30.4.1
+        version: 30.4.1
       prisma:
         specifier: 7.10.0
         version: 7.10.0(@types/react-dom@19.2.5(@types/react@19.2.18))(@types/react@19.2.18)(magicast@0.5.4)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@6.0.3)
