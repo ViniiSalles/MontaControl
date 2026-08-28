@@ -1,0 +1,112 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Codigo/**'
+      - '.github/workflows/ci.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Codigo/**'
+      - '.github/workflows/ci.yml'
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: Codigo
+
+env:
+  # apps/api/prisma.config.ts exige DIRECT_URL definido (via env() de
+  # `prisma/config`) só para carregar o arquivo de config — mesmo `prisma
+  # generate` sem conexão real falha sem isso. Placeholder cobre o
+  # `postinstall` em todo job; o job e2e-api sobrescreve com o secret real.
+  DIRECT_URL: postgresql://ci:ci@localhost:5432/ci
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: Codigo/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: Codigo/.nvmrc
+          cache: pnpm
+          cache-dependency-path: Codigo/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: Codigo/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: Codigo/.nvmrc
+          cache: pnpm
+          cache-dependency-path: Codigo/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: Codigo/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: Codigo/.nvmrc
+          cache: pnpm
+          cache-dependency-path: Codigo/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+  e2e-api:
+    name: API e2e tests
+    runs-on: ubuntu-latest
+    needs: [test]
+    # A suíte e2e roda contra um projeto Supabase real (usa a GoTrue Admin API
+    # para criar/apagar usuários de teste) — não dá para substituir por um
+    # Postgres genérico em container. `secrets` não é permitido em jobs.<id>.if,
+    # por isso o gate usa uma variável de repositório em vez do secret direto.
+    # Defina os secrets TEST_* e a variável ENABLE_API_E2E=true em
+    # Settings → Secrets and variables → Actions para habilitar este job.
+    if: vars.ENABLE_API_E2E == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: Codigo/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: Codigo/.nvmrc
+          cache: pnpm
+          cache-dependency-path: Codigo/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: Run e2e tests
+        working-directory: Codigo/apps/api
+        run: pnpm test:e2e
+        env:
+          NODE_ENV: test
+          DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.TEST_DIRECT_URL }}
+          SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_JWT_ISSUER: ${{ secrets.TEST_SUPABASE_JWT_ISSUER }}
+          PASSWORD_RESET_REDIRECT_URL: ${{ secrets.TEST_PASSWORD_RESET_REDIRECT_URL }}

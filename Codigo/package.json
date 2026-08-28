@@ -10,7 +10,7 @@
   "scripts": {
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
-    "test": "pnpm -r test",
+    "test": "pnpm --filter @montacontrol/shared build && pnpm -r test",
     "api:dev": "pnpm --filter @montacontrol/api start:dev",
     "web:dev": "pnpm --filter @montacontrol/web dev",
     "mobile:start": "pnpm --filter @montacontrol/mobile start"

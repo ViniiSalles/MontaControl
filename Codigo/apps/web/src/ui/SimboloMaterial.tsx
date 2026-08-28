@@ -12,8 +12,12 @@ import warning from '@material-symbols/svg-400/outlined/warning.svg?raw'
 // Os SVGs de @material-symbols/svg-400 não têm `fill` — herdam preto do
 // default do SVG. Injeta `fill="currentColor"` na tag raiz (os `<path>`
 // filhos não sobrescrevem `fill`, então herdam) para o ícone seguir a cor
-// de texto do Tailwind (`text-*`), como no mockup Stitch.
-const comCorAtual = (bruto: string) => bruto.replace('<svg ', '<svg fill="currentColor" ')
+// de texto do Tailwind (`text-*`), como no mockup Stitch. Também troca
+// `width`/`height`, fixos em 48px no arquivo fonte, por `1em` — sem isso o
+// ícone sempre renderiza a 48px e as classes `text-*` (font-size) não têm
+// nenhum efeito no tamanho.
+const comCorAtual = (bruto: string) =>
+  bruto.replace('<svg ', '<svg fill="currentColor" ').replace('width="48" height="48"', 'width="1em" height="1em"')
 
 const svgPorIcone: Record<NomeIcone, string> = {
   cancel: comCorAtual(cancel),
