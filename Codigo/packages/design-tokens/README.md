@@ -23,10 +23,7 @@ não-`bundler`) nem sempre lidam bem com pacotes só-subcaminho. Código novo nu
 | `tipos` | Tipos estruturais compartilhados (`Cor`, `TipografiaToken`) |
 | `web/preset` | Preset Tailwind (`{ colors, fontSize, spacing, borderRadius, boxShadow }`) |
 | `web/variaveis` | Cores como CSS custom properties (`--cor-*`) + utilitários CSS crus (ex. `.glass-panel`) |
-
-`native/` (adaptador React Native — `StyleSheet`, sombra via `elevation`/`shadowColor`) **fica
-deferido para quando a Fase 8/9 (mobile) começar**. Não é uma omissão — o app mobile ainda não
-existe no repo, então não há consumidor nem superfície de teste para esse código agora.
+| `native/index` | Objeto `tema` pronto para `StyleSheet` (RN) — `estiloTexto`, `sombraPorNivel` |
 
 ## Conversão Stitch → tokens
 
@@ -53,9 +50,21 @@ o `lg` deste design system (12px):
 - Torna as sombras tingidas (`elevacao.ts`) a única fonte de `box-shadow`, em vez de valores
   `rgba(...)` arbitrários repetidos inline em cada classe do mockup.
 
+## Limitações conhecidas — `native/sombra.ts` (Android)
+
+- `elevation` (única API de sombra do Android) não aceita cor — a sombra `marca`
+  (`cores.shadowBrand`) sai cinza no Android, não azul.
+- `elevation` também não aceita offset negativo — o nível `nav` (que deveria "subir", offset
+  negativo) tem esse valor zerado (`Math.max(offsetY, 0)`) só no Android.
+
+iOS usa `shadowColor`/`shadowOffset`/`shadowOpacity`/`shadowRadius` completos, fiel ao valor do
+token. Nenhuma das duas limitações é contornada com libs extras — ficam documentadas e aceitas
+(risco R14 do plano).
+
 ## Teste
 
 `pnpm --filter @montacontrol/design-tokens test` roda um smoke test (`scripts/smoke-test.ts`) que
-importa `web/preset.ts` e os módulos base, e garante que os tipos/valores exportados têm o formato
-esperado. Escopo intencionalmente web-only por ora — não há app mobile ainda para testar o
-adaptador `native/`.
+importa `web/preset.ts`, `native/` (`texto`, `sombra`) e os módulos base, e garante que os
+tipos/valores exportados têm o formato esperado — inclusive as duas limitações do Android acima
+(R14). A resolução do subpath `native/` a partir de um consumidor real (Metro/Jest, não `tsx`) é
+coberta separadamente por `apps/mobile/src/design-tokens.smoke.test.ts`.
