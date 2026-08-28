@@ -32,6 +32,8 @@ Codigo/apps/api/src/generated/
 coverage/
 .nyc_output/
 junit.xml
+playwright-report/
+test-results/
 
 # ---------------------------------------------------------------------------
 # Expo / React Native

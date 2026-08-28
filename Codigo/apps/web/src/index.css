@@ -1,0 +1,24 @@
+@import 'tailwindcss';
+@config '../tailwind.config.ts';
+
+/*
+ * Padrão local que substitui a foto de galpão logístico hot-linkada de
+ * `lh3.googleusercontent.com` no mockup Stitch (`login_montacontrol:94`,
+ * plano Fase 11/T11.2 — asset externo sujeito a apodrecer). Duas grades de
+ * linhas finas (prateleiras/montantes) na cor `--cor-outline-variant`
+ * diluída via `color-mix`, sem imagem.
+ */
+.fundo-padrao-logistica {
+  background-color: var(--cor-surface);
+  background-image:
+    repeating-linear-gradient(
+      to bottom,
+      color-mix(in oklab, var(--cor-outline-variant) 35%, transparent) 0 1px,
+      transparent 1px 96px
+    ),
+    repeating-linear-gradient(
+      to right,
+      color-mix(in oklab, var(--cor-outline-variant) 20%, transparent) 0 1px,
+      transparent 1px 160px
+    );
+}

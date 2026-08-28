@@ -114,6 +114,7 @@ Regras práticas:
 - **Do** validar todo input externo com DTOs/`class-validator`.
 - **Do** manter nomenclatura de domínio em pt-BR e nomenclatura técnica/estrutural em inglês.
 - **Do** manter todo o código dentro de `Codigo/`, organizado por app/pacote de workspace.
+- **Do** utilize o mcp e skill do code-graph sempre que possível para navegar entre os arquivos do projeto e entender as dependências entre eles.
 
 ## Don'ts
 

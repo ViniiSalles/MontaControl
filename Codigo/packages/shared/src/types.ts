@@ -25,6 +25,17 @@ export interface RefreshRequest {
   refreshToken: string;
 }
 
+/**
+ * Corpo padrão de toda resposta de erro HTTP da API (`HttpExceptionFilter`).
+ * `codigo` é discriminado para exceções de domínio (`CREDENCIAIS_INVALIDAS`,
+ * `TOKEN_EXPIRADO` — contrato R12, ver plano) e cai no nome da classe da
+ * exceção para os demais casos.
+ */
+export interface CorpoErroPadrao {
+  codigo: string;
+  message: string;
+}
+
 export interface RecuperarSenhaRequest {
   email: string;
 }
