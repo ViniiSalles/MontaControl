@@ -1,0 +1,28 @@
+module.exports = {
+  preset: 'jest-expo',
+  // NOTA (desvio do brief, ver task-4-report.md): o pnpm guarda pacotes em
+  // `node_modules/.pnpm/<chave>/node_modules/<pacote>` mesmo com
+  // node-linker=hoisted (pacotes que só existem como dependência transitiva
+  // de outro pacote, ex. `@react-native/jest-preset`, nunca ganham symlink
+  // direto em `apps/mobile/node_modules`). O padrão literal do brief só
+  // olha o primeiro segmento após `node_modules/`; quando esse segmento é
+  // `.pnpm/...`, o lookahead nunca reconhece o pacote da whitelist e o
+  // arquivo acaba (erroneamente) na lista de ignorados, quebrando o
+  // `import` ESM do preset do RN. O grupo `(?:\.pnpm/[^/]+/node_modules/)*`
+  // pula esse(s) segmento(s) intermediário(s) do pnpm store antes de testar
+  // a whitelist.
+  transformIgnorePatterns: [
+    'node_modules/(?!(?:\\.pnpm/[^/]+/node_modules/)*((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-native-svg))',
+  ],
+  moduleNameMapper: {
+    // `native/` é diretório (index.ts, texto.ts, sombra.ts) — precisa de
+    // regras mais específicas ANTES da regra geral, senão
+    // `@montacontrol/design-tokens/native` mapeia para o arquivo
+    // inexistente `src/native.ts` em vez de `src/native/index.ts`.
+    '^@montacontrol/design-tokens/native$': '<rootDir>/../../packages/design-tokens/src/native/index.ts',
+    '^@montacontrol/design-tokens/native/(.*)$': '<rootDir>/../../packages/design-tokens/src/native/$1.ts',
+    '^@montacontrol/design-tokens/(.*)$': '<rootDir>/../../packages/design-tokens/src/$1.ts',
+    '^@montacontrol/ui-contracts/(.*)$': '<rootDir>/../../packages/ui-contracts/src/$1.ts',
+  },
+  setupFilesAfterEach: [],
+};
