@@ -7,3 +7,4 @@ export * from './botao';
 export * from './campoTexto';
 export * from './cartao';
 export * from './alerta';
+export * from './checkbox';

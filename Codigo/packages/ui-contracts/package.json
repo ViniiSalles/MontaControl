@@ -12,7 +12,8 @@
     "./botao": "./src/botao.ts",
     "./campo-texto": "./src/campoTexto.ts",
     "./cartao": "./src/cartao.ts",
-    "./alerta": "./src/alerta.ts"
+    "./alerta": "./src/alerta.ts",
+    "./checkbox": "./src/checkbox.ts"
   },
   "scripts": {
     "test": "tsx scripts/smoke-test.ts",

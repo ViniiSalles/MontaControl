@@ -9,6 +9,7 @@ import type { PropsBotao } from '../src/botao';
 import type { PropsCampoTexto } from '../src/campoTexto';
 import type { PropsCartao } from '../src/cartao';
 import type { PropsAlerta } from '../src/alerta';
+import type { PropsCheckbox } from '../src/checkbox';
 import type * as barril from '../src/index';
 
 const exemploBotao: PropsBotao = {
@@ -39,11 +40,17 @@ const exemploAlerta: PropsAlerta = {
   mensagem: 'Credenciais inválidas.',
 };
 
+const exemploCheckbox: PropsCheckbox = {
+  rotulo: 'Manter conectado',
+  marcado: false,
+  aoAlterar: () => {},
+};
+
 // Confirma que o barril reexporta os mesmos tipos (checagem de tipo — se
 // `barril.PropsBotao` não existisse, esta linha falharia a compilação).
 const _viaBarril: barril.PropsBotao = exemploBotao;
 
-for (const exemplo of [exemploBotao, exemploCampoTexto, exemploCartao, exemploAlerta, _viaBarril]) {
+for (const exemplo of [exemploBotao, exemploCampoTexto, exemploCartao, exemploAlerta, exemploCheckbox, _viaBarril]) {
   assert.equal(typeof exemplo, 'object');
 }
 

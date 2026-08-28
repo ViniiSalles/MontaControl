@@ -5,6 +5,7 @@ import type { VarianteAlerta } from '@montacontrol/ui-contracts/alerta'
 import { Alerta } from '../ui/Alerta'
 import { Botao } from '../ui/Botao'
 import { CampoTexto } from '../ui/CampoTexto'
+import { Checkbox } from '../ui/Checkbox'
 import { SimboloMaterial } from '../ui/SimboloMaterial'
 import { useAuth } from '../auth/AuthContext'
 import { ErroAutenticacao } from '../auth/clienteAuth'
@@ -17,16 +18,18 @@ interface EstadoErro {
 }
 
 /**
- * Ver `login_montacontrol:92-153`. Sem checkbox "Manter conectado" e sem
- * link "Esqueci minha senha" — nenhum dos dois tem fluxo construído na Fase
- * 11 (recuperação de senha é DTO de backend só; ui-contracts não tem
- * Checkbox), então não entram para não deixar controle morto na tela.
+ * Ver `login_montacontrol:92-153`. "Manter conectado" e "Esqueci minha
+ * senha" são só visuais por ora, fiéis ao mockup (que também não liga
+ * nenhum dos dois a um destino real) — a recuperação de senha já tem
+ * endpoint no backend (`/auth/recuperar-senha`), mas não tem tela/rota web
+ * ainda, e não está na lista da Fase 11.
  */
 export default function Login() {
   const { entrar } = useAuth()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
+  const [mantendoConectado, setMantendoConectado] = useState(false)
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState<EstadoErro | null>(null)
 
@@ -91,6 +94,13 @@ export default function Login() {
             placeholder="••••••••"
             iconeEsquerda="lock"
             obrigatorio
+            desabilitado={carregando}
+            acaoRotulo={{ texto: 'Esqueci minha senha', aoPressionar: () => {} }}
+          />
+          <Checkbox
+            rotulo="Manter conectado"
+            marcado={mantendoConectado}
+            aoAlterar={setMantendoConectado}
             desabilitado={carregando}
           />
           <Botao
