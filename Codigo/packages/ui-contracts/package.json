@@ -12,7 +12,15 @@
     "./botao": "./src/botao.ts",
     "./campo-texto": "./src/campoTexto.ts",
     "./cartao": "./src/cartao.ts",
-    "./alerta": "./src/alerta.ts"
+    "./alerta": "./src/alerta.ts",
+    "./texto": "./src/texto.ts",
+    "./icone": "./src/icone.ts",
+    "./tela": "./src/tela.ts",
+    "./modal": "./src/modal.ts",
+    "./badge": "./src/badge.ts",
+    "./carregando": "./src/carregando.ts",
+    "./pulso-atividade": "./src/pulsoAtividade.ts",
+    "./barra-nav-inferior": "./src/barraNavInferior.ts"
   },
   "scripts": {
     "test": "tsx scripts/smoke-test.ts",
