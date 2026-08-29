@@ -9,9 +9,20 @@ import {
   Inter_700Bold,
   Inter_800ExtraBold,
 } from '@expo-google-fonts/inter';
-import { EscadaDePesos } from './src/telas-dev/EscadaDePesos';
+import { BarraNavInferior } from './src/ui/BarraNavInferior';
 
 SplashScreen.preventAutoHideAsync();
+
+// PROVISÓRIO (Task 14): dados de exemplo só para verificação visual manual do
+// `BarraNavInferior` fora de teste. Reverter para uma `View` vazia (ou trocar
+// pelo `RootNavigator` real) antes de qualquer PR — `RootNavigator` chega só
+// na Fase 10.
+const itensDeExemplo = [
+  { rotulo: 'Jornada', icone: 'event_note', ativo: true } as const,
+  { rotulo: 'Bipagem', icone: 'barcode_scanner', ativo: false, desabilitado: true } as const,
+  { rotulo: 'Histórico', icone: 'description', ativo: false, desabilitado: true } as const,
+  { rotulo: 'Manual', icone: 'menu_book', ativo: false, desabilitado: true } as const,
+];
 
 export default function App() {
   const [fontesCarregadas] = useFonts({
@@ -28,12 +39,10 @@ export default function App() {
 
   if (!fontesCarregadas) return null;
 
-  // PROVISÓRIO (Task 8): renderiza a tela de verificação visual da escada de
-  // pesos de fonte no lugar da `View` vazia do Task 3. `RootNavigator` ainda
-  // não existe (chega no Task 14 / Fase 10) — reverter esta troca lá.
   return (
     <View style={{ flex: 1 }} onLayout={aoLayoutRaiz}>
-      <EscadaDePesos />
+      <View style={{ flex: 1 }} />
+      <BarraNavInferior itens={itensDeExemplo} />
     </View>
   );
 }
