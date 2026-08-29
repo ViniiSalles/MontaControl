@@ -22,6 +22,15 @@ module.exports = {
     '^@montacontrol/design-tokens/native$': '<rootDir>/../../packages/design-tokens/src/native/index.ts',
     '^@montacontrol/design-tokens/native/(.*)$': '<rootDir>/../../packages/design-tokens/src/native/$1.ts',
     '^@montacontrol/design-tokens/(.*)$': '<rootDir>/../../packages/design-tokens/src/$1.ts',
+    // `ui-contracts` expõe alguns subpaths em kebab-case cujo arquivo fonte é
+    // camelCase (ver `exports` em `packages/ui-contracts/package.json`) — a
+    // regra genérica abaixo faz passthrough literal do subpath e não bate com
+    // esses arquivos, então essas 3 precisam vir antes dela.
+    '^@montacontrol/ui-contracts/campo-texto$': '<rootDir>/../../packages/ui-contracts/src/campoTexto.ts',
+    '^@montacontrol/ui-contracts/pulso-atividade$':
+      '<rootDir>/../../packages/ui-contracts/src/pulsoAtividade.ts',
+    '^@montacontrol/ui-contracts/barra-nav-inferior$':
+      '<rootDir>/../../packages/ui-contracts/src/barraNavInferior.ts',
     '^@montacontrol/ui-contracts/(.*)$': '<rootDir>/../../packages/ui-contracts/src/$1.ts',
   },
   setupFilesAfterEnv: [],
