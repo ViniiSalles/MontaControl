@@ -1,6 +1,6 @@
 import { Platform, Pressable, View } from 'react-native';
 import type { PropsBarraNavInferior } from '@montacontrol/ui-contracts/barra-nav-inferior';
-import { cores, espacamentoNomeado } from '@montacontrol/design-tokens/native';
+import { cores, espacamento, espacamentoNomeado } from '@montacontrol/design-tokens/native';
 import { sombraPorNivel } from '@montacontrol/design-tokens/native/sombra';
 import { Texto } from './Texto';
 import { Icone } from './Icone';
@@ -32,7 +32,7 @@ export function BarraNavInferior({ itens }: PropsBarraNavInferior) {
           onPress={item.aoPressionar}
           style={{
             alignItems: 'center',
-            gap: 2,
+            gap: espacamento[2],
             opacity: item.desabilitado ? 0.4 : item.ativo ? 1 : 0.7,
           }}
         >
