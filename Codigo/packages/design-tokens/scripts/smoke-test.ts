@@ -8,6 +8,8 @@ import { elevacao } from '../src/elevacao';
 import { fontes } from '../src/fontes';
 import { preset } from '../src/web/preset';
 import { variaveisCss, variaveisCssTexto } from '../src/web/variaveis';
+import { estiloTexto, tipografia as tipografiaNative } from '../src/native/texto';
+import { sombraPorNivel } from '../src/native/sombra';
 
 const hex = /^#[0-9a-f]{6}$/i;
 
@@ -53,4 +55,24 @@ assert.equal(barril.cores.primary, cores.primary);
 assert.equal(typeof barril.tipografia, 'object');
 assert.equal(typeof barril.raio, 'object');
 
+// native/texto.ts: nunca emite fontWeight, sempre fontFamily por peso.
+const estiloBotao = estiloTexto(tipografiaNative.titleLg);
+assert.equal(estiloBotao.fontFamily, 'Inter_700Bold');
+assert.equal('fontWeight' in estiloBotao, false, 'estiloTexto não deve emitir fontWeight (R13)');
+assert.equal(estiloTexto(tipografiaNative.bodyMd, 800).fontFamily, 'Inter_800ExtraBold');
+
+// native/sombra.ts: elev4 tem os mesmos offset/blur do valor web, em ambas as plataformas.
+const elev4Ios = sombraPorNivel('elev4', 'ios');
+assert.equal(elev4Ios.shadowOffset.height, 12);
+assert.equal(elev4Ios.shadowRadius, 16);
+assert.equal(elev4Ios.elevation, 0, 'iOS não usa elevation');
+
+// nav: as duas limitações do Android (R14) — offset negativo vira 0, elevation > 0.
+const navIos = sombraPorNivel('nav', 'ios');
+assert.equal(navIos.shadowOffset.height, -8, 'iOS preserva o offset negativo');
+const navAndroid = sombraPorNivel('nav', 'android');
+assert.equal(navAndroid.shadowOffset.height, 0, 'Android não faz offset negativo — vira 0 (R14)');
+assert.ok(navAndroid.elevation > 0, 'Android usa elevation, não shadow*');
+
+console.log('OK — native/ (texto, sombra) smoke test passou.');
 console.log('OK — @montacontrol/design-tokens smoke test passou.');
