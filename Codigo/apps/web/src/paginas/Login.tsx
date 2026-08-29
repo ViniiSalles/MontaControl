@@ -59,8 +59,8 @@ export default function Login() {
 
   return (
     <main className="fundo-padrao-logistica relative flex min-h-screen items-center justify-center overflow-hidden px-24 font-sans">
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-primary/10 to-transparent" />
-      <div className="relative z-10 w-full max-w-[440px] rounded-xl bg-white/70 p-40 shadow-elev4 backdrop-blur-lg">
+      <div className="pointer-events-none absolute inset-0 bg-linear-to-tr from-primary/10 to-transparent" />
+      <div className="relative z-10 w-full max-w-110 rounded-xl bg-white/70 p-40 shadow-elev4 backdrop-blur-lg">
         <header className="mb-40 flex flex-col items-center text-center">
           <div className="mb-16 flex h-64 w-64 items-center justify-center rounded-xl bg-primary-container shadow-sm">
             <SimboloMaterial nome="conveyor_belt" className="text-4xl text-on-primary-container" />

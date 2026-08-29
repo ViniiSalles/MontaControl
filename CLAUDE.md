@@ -107,6 +107,7 @@ Regras práticas:
 
 ## Do's
 
+- **Do** Todos os commits devem ser em portugues e sem coautoria
 - **Do** seguir a ordem de camadas Controller → Service → Repository → Model no backend, sempre.
 - **Do** consumir os tokens de `@montacontrol/design-tokens` (preset Tailwind na Web, objeto de tema
   no Mobile) para toda estilização.
