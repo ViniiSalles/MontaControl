@@ -11,16 +11,13 @@ Codigo/
 ├── tsconfig.base.json  eslint.config.mjs  .prettierrc  .editorconfig
 ├── packages/
 │   ├── shared/           # contrato de fio: enums, DTOs, eventos (API ↔ Web ↔ Mobile)
-│   ├── design-tokens/    # [planejado] tokens de design (cores, tipografia, espaçamento…)
-│   └── ui-contracts/     # [planejado] prop types dos componentes base, zero runtime
+│   ├── design-tokens/    # tokens de design (cores, tipografia, espaçamento…)
+│   └── ui-contracts/     # prop types dos componentes base, zero runtime
 └── apps/
     ├── api/               # NestJS
-    ├── mobile/            # [planejado] Expo / React Native
-    └── web/               # [planejado] Vite / React
+    ├── mobile/            # Expo / React Native — ver apps/mobile/README.md
+    └── web/               # Vite / React — ver apps/web/README.md
 ```
-
-`packages/design-tokens`, `packages/ui-contracts`, `apps/mobile` e `apps/web` ainda não existem —
-chegam nas fases seguintes da Sprint 1. Esta seção é atualizada à medida que cada um nasce.
 
 ## Pré-requisitos
 
@@ -77,6 +74,12 @@ emitia `dist/apps/api/src/main.js`, um caminho que `nest start`/`node dist/main.
 `pnpm -r build` já ordena os pacotes topologicamente pela dependência `workspace:*`. Os testes
 (`apps/api`) usam `moduleNameMapper` no Jest apontando direto para `packages/shared/src/index.ts`,
 então rodar a suíte de testes nunca depende de um build prévio do `shared`.
+
+**Exceção do Mobile:** o `package.json` do `shared` também declara `"react-native": "src/index.ts"`.
+Só o Metro lê esse campo, então API (CommonJS, via `main`) e Web (Vite, via `main`) seguem
+consumindo o `dist/`; o app mobile resolve o TS cru, como já faz com `design-tokens` e
+`ui-contracts`. Sem isso, rodar o app exigiria um `pnpm -r build` antes de cada `expo start`. O
+Jest do mobile tem o `moduleNameMapper` equivalente, pela mesma razão que o do `apps/api`.
 
 ## Migrações (Prisma + Supabase) — receitas de resgate
 
