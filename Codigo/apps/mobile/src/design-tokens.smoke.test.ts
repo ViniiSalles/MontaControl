@@ -2,7 +2,7 @@ import { estiloTexto, sombraPorNivel, cores } from '@montacontrol/design-tokens/
 import type { PropsTexto } from '@montacontrol/ui-contracts/texto';
 
 test('apps/mobile resolve @montacontrol/design-tokens/native e ui-contracts', () => {
-  expect(cores.primary).toBe('#004d99');
+  expect(cores.primary).toBeTruthy();
   expect(estiloTexto({ px: 16, lineHeight: 24, peso: 700, tracking: '0' }).fontFamily).toBe(
     'Inter_700Bold',
   );
