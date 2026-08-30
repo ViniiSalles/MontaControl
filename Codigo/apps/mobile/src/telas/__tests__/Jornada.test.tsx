@@ -8,6 +8,7 @@ import type { JornadaDTO } from '@montacontrol/shared';
 import { useAuth } from '../../auth/AuthContext';
 import { registrarCheckin, registrarCheckout } from '../../jornada/acoes';
 import { buscarJornadaAtual } from '../../jornada/clienteJornadas';
+import { formatarHora } from '../../jornada/formatacao';
 import { montador } from '../../auth/__tests__/apoio';
 import { Jornada } from '../Jornada';
 
@@ -23,11 +24,20 @@ const buscarJornadaAtualMock = jest.mocked(buscarJornadaAtual);
 const registrarCheckinMock = jest.mocked(registrarCheckin);
 const registrarCheckoutMock = jest.mocked(registrarCheckout);
 
+/**
+ * Check-in de duas horas atrás, e não uma data fixa: jornada aberta só conta
+ * como "em andamento" dentro do limite de 24h (`estadoJornada`). Com data
+ * congelada no passado a fixture nasceria vencida e o botão ofereceria
+ * entrada em vez de saída.
+ */
+const CHECKIN_RECENTE = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+const HORA_CHECKIN = formatarHora(CHECKIN_RECENTE);
+
 const ABERTA: JornadaDTO = {
   id: 1,
   usuarioId: montador.id,
   status: StatusJornada.EM_ANDAMENTO,
-  checkinAt: '2026-08-29T11:00:00.000Z', // 08:00 local
+  checkinAt: CHECKIN_RECENTE,
   checkinLatitude: -19.9325,
   checkinLongitude: -43.9382,
   checkinEndereco: 'Av. Afonso Pena, 1000',
@@ -36,13 +46,16 @@ const ABERTA: JornadaDTO = {
   checkoutLongitude: null,
   checkoutEndereco: null,
   lancadoEmAtraso: false,
-  criadoEm: '2026-08-29T11:00:00.000Z',
+  criadoEm: CHECKIN_RECENTE,
 };
+
+const CHECKOUT_RECENTE = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+const HORA_CHECKOUT = formatarHora(CHECKOUT_RECENTE);
 
 const ENCERRADA: JornadaDTO = {
   ...ABERTA,
   status: StatusJornada.FINALIZADA,
-  checkoutAt: '2026-08-29T20:00:00.000Z', // 17:00 local
+  checkoutAt: CHECKOUT_RECENTE,
   checkoutLatitude: -19.94,
   checkoutLongitude: -43.94,
   checkoutEndereco: 'Rua da Bahia, 200',
@@ -77,7 +90,7 @@ test('jornada aberta mostra o check-in como último ponto e pede a saída', asyn
 
   await renderizar();
 
-  await waitFor(() => expect(screen.getByText('08:00')).toBeTruthy());
+  await waitFor(() => expect(screen.getByText(HORA_CHECKIN)).toBeTruthy());
   expect(screen.getByText('Av. Afonso Pena, 1000')).toBeTruthy();
   expect(screen.getByText(ROTULO_SAIDA)).toBeTruthy();
 });
@@ -92,8 +105,8 @@ test('bater a entrada registra o ponto e a tela passa a pedir a saída', async (
 
   await waitFor(() => expect(screen.getByText(ROTULO_SAIDA)).toBeTruthy());
   expect(registrarCheckinMock).toHaveBeenCalledWith('access');
-  expect(screen.getByText('Ponto de entrada registrado às 08:00.')).toBeTruthy();
-  expect(screen.getByText('08:00')).toBeTruthy();
+  expect(screen.getByText(`Ponto de entrada registrado às ${HORA_CHECKIN}.`)).toBeTruthy();
+  expect(screen.getByText(HORA_CHECKIN)).toBeTruthy();
 });
 
 test('bater a saída mantém o check-out na tela em vez de voltar ao estado vazio', async () => {
@@ -107,7 +120,7 @@ test('bater a saída mantém o check-out na tela em vez de voltar ao estado vazi
 
   // A jornada da resposta tem precedência sobre o GET: o ponto recém-batido
   // continua visível, e o botão volta a oferecer a entrada.
-  await waitFor(() => expect(screen.getByText('17:00')).toBeTruthy());
+  await waitFor(() => expect(screen.getByText(HORA_CHECKOUT)).toBeTruthy());
   expect(screen.getByText(ROTULO_ENTRADA)).toBeTruthy();
   expect(screen.queryByText('Nenhum ponto registrado')).toBeNull();
 });
