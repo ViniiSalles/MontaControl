@@ -1,6 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { diaNoFuso, somarDias } from '@montacontrol/shared';
-import type { CheckinRequest, CheckoutRequest, JornadaDTO } from '@montacontrol/shared';
+import { agruparJornadasPorDia, comporInstante, diaNoFuso, somarDias } from '@montacontrol/shared';
+import type {
+  CheckinRequest,
+  CheckoutRequest,
+  HistoricoJornadasDTO,
+  JornadaDTO,
+  PeriodoHistorico,
+} from '@montacontrol/shared';
 import { FUSO_OPERACAO } from '../common/fuso';
 import { JornadasRepository } from './jornadas.repository';
 import { JornadaEmAndamentoException } from './exceptions/jornada-em-andamento.exception';
@@ -58,6 +64,29 @@ export class JornadasService {
 
   async buscarAtual(usuarioId: number): Promise<JornadaDTO | null> {
     return this.jornadas.buscarAbertaDoUsuario(usuarioId);
+  }
+
+  async historico(usuarioId: number, dias: PeriodoHistorico): Promise<HistoricoJornadasDTO> {
+    const fimPeriodo = diaNoFuso(new Date().toISOString(), FUSO_OPERACAO);
+    const inicioPeriodo = somarDias(fimPeriodo, -(dias - 1));
+
+    // O fim é a meia-noite do dia seguinte menos 1 ms: pegar `23:59` deixaria
+    // de fora o check-in feito entre 23:59:01 e 23:59:59.
+    const inicioIso = comporInstante(inicioPeriodo, '00:00', FUSO_OPERACAO);
+    const fimIso = new Date(
+      new Date(comporInstante(somarDias(fimPeriodo, 1), '00:00', FUSO_OPERACAO)).getTime() - 1,
+    ).toISOString();
+
+    const jornadas = await this.jornadas.listarNoPeriodo(usuarioId, inicioIso, fimIso);
+    const diasAgrupados = agruparJornadasPorDia(jornadas, FUSO_OPERACAO);
+
+    return {
+      periodoDias: dias,
+      inicioPeriodo,
+      fimPeriodo,
+      dias: diasAgrupados,
+      totalMinutos: diasAgrupados.reduce((soma, dia) => soma + dia.minutosTrabalhados, 0),
+    };
   }
 
   /**

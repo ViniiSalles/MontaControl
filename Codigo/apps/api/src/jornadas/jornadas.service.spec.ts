@@ -255,3 +255,68 @@ describe('JornadasService — check-out', () => {
     expect(repositorio.registrarCheckout).not.toHaveBeenCalled();
   });
 });
+
+describe('JornadasService — histórico', () => {
+  let service: JornadasService;
+  let repositorio: jest.Mocked<JornadasRepository>;
+
+  beforeAll(() => {
+    jest.useFakeTimers().setSystemTime(AGORA);
+  });
+
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+
+  beforeEach(async () => {
+    const duplo: Partial<jest.Mocked<JornadasRepository>> = {
+      listarNoPeriodo: jest.fn().mockResolvedValue([]),
+    };
+
+    const modulo = await Test.createTestingModule({
+      providers: [JornadasService, { provide: JornadasRepository, useValue: duplo }],
+    }).compile();
+
+    service = modulo.get(JornadasService);
+    repositorio = modulo.get(JornadasRepository);
+    jest.clearAllMocks();
+  });
+
+  it('calcula o período de 5 dias terminando hoje, no fuso local', async () => {
+    const resultado = await service.historico(USUARIO_ID, 5);
+
+    expect(resultado.fimPeriodo).toBe('2026-08-26');
+    expect(resultado.inicioPeriodo).toBe('2026-08-22');
+    expect(resultado.periodoDias).toBe(5);
+  });
+
+  it('consulta o repositório com o intervalo em instantes locais', async () => {
+    await service.historico(USUARIO_ID, 5);
+
+    expect(repositorio.listarNoPeriodo).toHaveBeenCalledWith(
+      USUARIO_ID,
+      '2026-08-22T03:00:00.000Z', // 22/08 00:00 local
+      '2026-08-27T02:59:59.999Z', // 26/08 23:59:59.999 local
+    );
+  });
+
+  it('soma os minutos de todos os dias no total do período', async () => {
+    repositorio.listarNoPeriodo.mockResolvedValue([
+      jornadaFake({
+        id: 1,
+        checkinAt: '2026-08-26T11:00:00.000Z',
+        checkoutAt: '2026-08-26T15:00:00.000Z',
+      }),
+      jornadaFake({
+        id: 2,
+        checkinAt: '2026-08-25T11:00:00.000Z',
+        checkoutAt: '2026-08-25T14:00:00.000Z',
+      }),
+    ]);
+
+    const resultado = await service.historico(USUARIO_ID, 15);
+
+    expect(resultado.dias).toHaveLength(2);
+    expect(resultado.totalMinutos).toBe(420);
+  });
+});
