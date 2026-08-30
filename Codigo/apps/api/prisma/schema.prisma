@@ -220,19 +220,25 @@ model Jornada {
   id                Int           @id @default(autoincrement())
   usuarioId         Int           @map("usuario_id")
   pedidoId          Int?          @map("pedido_id")
+  checkinIdCliente  String?       @unique @map("checkin_id_cliente") @db.Uuid
   checkinLatitude   Decimal?      @map("checkin_latitude") @db.Decimal(10, 7)
   checkinLongitude  Decimal?      @map("checkin_longitude") @db.Decimal(10, 7)
+  checkinEndereco   String?       @map("checkin_endereco")
   checkinAt         DateTime?     @map("checkin_at")
+  checkoutIdCliente String?       @unique @map("checkout_id_cliente") @db.Uuid
   checkoutLatitude  Decimal?      @map("checkout_latitude") @db.Decimal(10, 7)
   checkoutLongitude Decimal?      @map("checkout_longitude") @db.Decimal(10, 7)
+  checkoutEndereco  String?       @map("checkout_endereco")
   checkoutAt        DateTime?     @map("checkout_at")
   status            StatusJornada @default(EM_ANDAMENTO)
   createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
 
   usuario Usuario @relation(fields: [usuarioId], references: [id])
   pedido  Pedido? @relation(fields: [pedidoId], references: [id])
   pausas  Pausa[]
 
+  @@index([usuarioId, checkinAt])
   @@map("jornada")
 }
 

@@ -94,30 +94,36 @@ Dois ambientes, ambos na nuvem (Supabase) — **não são intercambiáveis**:
 | `MontaControlDev` | Projeto de desenvolvimento | Alvo do fluxo de migração abaixo e dos testes de integração (GoTrue real) |
 | `MontaControl` | Projeto de produção/demo | Alvo só de `migrate deploy` |
 
-**Sem shadow database.** `prisma migrate dev` normalmente usa um shadow database para detectar
-drift, e isso exige um role com `CREATE`/`DROP` — o role gerenciado do Supabase não é superuser, o
-que dá o clássico `P3014`. Em vez de manter um Postgres local só para isso, o fluxo de migração
-deste projeto não usa `migrate dev`:
+**Sem shadow database, e sem diff automático.** `prisma migrate dev` usa um shadow database para
+detectar drift, o que já exige um role com `CREATE`/`DROP` — o role gerenciado do Supabase não é
+superuser, o que dá o clássico `P3014`. Mesmo contornando isso, o shadow nasce vazio e sem o schema
+`auth` do Supabase, então a migração histórica `..._fk_auth_users` (a FK de `usuario.auth_user_id`
+para `auth.users.id`) não tem como ser reaplicada nele — o comando cai em `P3006`/`P3018`. Gerar o
+SQL por diff (`prisma migrate diff --from-config-datasource ... --to-schema-datamodel ...`) também
+não serve: com essa mesma FK cruzando para `auth.users`, o Prisma exige que `auth` conste em
+`schemas` do datasource para conseguir introspectá-lo, e isso implica ligar `multiSchema` — decisão
+que este projeto evita de propósito (ver `CLAUDE.md`). O diff falha com `P4002`. `db push` também
+está fora para produzir uma migração versionada: ele aplica DDL direto no banco, sem deixar arquivo
+em `prisma/migrations/`. Por isso o fluxo deste projeto escreve o SQL da migração à mão:
 
 1. Editar `prisma/schema.prisma`.
-2. `pnpm --filter @montacontrol/api exec prisma db push` — aplica o schema direto no
-   `MontaControlDev` para iterar (sem gerar arquivo de migração, sem shadow database).
-3. Quando o schema estiver estável, gerar o SQL da migração a partir do diff e commitar como
-   migração real:
+2. Criar a pasta `prisma/migrations/<timestamp>_<nome>/` e escrever `migration.sql` nela à mão, com
+   o SQL incremental (só as colunas/índices/constraints que mudaram — nunca o schema inteiro).
+   Seguir a convenção de nomes que o Prisma usaria se tivesse gerado o arquivo
+   (`<tabela>_<coluna>_key` para `@unique`, `<tabela>_<colunas>_idx` para `@@index`,
+   `<tabela>_<coluna>_fkey` para FK): nomes fora do padrão fazem `migrate status`/`migrate diff`
+   acusar drift na próxima verificação, mesmo com o schema logicamente idêntico.
+3. Aplicar no `MontaControlDev`:
 
    ```bash
-   pnpm --filter @montacontrol/api exec prisma migrate diff \
-     --from-empty --to-schema-datamodel prisma/schema.prisma \
-     --script > prisma/migrations/<timestamp>_<nome>/migration.sql
+   pnpm --filter @montacontrol/api exec prisma migrate deploy
    ```
 
-4. Marcar a migração como já aplicada no `MontaControlDev` (o `db push` do passo 2 já criou os
-   objetos — `migrate resolve` só registra o histórico, sem tocar no schema):
-
-   ```bash
-   pnpm --filter @montacontrol/api exec prisma migrate resolve --applied <timestamp>_<nome>
-   ```
-
+   `migrate deploy` lê o histórico em `_prisma_migrations`, aplica só as migrações que ainda não
+   constam nele e não usa shadow database em nenhum momento — imune aos dois problemas acima.
+4. Conferir com `pnpm --filter @montacontrol/api prisma:migrate:status` (deve responder "Database
+   schema is up to date!", sem drift) e rodar `pnpm --filter @montacontrol/api prisma:generate`
+   para atualizar o Prisma Client com as colunas novas.
 5. Promover para produção com `migrate deploy` (não usa shadow database em nenhum cenário):
 
    ```bash
