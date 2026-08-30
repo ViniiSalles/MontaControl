@@ -61,14 +61,25 @@ export async function enviarSolicitacaoPonto(
   return postar<SolicitacaoPontoDTO>('/api/pontos-em-atraso', token, dados);
 }
 
-/** GET /api/jornadas/atual — jornada aberta do montador, ou `null` se não houver nenhuma. */
+/**
+ * GET /api/jornadas/atual — jornada aberta do montador, ou `null` se não houver
+ * nenhuma.
+ *
+ * O corpo vazio precisa ser tratado: o Nest responde 200 **sem corpo** quando o
+ * handler devolve `null` (é o caso normal do montador que ainda não bateu o
+ * ponto do dia), e `resposta.json()` estoura em corpo vazio. Sem isto, o "sem
+ * jornada" chegaria à tela como falha de carregamento.
+ */
 export async function buscarJornadaAtual(token: string): Promise<JornadaDTO | null> {
   const resposta = await fetch(`${urlBaseApi}/api/jornadas/atual`, {
     headers: { Authorization: `Bearer ${token}` },
   });
 
   if (!resposta.ok) throw await lerErro(resposta);
-  return (await resposta.json()) as JornadaDTO | null;
+
+  const corpo = await resposta.text();
+  if (!corpo) return null;
+  return JSON.parse(corpo) as JornadaDTO | null;
 }
 
 /** GET /api/jornadas/historico — dias agrupados do período (5, 15 ou 30 dias). */

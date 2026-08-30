@@ -44,7 +44,10 @@ beforeEach(() => {
   armazenamentoMock.lerTokens.mockResolvedValue(null);
   armazenamentoMock.salvarTokens.mockResolvedValue(undefined);
   armazenamentoMock.limparTokens.mockResolvedValue(undefined);
-  globalThis.fetch = jest.fn();
+  // Default rejeitando: a aba Jornada busca `GET /api/jornadas/atual` assim
+  // que monta, e um `jest.fn()` cru devolveria `undefined` para esse `await`.
+  // Cada teste ainda enfileira suas respostas com `mockResolvedValueOnce`.
+  globalThis.fetch = jest.fn().mockRejectedValue(new TypeError('Network request failed'));
 });
 
 test('sem sessão o app abre no Login, não no onboarding', async () => {
@@ -162,5 +165,5 @@ test('a barra inferior traz as 5 abas com só a Jornada habilitada', async () =>
 
   // Aba ainda não entregue não troca de tela.
   await fireEvent.press(screen.getByText('Bipagem'));
-  expect(screen.getByText('Nenhuma jornada em andamento')).toBeTruthy();
+  expect(screen.getByText(montador.nome)).toBeTruthy();
 });

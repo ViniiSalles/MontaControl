@@ -3,7 +3,7 @@ import type { ComponentType } from 'react';
 import { View } from 'react-native';
 import { cores } from '@montacontrol/design-tokens/native';
 import { BarraNavInferior } from '../ui/BarraNavInferior';
-import { Jornada } from '../telas/Jornada';
+import { PilhaJornada } from './PilhaJornada';
 import { ABA_PADRAO, ABAS } from './abas';
 import type { IdAba } from './abas';
 
@@ -16,7 +16,7 @@ import type { IdAba } from './abas';
  * `abas.ts`, sem reescrever a navegação.
  */
 const telaPorAba: Partial<Record<IdAba, ComponentType>> = {
-  jornada: Jornada,
+  jornada: PilhaJornada,
 };
 
 export function AppAutenticado() {
@@ -24,7 +24,7 @@ export function AppAutenticado() {
 
   // Aba sem tela entregue cai na padrão, que sempre existe — a barra já as
   // mantém desabilitadas, então isto é rede de segurança, não fluxo normal.
-  const TelaAtiva = telaPorAba[abaAtiva] ?? Jornada;
+  const TelaAtiva = telaPorAba[abaAtiva] ?? PilhaJornada;
 
   const itens = ABAS.map((aba) => ({
     rotulo: aba.rotulo,

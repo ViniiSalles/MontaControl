@@ -34,3 +34,18 @@ export function formatarDiaCurto(data: string): string {
     .format(new Date(Date.UTC(ano, mes - 1, dia)))
     .replace('.', '');
 }
+
+/**
+ * Instante ISO -> dia civil `YYYY-MM-DD` no fuso de operação. `en-CA` é o
+ * atalho de sempre para esse formato no `Intl`; montar a string à mão a
+ * partir de `getFullYear()` etc. usaria o fuso do aparelho, que é o que se
+ * quer justamente evitar.
+ */
+export function diaCivilDe(iso: string): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: FUSO_OPERACAO,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(iso));
+}

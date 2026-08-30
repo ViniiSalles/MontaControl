@@ -12,15 +12,22 @@ const PADRAO_POR_PLATAFORMA = {
   ios: 'http://localhost:3000',
 } as const;
 
+function lerUrlOpcional(valor: unknown): string | undefined {
+  if (typeof valor !== 'string') return undefined;
+  const normalizado = valor.trim();
+  return normalizado.length > 0 ? normalizado : undefined;
+}
+
 /**
- * Base da API. Sobrescreva por ambiente em `app.json` (`expo.extra.apiUrl`)
- * — em dispositivo físico é obrigatório, porque nem `localhost` nem
- * `10.0.2.2` alcançam a máquina do desenvolvedor a partir do aparelho: use
- * o IP dela na rede local (ex.: `http://192.168.0.10:3000`).
+ * Base da API, nesta ordem:
+ * 1. `EXPO_PUBLIC_API_URL` em `.env.local` (aparelho físico / rede local)
+ * 2. `expo.extra.apiUrl` em `app.json` (builds / overrides)
+ * 3. padrão de emulador por plataforma
  *
  * A web (`apps/web`) não precisa disso: fala com o mesmo-origin `/api/...`
  * via proxy do Vite (ver `apps/web/vite.config.ts`).
  */
 export const urlBaseApi: string =
-  (Constants.expoConfig?.extra?.apiUrl as string | undefined) ??
+  lerUrlOpcional(process.env.EXPO_PUBLIC_API_URL) ??
+  lerUrlOpcional(Constants.expoConfig?.extra?.apiUrl) ??
   (Platform.OS === 'android' ? PADRAO_POR_PLATAFORMA.android : PADRAO_POR_PLATAFORMA.ios);

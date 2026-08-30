@@ -59,7 +59,7 @@ describe('clienteJornadas', () => {
     const fetchFalso = jest.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({ id: 7 }),
+      text: async () => JSON.stringify({ id: 7 }),
     });
     global.fetch = fetchFalso as unknown as typeof fetch;
 
@@ -69,6 +69,19 @@ describe('clienteJornadas', () => {
     const [url, opcoes] = fetchFalso.mock.calls[0];
     expect(url).toMatch(/\/api\/jornadas\/atual$/);
     expect(opcoes.headers.Authorization).toBe('Bearer token-abc');
+  });
+
+  // O Nest responde 200 com corpo VAZIO quando o handler devolve `null` — o
+  // caso normal de quem ainda não bateu o ponto do dia. `resposta.json()`
+  // estouraria aqui, e a tela leria "sem jornada" como falha de rede.
+  it('corpo vazio (sem jornada aberta) vira null, não erro', async () => {
+    globalThis.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => '',
+    }) as unknown as typeof fetch;
+
+    await expect(buscarJornadaAtual('token-abc')).resolves.toBeNull();
   });
 
   it('buscarJornadaAtual: erro da API vira ErroApi com o código do corpo preservado', async () => {
