@@ -1,7 +1,30 @@
 import { Injectable } from '@nestjs/common';
+import { Perfil } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsuarioAutenticado } from '../auth/usuario-autenticado';
 import { UsuarioListado } from './usuario-listado';
+
+const CODIGO_PRISMA_VIOLACAO_UNICIDADE = 'P2002';
+
+export interface DadosNovoUsuario {
+  nome: string;
+  email: string;
+  perfil: Perfil;
+  authUserId: string;
+}
+
+/**
+ * Checagem por forma (não `instanceof`): o cliente Prisma gerado no build
+ * pode divergir, por identidade de módulo, da classe importada aqui.
+ */
+function ehViolacaoDeUnicidade(erro: unknown): boolean {
+  return (
+    typeof erro === 'object' &&
+    erro !== null &&
+    'code' in erro &&
+    (erro as { code?: unknown }).code === CODIGO_PRISMA_VIOLACAO_UNICIDADE
+  );
+}
 
 const SELECAO_USUARIO_AUTENTICADO = {
   id: true,
@@ -36,5 +59,18 @@ export class UsuariosRepository {
       select: SELECAO_USUARIO_LISTADO,
       orderBy: { nome: 'asc' },
     });
+  }
+
+  /** Retorna `null` em violação de unicidade (e-mail ou authUserId já existentes). */
+  async criar(dados: DadosNovoUsuario): Promise<UsuarioListado | null> {
+    try {
+      return await this.prisma.usuario.create({
+        data: dados,
+        select: SELECAO_USUARIO_LISTADO,
+      });
+    } catch (erro) {
+      if (ehViolacaoDeUnicidade(erro)) return null;
+      throw erro;
+    }
   }
 }

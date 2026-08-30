@@ -55,6 +55,13 @@ export interface UsuarioDTO {
   ativo: boolean;
 }
 
+export interface CadastrarUsuarioRequest {
+  nome: string;
+  email: string;
+  senha: string;
+  perfil: Perfil;
+}
+
 export interface CheckinRequest {
   /**
    * UUID gerado no aparelho. Chave de idempotência da outbox: se a resposta
