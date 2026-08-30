@@ -133,4 +133,13 @@ describe('JornadasService — check-in', () => {
       service.checkin(USUARIO_ID, pedido({ registradoEm: '2026-08-24T20:00:00.000Z' })),
     ).rejects.toBeInstanceOf(RegistroForaDaJanelaException);
   });
+
+  it('avalia o dia no fuso de operação, não em UTC', async () => {
+    // 24/08 23:00 no horário de Brasília é 25/08 02:00Z. Em UTC o dia seria
+    // 25/08, que está na janela; no fuso de operação é 24/08 — anteontem —
+    // e precisa ser recusado. É o único caso que separa as duas leituras.
+    await expect(
+      service.checkin(USUARIO_ID, pedido({ registradoEm: '2026-08-25T02:00:00.000Z' })),
+    ).rejects.toBeInstanceOf(RegistroForaDaJanelaException);
+  });
 });
