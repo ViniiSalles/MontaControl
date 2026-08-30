@@ -1,10 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { diaNoFuso, somarDias } from '@montacontrol/shared';
-import type { CheckinRequest, JornadaDTO } from '@montacontrol/shared';
+import type { CheckinRequest, CheckoutRequest, JornadaDTO } from '@montacontrol/shared';
 import { FUSO_OPERACAO } from '../common/fuso';
 import { JornadasRepository } from './jornadas.repository';
 import { JornadaEmAndamentoException } from './exceptions/jornada-em-andamento.exception';
 import { RegistroForaDaJanelaException } from './exceptions/registro-fora-da-janela.exception';
+import { SemJornadaAbertaException } from './exceptions/sem-jornada-aberta.exception';
+import { CheckoutAntesDoCheckinException } from './exceptions/checkout-antes-do-checkin.exception';
 
 /** Tolerância para relógio de aparelho adiantado. */
 const TOLERANCIA_FUTURO_MS = 5 * 60_000;
@@ -30,6 +32,32 @@ export class JornadasService {
       endereco: dados.endereco ?? null,
       checkinAt: new Date(dados.registradoEm),
     });
+  }
+
+  async checkout(usuarioId: number, dados: CheckoutRequest): Promise<JornadaDTO> {
+    const jaEncerrada = await this.jornadas.buscarPorCheckoutIdCliente(usuarioId, dados.idCliente);
+    if (jaEncerrada) return jaEncerrada;
+
+    this.validarJanela(dados.registradoEm);
+
+    const aberta = await this.jornadas.buscarAbertaDoUsuario(usuarioId);
+    if (!aberta) throw new SemJornadaAbertaException();
+
+    if (aberta.checkinAt && dados.registradoEm < aberta.checkinAt) {
+      throw new CheckoutAntesDoCheckinException();
+    }
+
+    return this.jornadas.registrarCheckout(aberta.id, {
+      idCliente: dados.idCliente,
+      latitude: dados.latitude,
+      longitude: dados.longitude,
+      endereco: dados.endereco ?? null,
+      checkoutAt: new Date(dados.registradoEm),
+    });
+  }
+
+  async buscarAtual(usuarioId: number): Promise<JornadaDTO | null> {
+    return this.jornadas.buscarAbertaDoUsuario(usuarioId);
   }
 
   /**

@@ -1,10 +1,12 @@
 import { Test } from '@nestjs/testing';
 import { StatusJornada } from '@montacontrol/shared';
-import type { CheckinRequest, JornadaDTO } from '@montacontrol/shared';
+import type { CheckinRequest, CheckoutRequest, JornadaDTO } from '@montacontrol/shared';
 import { JornadasRepository } from './jornadas.repository';
 import { JornadasService } from './jornadas.service';
 import { JornadaEmAndamentoException } from './exceptions/jornada-em-andamento.exception';
 import { RegistroForaDaJanelaException } from './exceptions/registro-fora-da-janela.exception';
+import { SemJornadaAbertaException } from './exceptions/sem-jornada-aberta.exception';
+import { CheckoutAntesDoCheckinException } from './exceptions/checkout-antes-do-checkin.exception';
 
 const USUARIO_ID = 7;
 
@@ -36,6 +38,16 @@ function pedido(parcial: Partial<CheckinRequest> = {}): CheckinRequest {
     latitude: -19.9325,
     longitude: -43.9382,
     registradoEm: '2026-08-26T16:00:00.000Z', // 13:00 local, hoje
+    ...parcial,
+  };
+}
+
+function pedidoSaida(parcial: Partial<CheckoutRequest> = {}): CheckoutRequest {
+  return {
+    idCliente: '22222222-2222-4222-8222-222222222222',
+    latitude: -19.94,
+    longitude: -43.94,
+    registradoEm: '2026-08-26T16:30:00.000Z',
     ...parcial,
   };
 }
@@ -157,5 +169,89 @@ describe('JornadasService — check-in', () => {
     await expect(
       service.checkin(USUARIO_ID, pedido({ registradoEm: '2026-08-25T02:00:00.000Z' })),
     ).rejects.toBeInstanceOf(RegistroForaDaJanelaException);
+  });
+});
+
+describe('JornadasService — check-out', () => {
+  let service: JornadasService;
+  let repositorio: jest.Mocked<JornadasRepository>;
+
+  beforeAll(() => {
+    jest.useFakeTimers().setSystemTime(AGORA);
+  });
+
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+
+  beforeEach(async () => {
+    const duplo: Partial<jest.Mocked<JornadasRepository>> = {
+      buscarPorCheckoutIdCliente: jest.fn().mockResolvedValue(null),
+      buscarAbertaDoUsuario: jest.fn().mockResolvedValue(jornadaFake()),
+      registrarCheckout: jest.fn().mockResolvedValue(
+        jornadaFake({ status: StatusJornada.FINALIZADA, checkoutAt: '2026-08-26T16:30:00.000Z' }),
+      ),
+    };
+
+    const modulo = await Test.createTestingModule({
+      providers: [JornadasService, { provide: JornadasRepository, useValue: duplo }],
+    }).compile();
+
+    service = modulo.get(JornadasService);
+    repositorio = modulo.get(JornadasRepository);
+    jest.clearAllMocks();
+  });
+
+  it('finaliza a jornada aberta gravando coordenadas de saída', async () => {
+    const resultado = await service.checkout(USUARIO_ID, pedidoSaida());
+
+    expect(resultado.status).toBe(StatusJornada.FINALIZADA);
+    expect(repositorio.registrarCheckout).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({ latitude: -19.94, checkoutAt: new Date('2026-08-26T16:30:00.000Z') }),
+    );
+  });
+
+  it('idCliente repetido devolve a jornada já encerrada, sem novo update', async () => {
+    repositorio.buscarPorCheckoutIdCliente.mockResolvedValue(
+      jornadaFake({ id: 99, status: StatusJornada.FINALIZADA }),
+    );
+
+    const resultado = await service.checkout(USUARIO_ID, pedidoSaida());
+
+    expect(resultado.id).toBe(99);
+    expect(repositorio.registrarCheckout).not.toHaveBeenCalled();
+  });
+
+  it('recusa quando não há jornada aberta', async () => {
+    repositorio.buscarAbertaDoUsuario.mockResolvedValue(null);
+
+    await expect(service.checkout(USUARIO_ID, pedidoSaida())).rejects.toBeInstanceOf(
+      SemJornadaAbertaException,
+    );
+  });
+
+  it('recusa check-out anterior ao check-in', async () => {
+    await expect(
+      service.checkout(USUARIO_ID, pedidoSaida({ registradoEm: '2026-08-26T10:00:00.000Z' })),
+    ).rejects.toBeInstanceOf(CheckoutAntesDoCheckinException);
+  });
+
+  it('idCliente já encerrado é devolvido mesmo com registradoEm fora da janela', async () => {
+    // Retentativa da fila de envio: o check-out foi batido dias atrás e a
+    // jornada já foi encerrada. A janela guarda o registro novo, não a
+    // confirmação de um que o servidor já aceitou. Este caso falha se a
+    // validação de janela passar para antes da busca por `idCliente`.
+    repositorio.buscarPorCheckoutIdCliente.mockResolvedValue(
+      jornadaFake({ id: 99, status: StatusJornada.FINALIZADA }),
+    );
+
+    const resultado = await service.checkout(
+      USUARIO_ID,
+      pedidoSaida({ registradoEm: '2026-08-20T12:00:00.000Z' }),
+    );
+
+    expect(resultado.id).toBe(99);
+    expect(repositorio.registrarCheckout).not.toHaveBeenCalled();
   });
 });
