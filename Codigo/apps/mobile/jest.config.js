@@ -45,5 +45,5 @@ module.exports = {
   // helpers) e falha com "must contain at least one test". Toda suite do
   // app termina em `.test.ts(x)`.
   testMatch: ['**/*.test.ts?(x)'],
-  setupFilesAfterEnv: [],
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
 };
