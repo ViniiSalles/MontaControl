@@ -1,4 +1,5 @@
-import { KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import type { PropsTela } from '@montacontrol/ui-contracts/tela';
 import { cores, espacamentoNomeado } from '@montacontrol/design-tokens/native';
 

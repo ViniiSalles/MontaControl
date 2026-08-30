@@ -86,3 +86,5 @@ mudar de layout a cada sprint. Cada sprint seguinte vira uma para `true` e acres
 - `pnpm start` / `pnpm android` / `pnpm ios` — Expo dev server.
 - `pnpm test` — Jest.
 - `pnpm lint` — `eslint` com a config raiz do monorepo.
+
+Para gerar um `.apk` instalável (release local, sem EAS), ver [`BUILD-APK.md`](./BUILD-APK.md).
