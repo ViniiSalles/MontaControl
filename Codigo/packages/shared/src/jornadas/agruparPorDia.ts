@@ -3,7 +3,12 @@ import { diaNoFuso } from './fuso';
 
 const MS_POR_MINUTO = 60_000;
 
-function minutosDe(jornada: JornadaDTO): number {
+/**
+ * Minutos de um turno. Zero enquanto faltar uma das pontas: turno aberto
+ * (ou vencido, sem check-out) não tem duração para somar — o que ele tem é
+ * um registro faltando.
+ */
+export function minutosDaJornada(jornada: JornadaDTO): number {
   if (!jornada.checkinAt || !jornada.checkoutAt) return 0;
   const bruto = new Date(jornada.checkoutAt).getTime() - new Date(jornada.checkinAt).getTime();
   return Math.max(0, Math.round(bruto / MS_POR_MINUTO));
@@ -49,7 +54,7 @@ export function agruparJornadasPorDia(
         data,
         inicio: jornada.checkinAt,
         fim: jornada.checkoutAt,
-        minutosTrabalhados: minutosDe(jornada),
+        minutosTrabalhados: minutosDaJornada(jornada),
         emAndamento: jornada.checkoutAt === null,
         jornadas: [jornada],
       });
@@ -58,7 +63,7 @@ export function agruparJornadasPorDia(
 
     existente.inicio = menor(existente.inicio, jornada.checkinAt);
     existente.fim = maior(existente.fim, jornada.checkoutAt);
-    existente.minutosTrabalhados += minutosDe(jornada);
+    existente.minutosTrabalhados += minutosDaJornada(jornada);
     existente.emAndamento = existente.emAndamento || jornada.checkoutAt === null;
     existente.jornadas.push(jornada);
   }

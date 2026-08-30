@@ -15,6 +15,10 @@ export const SELECAO_JORNADA = {
   checkoutLongitude: true,
   checkoutEndereco: true,
   createdAt: true,
+  // Só a existência interessa — `lancadoEmAtraso` é booleano. A relação é
+  // 1-1 (`jornada_id` é único em `solicitacao_ponto`), então não há lista
+  // para contar.
+  solicitacaoPonto: { select: { id: true } },
 } as const;
 
 type LinhaJornada = Prisma.JornadaGetPayload<{ select: typeof SELECAO_JORNADA }>;
@@ -44,10 +48,7 @@ export function paraJornadaDTO(linha: LinhaJornada): JornadaDTO {
     checkoutLatitude: numero(linha.checkoutLatitude),
     checkoutLongitude: numero(linha.checkoutLongitude),
     checkoutEndereco: linha.checkoutEndereco,
-    // Provisório: a relação `solicitacaoPonto` que dá origem a este campo só
-    // existe a partir da migração de ponto em atraso. Trocado por
-    // `linha.solicitacaoPonto !== null` naquela task.
-    lancadoEmAtraso: false,
+    lancadoEmAtraso: linha.solicitacaoPonto !== null,
     criadoEm: linha.createdAt.toISOString(),
   };
 }

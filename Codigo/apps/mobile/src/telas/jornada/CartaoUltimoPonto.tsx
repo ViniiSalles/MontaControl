@@ -1,5 +1,7 @@
 import { View } from 'react-native';
 import { cores, espacamento } from '@montacontrol/design-tokens/native';
+import { LIMITE_JORNADA_HORAS } from '@montacontrol/shared';
+import type { EstadoJornada } from '@montacontrol/shared';
 import { Badge } from '../../ui/Badge';
 import { Cartao } from '../../ui/Cartao';
 import { MapaLocalizacao } from '../../ui/MapaLocalizacao';
@@ -13,6 +15,8 @@ const rotuloExibido: Record<TipoPonto, string> = { entrada: 'Entrada', saida: 'S
 interface PropsCartaoUltimoPonto {
   /** `null` = montador ainda não bateu nenhum ponto na jornada corrente. */
   ponto: UltimoPonto | null;
+  /** Estado da jornada a que o ponto pertence — decide o selo e o aviso. */
+  estado: EstadoJornada;
 }
 
 function CartaoVazio() {
@@ -35,15 +39,20 @@ function CartaoVazio() {
   );
 }
 
+function SeloEstado({ estado }: { estado: EstadoJornada }) {
+  if (estado === 'em_andamento') return <Badge variante="info" texto="Em andamento" />;
+  if (estado === 'vencida') return <Badge variante="erro" texto="Sem saída" />;
+  return <Badge variante="neutro" texto="Encerrada" />;
+}
+
 /**
  * Cartão de leitura do último registro: hora em destaque, tipo/dia logo
  * abaixo e o mapa do lugar onde o ponto caiu. O mapa só aparece com
  * coordenada — ponto lançado em atraso nasce sem GPS (`JornadaDTO.lancadoEmAtraso`).
  */
-export function CartaoUltimoPonto({ ponto }: PropsCartaoUltimoPonto) {
+export function CartaoUltimoPonto({ ponto, estado }: PropsCartaoUltimoPonto) {
   if (!ponto) return <CartaoVazio />;
 
-  const emAndamento = ponto.tipo === 'entrada';
   // Desestruturar antes do JSX é o que faz o TS estreitar `number | null`
   // para `number` dentro do bloco condicional do mapa.
   const { latitude, longitude } = ponto;
@@ -59,16 +68,12 @@ export function CartaoUltimoPonto({ ponto }: PropsCartaoUltimoPonto) {
               ÚLTIMO PONTO
             </Texto>
             <View style={{ flex: 1 }} />
-            {emAndamento ? (
-              <Badge variante="info" texto="Em andamento" />
-            ) : (
-              <Badge variante="neutro" texto="Encerrada" />
-            )}
+            <SeloEstado estado={estado} />
             {ponto.lancadoEmAtraso && <Badge variante="aviso" texto="Em atraso" />}
           </View>
 
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: espacamento[12] }}>
-            {emAndamento && <PulsoAtividade />}
+            {estado === 'em_andamento' && <PulsoAtividade />}
             <Texto variante="displaySm" tabular>
               {formatarHora(ponto.registradoEm)}
             </Texto>
@@ -77,6 +82,12 @@ export function CartaoUltimoPonto({ ponto }: PropsCartaoUltimoPonto) {
           <Texto variante="bodyMd" cor={cores.onSurfaceVariant}>
             {`${rotuloExibido[ponto.tipo]} · ${formatarDiaCurto(diaCivilDe(ponto.registradoEm))}`}
           </Texto>
+
+          {estado === 'vencida' && (
+            <Texto variante="bodyMd" cor={cores.error}>
+              {`Esta entrada passou de ${LIMITE_JORNADA_HORAS}h sem saída. Registre a saída pelo ponto em atraso — a próxima batida abre uma jornada nova.`}
+            </Texto>
+          )}
 
           {latitude !== null && longitude !== null && (
             <MapaLocalizacao latitude={latitude} longitude={longitude} endereco={ponto.endereco} />

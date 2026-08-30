@@ -69,19 +69,23 @@ describe('derivarUltimoPonto', () => {
   });
 });
 
+// Check-in às 08:00 locais do dia 29; o limite de 24h cai às 08:00 do dia 30.
+const DENTRO_DO_LIMITE = '2026-08-29T22:00:00.000Z';
+const DEPOIS_DO_LIMITE = '2026-08-30T12:00:00.000Z';
+
 describe('proximaAcao', () => {
   it('sem jornada, a próxima ação é a entrada', () => {
-    expect(proximaAcao(null)).toBe('entrada');
+    expect(proximaAcao(null, DENTRO_DO_LIMITE)).toBe('entrada');
   });
 
-  it('jornada sem check-out pede saída', () => {
-    expect(proximaAcao(jornada())).toBe('saida');
+  it('jornada aberta dentro do limite pede saída', () => {
+    expect(proximaAcao(jornada(), DENTRO_DO_LIMITE)).toBe('saida');
   });
 
   // O que decide é `checkoutAt`, não `status`: uma jornada PAUSADA continua
   // aberta e o botão precisa seguir oferecendo a saída.
   it('jornada pausada continua pedindo saída', () => {
-    expect(proximaAcao(jornada({ status: StatusJornada.PAUSADA }))).toBe('saida');
+    expect(proximaAcao(jornada({ status: StatusJornada.PAUSADA }), DENTRO_DO_LIMITE)).toBe('saida');
   });
 
   it('jornada com check-out volta a pedir entrada', () => {
@@ -89,6 +93,13 @@ describe('proximaAcao', () => {
       status: StatusJornada.FINALIZADA,
       checkoutAt: '2026-08-29T20:00:00.000Z',
     });
-    expect(proximaAcao(encerrada)).toBe('entrada');
+    expect(proximaAcao(encerrada, DENTRO_DO_LIMITE)).toBe('entrada');
+  });
+
+  // O caso da refatoração: check-out esquecido não pode prender o montador
+  // oferecendo uma saída que a API vai recusar — o dia de hoje começa com
+  // uma entrada nova.
+  it('jornada aberta além das 24h vence e volta a pedir entrada', () => {
+    expect(proximaAcao(jornada(), DEPOIS_DO_LIMITE)).toBe('entrada');
   });
 });

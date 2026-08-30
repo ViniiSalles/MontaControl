@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { View } from 'react-native';
 import { cores, espacamento, espacamentoNomeado } from '@montacontrol/design-tokens/native';
+import { estadoJornada } from '@montacontrol/shared';
 import type { JornadaDTO } from '@montacontrol/shared';
 import { Alerta } from '../ui/Alerta';
 import { Botao } from '../ui/Botao';
@@ -54,7 +55,11 @@ export function Jornada({ aoAbrirHistorico, aoLancarEmAtraso }: PropsJornada) {
 
   const jornadaExibida = jornadaRegistrada ?? jornada;
   const ultimoPonto = derivarUltimoPonto(jornadaExibida);
-  const acao = proximaAcao(jornadaExibida);
+  // Um único `agora` por render: calcular de novo dentro do cartão poderia
+  // deixá-lo em desacordo com o rótulo do botão na virada do limite.
+  const agoraIso = new Date().toISOString();
+  const estado = jornadaExibida ? estadoJornada(jornadaExibida, agoraIso) : 'finalizada';
+  const acao = proximaAcao(jornadaExibida, agoraIso);
 
   const baterPonto = useCallback(async () => {
     setRegistrando(true);
@@ -92,7 +97,7 @@ export function Jornada({ aoAbrirHistorico, aoLancarEmAtraso }: PropsJornada) {
             <Carregando tamanho={espacamento[32]} />
           </View>
         ) : (
-          <CartaoUltimoPonto ponto={ultimoPonto} />
+          <CartaoUltimoPonto ponto={ultimoPonto} estado={estado} />
         )}
 
         {/*

@@ -7,6 +7,7 @@ import { JornadaEmAndamentoException } from './exceptions/jornada-em-andamento.e
 import { RegistroForaDaJanelaException } from './exceptions/registro-fora-da-janela.exception';
 import { SemJornadaAbertaException } from './exceptions/sem-jornada-aberta.exception';
 import { CheckoutAntesDoCheckinException } from './exceptions/checkout-antes-do-checkin.exception';
+import { JornadaVencidaException } from './exceptions/jornada-vencida.exception';
 
 const USUARIO_ID = 7;
 
@@ -162,6 +163,17 @@ describe('JornadasService — check-in', () => {
     expect(repositorio.criarCheckin).not.toHaveBeenCalled();
   });
 
+  // Check-out esquecido não pode prender o montador: passadas as 24h a
+  // jornada aberta é lixo, e a batida de hoje abre uma nova.
+  it('jornada aberta há mais de 24h não bloqueia um novo check-in', async () => {
+    repositorio.buscarAbertaDoUsuario.mockResolvedValue(
+      jornadaFake({ checkinAt: '2026-08-25T10:00:00.000Z' }), // 31h antes de AGORA
+    );
+
+    await expect(service.checkin(USUARIO_ID, pedido())).resolves.toBeDefined();
+    expect(repositorio.criarCheckin).toHaveBeenCalledTimes(1);
+  });
+
   it('avalia o dia no fuso de operação, não em UTC', async () => {
     // 24/08 23:00 no horário de Brasília é 25/08 02:00Z. Em UTC o dia seria
     // 25/08, que está na janela; no fuso de operação é 24/08 — anteontem —
@@ -235,6 +247,19 @@ describe('JornadasService — check-out', () => {
     await expect(
       service.checkout(USUARIO_ID, pedidoSaida({ registradoEm: '2026-08-26T10:00:00.000Z' })),
     ).rejects.toBeInstanceOf(CheckoutAntesDoCheckinException);
+  });
+
+  // O limite é medido contra a hora batida: fechar agora uma jornada de 31h
+  // gravaria uma saída que ninguém deu. O caminho é o ponto em atraso.
+  it('recusa check-out de jornada aberta há mais de 24h', async () => {
+    repositorio.buscarAbertaDoUsuario.mockResolvedValue(
+      jornadaFake({ checkinAt: '2026-08-25T10:00:00.000Z' }),
+    );
+
+    await expect(service.checkout(USUARIO_ID, pedidoSaida())).rejects.toBeInstanceOf(
+      JornadaVencidaException,
+    );
+    expect(repositorio.registrarCheckout).not.toHaveBeenCalled();
   });
 
   it('idCliente já encerrado é devolvido mesmo com registradoEm fora da janela', async () => {

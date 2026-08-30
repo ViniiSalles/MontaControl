@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { StatusJornada } from '../../generated/prisma';
+import { LIMITE_JORNADA_MS } from '@montacontrol/shared';
 import type { JornadaDTO } from '@montacontrol/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { SELECAO_JORNADA, paraJornadaDTO } from './jornada-mapper';
@@ -107,6 +108,10 @@ export class JornadasRepository {
    * Existe jornada do usuário cujo intervalo cruza `[inicio, fim]`?
    * Aprovar um ponto em atraso sobre uma jornada existente pagaria a mesma
    * hora duas vezes.
+   *
+   * Jornada aberta ocupa `[check-in, check-in + limite]`, e não daqui até o
+   * infinito: um check-out esquecido em maio não pode barrar o lançamento
+   * de um ponto em atraso de agosto.
    */
   async existeSobreposicao(
     usuarioId: number,
@@ -114,12 +119,21 @@ export class JornadasRepository {
     fimIso: string,
     ignorarJornadaId?: number,
   ): Promise<boolean> {
+    const inicio = new Date(inicioIso);
     const total = await this.prisma.jornada.count({
       where: {
         usuarioId,
         id: ignorarJornadaId ? { not: ignorarJornadaId } : undefined,
         checkinAt: { lte: new Date(fimIso) },
-        OR: [{ checkoutAt: null }, { checkoutAt: { gte: new Date(inicioIso) } }],
+        OR: [
+          { checkoutAt: { gte: inicio } },
+          {
+            AND: [
+              { checkoutAt: null },
+              { checkinAt: { gte: new Date(inicio.getTime() - LIMITE_JORNADA_MS) } },
+            ],
+          },
+        ],
       },
     });
     return total > 0;

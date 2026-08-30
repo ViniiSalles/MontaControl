@@ -3,7 +3,7 @@ jest.mock('../../jornada/clienteJornadas');
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { StatusJornada } from '@montacontrol/shared';
-import type { DiaJornadaDTO, HistoricoJornadasDTO } from '@montacontrol/shared';
+import type { DiaJornadaDTO, HistoricoJornadasDTO, JornadaDTO } from '@montacontrol/shared';
 import { useAuth } from '../../auth/AuthContext';
 import { buscarHistorico } from '../../jornada/clienteJornadas';
 import { montador } from '../../auth/__tests__/apoio';
@@ -15,6 +15,26 @@ const buscarHistoricoMock = jest.mocked(buscarHistorico);
 const voltar = jest.fn();
 const lancarEmAtraso = jest.fn();
 
+function jornada(parcial: Partial<JornadaDTO> & { id: number }): JornadaDTO {
+  return {
+    usuarioId: montador.id,
+    status: StatusJornada.FINALIZADA,
+    checkinAt: null,
+    checkinLatitude: null,
+    checkinLongitude: null,
+    checkinEndereco: null,
+    checkoutAt: null,
+    checkoutLatitude: null,
+    checkoutLongitude: null,
+    checkoutEndereco: null,
+    lancadoEmAtraso: false,
+    criadoEm: '2026-08-26T11:00:00.000Z',
+    ...parcial,
+  };
+}
+
+// `jornadas` precisa vir preenchido: o card do dia lista turno a turno, não
+// mais o resumo min/max do dia.
 function dia(parcial: Partial<DiaJornadaDTO> = {}): DiaJornadaDTO {
   return {
     data: '2026-08-26',
@@ -22,7 +42,13 @@ function dia(parcial: Partial<DiaJornadaDTO> = {}): DiaJornadaDTO {
     fim: '2026-08-26T20:00:00.000Z', // 17:00 local
     minutosTrabalhados: 540,
     emAndamento: false,
-    jornadas: [],
+    jornadas: [
+      jornada({
+        id: 1,
+        checkinAt: '2026-08-26T11:00:00.000Z',
+        checkoutAt: '2026-08-26T20:00:00.000Z',
+      }),
+    ],
     ...parcial,
   };
 }
@@ -86,21 +112,7 @@ test('dia sem check-out oferece o atalho de ponto em atraso com a data do card',
     emAndamento: true,
     minutosTrabalhados: 0,
     jornadas: [
-      {
-        id: 1,
-        usuarioId: montador.id,
-        status: StatusJornada.EM_ANDAMENTO,
-        checkinAt: '2026-08-26T11:00:00.000Z',
-        checkinLatitude: null,
-        checkinLongitude: null,
-        checkinEndereco: null,
-        checkoutAt: null,
-        checkoutLatitude: null,
-        checkoutLongitude: null,
-        checkoutEndereco: null,
-        lancadoEmAtraso: false,
-        criadoEm: '2026-08-26T11:00:00.000Z',
-      },
+      jornada({ id: 1, status: StatusJornada.EM_ANDAMENTO, checkinAt: '2026-08-26T11:00:00.000Z' }),
     ],
   });
   buscarHistoricoMock.mockResolvedValue(historico([semSaida], 0));

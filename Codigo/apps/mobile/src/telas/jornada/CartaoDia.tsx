@@ -1,6 +1,7 @@
 import { View } from 'react-native';
 import { cores, espacamento } from '@montacontrol/design-tokens/native';
-import type { DiaJornadaDTO } from '@montacontrol/shared';
+import { estadoJornada, minutosDaJornada } from '@montacontrol/shared';
+import type { DiaJornadaDTO, JornadaDTO } from '@montacontrol/shared';
 import { Badge } from '../../ui/Badge';
 import { Botao } from '../../ui/Botao';
 import { Cartao } from '../../ui/Cartao';
@@ -13,46 +14,100 @@ interface PropsCartaoDia {
   aoLancarEmAtraso: (data: string) => void;
 }
 
+/**
+ * Um turno por linha, em ordem cronológica.
+ *
+ * O card mostrava só o menor início e o maior fim do dia, e com isso dois
+ * turnos (10:00–15:00 e 16:00–18:00) apareciam como um único 10:00–18:00 —
+ * o intervalo do meio sumia e o dia parecia uma hora mais longo do que foi.
+ * Cada turno é um par entrada/saída próprio; o total do dia é a soma deles,
+ * não a distância entre as pontas.
+ */
+function LinhaTurno({
+  jornada,
+  ordem,
+  agoraIso,
+}: {
+  jornada: JornadaDTO;
+  ordem: number;
+  agoraIso: string;
+}) {
+  const estado = estadoJornada(jornada, agoraIso);
+
+  return (
+    <View style={{ gap: espacamento[4] }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: espacamento[8] }}>
+        <Texto variante="labelMd" cor={cores.onSurfaceVariant}>
+          {`${ordem}º TURNO`}
+        </Texto>
+        {estado === 'em_andamento' && <Badge variante="info" texto="Em andamento" />}
+        {estado === 'vencida' && <Badge variante="erro" texto="Sem saída" />}
+        {jornada.lancadoEmAtraso && <Badge variante="aviso" texto="Em atraso" />}
+      </View>
+
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: espacamento[8] }}>
+        <Texto variante="bodyLg" tabular>
+          {formatarHora(jornada.checkinAt)}
+        </Texto>
+        <Texto variante="bodyLg" cor={cores.onSurfaceVariant}>
+          →
+        </Texto>
+        <Texto variante="bodyLg" tabular>
+          {formatarHora(jornada.checkoutAt)}
+        </Texto>
+        <View style={{ flex: 1 }} />
+        <Texto variante="bodyLg" cor={cores.onSurfaceVariant} tabular>
+          {formatarDuracao(minutosDaJornada(jornada))}
+        </Texto>
+      </View>
+    </View>
+  );
+}
+
 export function CartaoDia({ dia, aoLancarEmAtraso }: PropsCartaoDia) {
-  const temAtraso = dia.jornadas.some((jornada) => jornada.lancadoEmAtraso);
-  // Dia terminado sem check-out não é "em andamento": é ponto faltando, e o
-  // montador precisa do atalho para corrigir.
-  const semCheckout = dia.emAndamento && dia.fim === null;
+  const agoraIso = new Date().toISOString();
+
+  // O histórico vem do mais recente para o mais antigo; dentro do dia a
+  // ordem que o montador espera é a do relógio.
+  const turnos = [...dia.jornadas].sort((a, b) =>
+    (a.checkinAt ?? '').localeCompare(b.checkinAt ?? ''),
+  );
+
+  const semSaida = turnos.some((turno) => turno.checkoutAt === null);
+  // Com um turno só, o total do dia repetiria a duração da linha acima.
+  const mostrarTotal = turnos.length > 1;
 
   return (
     <Cartao
       elevacao="elev1"
       tom="padrao"
       conteudo={
-        <View style={{ gap: espacamento[8] }}>
+        <View style={{ gap: espacamento[12] }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: espacamento[8] }}>
             <Texto variante="titleMd">{formatarDiaCurto(dia.data)}</Texto>
-            {dia.emAndamento && <Badge variante="info" texto="Em andamento" />}
-            {temAtraso && <Badge variante="aviso" texto="Em atraso" />}
+            <View style={{ flex: 1 }} />
+            <Texto variante="labelMd" cor={cores.onSurfaceVariant}>
+              {turnos.length === 1 ? '1 turno' : `${turnos.length} turnos`}
+            </Texto>
           </View>
 
-          <View style={{ flexDirection: 'row', gap: espacamento[16] }}>
-            <View>
-              <Texto variante="labelMd" cor={cores.onSurfaceVariant}>
-                ENTRADA
-              </Texto>
-              <Texto variante="bodyLg">{formatarHora(dia.inicio)}</Texto>
-            </View>
-            <View>
-              <Texto variante="labelMd" cor={cores.onSurfaceVariant}>
-                SAÍDA
-              </Texto>
-              <Texto variante="bodyLg">{formatarHora(dia.fim)}</Texto>
-            </View>
-            <View>
-              <Texto variante="labelMd" cor={cores.onSurfaceVariant}>
-                TOTAL
-              </Texto>
-              <Texto variante="bodyLg">{formatarDuracao(dia.minutosTrabalhados)}</Texto>
-            </View>
-          </View>
+          {turnos.map((turno, indice) => (
+            <LinhaTurno key={turno.id} jornada={turno} ordem={indice + 1} agoraIso={agoraIso} />
+          ))}
 
-          {semCheckout && (
+          {mostrarTotal && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: espacamento[8] }}>
+              <Texto variante="labelMd" cor={cores.onSurfaceVariant}>
+                TOTAL DO DIA
+              </Texto>
+              <View style={{ flex: 1 }} />
+              <Texto variante="titleMd" tabular>
+                {formatarDuracao(dia.minutosTrabalhados)}
+              </Texto>
+            </View>
+          )}
+
+          {semSaida && (
             <Botao
               variante="fantasma"
               tamanho={40}

@@ -1,5 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { agruparJornadasPorDia, comporInstante, diaNoFuso, somarDias } from '@montacontrol/shared';
+import {
+  agruparJornadasPorDia,
+  comporInstante,
+  diaNoFuso,
+  jornadaVencida,
+  somarDias,
+} from '@montacontrol/shared';
 import type {
   CheckinRequest,
   CheckoutRequest,
@@ -13,6 +19,7 @@ import { JornadaEmAndamentoException } from './exceptions/jornada-em-andamento.e
 import { RegistroForaDaJanelaException } from './exceptions/registro-fora-da-janela.exception';
 import { SemJornadaAbertaException } from './exceptions/sem-jornada-aberta.exception';
 import { CheckoutAntesDoCheckinException } from './exceptions/checkout-antes-do-checkin.exception';
+import { JornadaVencidaException } from './exceptions/jornada-vencida.exception';
 
 /** Tolerância para relógio de aparelho adiantado. */
 const TOLERANCIA_FUTURO_MS = 5 * 60_000;
@@ -27,8 +34,13 @@ export class JornadasService {
 
     this.validarJanela(dados.registradoEm);
 
+    // Só jornada viva bloqueia. A vencida (check-out esquecido) fica onde
+    // está, para ser corrigida por ponto em atraso, e não pode impedir o
+    // montador de começar o turno de hoje.
     const aberta = await this.jornadas.buscarAbertaDoUsuario(usuarioId);
-    if (aberta) throw new JornadaEmAndamentoException();
+    if (aberta && !jornadaVencida(aberta, new Date().toISOString())) {
+      throw new JornadaEmAndamentoException();
+    }
 
     return this.jornadas.criarCheckin({
       usuarioId,
@@ -48,6 +60,10 @@ export class JornadasService {
 
     const aberta = await this.jornadas.buscarAbertaDoUsuario(usuarioId);
     if (!aberta) throw new SemJornadaAbertaException();
+
+    // O limite é medido contra o instante batido, não contra o relógio do
+    // servidor: quem decide se o turno estourou é a hora da saída.
+    if (jornadaVencida(aberta, dados.registradoEm)) throw new JornadaVencidaException();
 
     if (aberta.checkinAt && dados.registradoEm < aberta.checkinAt) {
       throw new CheckoutAntesDoCheckinException();

@@ -7,6 +7,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { HealthController } from './common/health.controller';
 import { validate } from './config/env.validation';
 import { JornadasModule } from './jornadas/jornadas.module';
+import { PontosEmAtrasoModule } from './pontos-em-atraso/pontos-em-atraso.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
@@ -19,6 +20,7 @@ import { PrismaModule } from './prisma/prisma.module';
     PrismaModule,
     AuthModule,
     JornadasModule,
+    PontosEmAtrasoModule,
   ],
   controllers: [HealthController],
   providers: [

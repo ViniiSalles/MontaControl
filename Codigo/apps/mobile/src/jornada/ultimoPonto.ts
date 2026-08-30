@@ -1,3 +1,4 @@
+import { estadoJornada } from '@montacontrol/shared';
 import type { JornadaDTO } from '@montacontrol/shared';
 
 /** Os dois registros que uma jornada guarda. */
@@ -50,12 +51,16 @@ export function derivarUltimoPonto(jornada: JornadaDTO | null): UltimoPonto | nu
 }
 
 /**
- * Qual ponto o botão vai bater. A decisão olha `checkoutAt`, não `status`:
- * `EM_ANDAMENTO` e `PAUSADA` são ambos jornada aberta, e o que impede um
- * segundo check-in é justamente a saída ainda não registrada.
+ * Qual ponto o botão vai bater. Só turno vivo pede saída: jornada aberta
+ * que passou do limite é check-out esquecido, não turno em curso, e insistir
+ * em oferecer a saída deixaria o montador sem começar o dia de hoje.
+ *
+ * Quem decide é `estadoJornada` (`@montacontrol/shared`), a mesma função que
+ * a API usa para recusar o check-out — duas cópias da regra divergiriam.
  */
-export function proximaAcao(jornada: JornadaDTO | null): TipoPonto {
-  return jornada && jornada.checkoutAt === null ? 'saida' : 'entrada';
+export function proximaAcao(jornada: JornadaDTO | null, agoraIso: string): TipoPonto {
+  if (!jornada) return 'entrada';
+  return estadoJornada(jornada, agoraIso) === 'em_andamento' ? 'saida' : 'entrada';
 }
 
 /** Rótulo em pt-BR para exibição — `'saida'` é o identificador, "saída" é o texto. */
