@@ -68,4 +68,13 @@ export enum TipoOperacaoOutbox {
   CHECKOUT = 'CHECKOUT',
   BIPAGEM = 'BIPAGEM',
   AVARIA = 'AVARIA',
+  /** Lançamento de ponto em atraso — também é feito offline, então também enfileira. */
+  SOLICITACAO_PONTO = 'SOLICITACAO_PONTO',
+}
+
+/** Ciclo de vida de um lançamento de ponto em atraso (Sprint 2). */
+export enum StatusSolicitacaoPonto {
+  PENDENTE = 'PENDENTE',
+  APROVADA = 'APROVADA',
+  REJEITADA = 'REJEITADA',
 }
