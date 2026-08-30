@@ -18,7 +18,7 @@ test('botão de fechar chama aoFechar', async () => {
   // Seletor por `accessibilityLabel="Fechar"` do Pressable em Modal.tsx —
   // não depender de estrutura de DOM (`.parent.parent`), frágil a qualquer
   // ajuste de layout.
-  fireEvent.press(screen.getByLabelText('Fechar'));
+  await fireEvent.press(screen.getByLabelText('Fechar'));
   expect(aoFechar).toHaveBeenCalledTimes(1);
 });
 
@@ -27,7 +27,7 @@ test('tocar no overlay chama aoFechar', async () => {
   await render(
     <Modal visivel apresentacao="centro" titulo="Teste" conteudo={<Text>corpo</Text>} aoFechar={aoFechar} />,
   );
-  fireEvent.press(screen.getByTestId('modal-overlay'));
+  await fireEvent.press(screen.getByTestId('modal-overlay'));
   expect(aoFechar).toHaveBeenCalledTimes(1);
 });
 
@@ -47,10 +47,10 @@ test('cada ação em `acoes` dispara seu próprio aoPressionar', async () => {
       aoFechar={() => {}}
     />,
   );
-  fireEvent.press(screen.getByText('Cancelar'));
+  await fireEvent.press(screen.getByText('Cancelar'));
   expect(aoCancelar).toHaveBeenCalledTimes(1);
   expect(aoConfirmar).not.toHaveBeenCalled();
 
-  fireEvent.press(screen.getByText('Confirmar'));
+  await fireEvent.press(screen.getByText('Confirmar'));
   expect(aoConfirmar).toHaveBeenCalledTimes(1);
 });
