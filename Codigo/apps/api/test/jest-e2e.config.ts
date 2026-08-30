@@ -16,6 +16,16 @@ const config: Config = {
   moduleNameMapper: {
     '^@montacontrol/shared$': '<rootDir>/../../../packages/shared/src/index.ts',
   },
+  /**
+   * O default do Jest é 5s por teste — orçamento de teste unitário, não de
+   * e2e. Cada caso aqui fala com o Supabase real em São Paulo: o mais pesado
+   * (`check-out encerra a jornada...`) faz duas chamadas ao GoTrue (criar
+   * usuário e login, ambas com hash de senha no servidor) mais quatro idas
+   * ao Postgres. Roda em ~650ms com o projeto quente e estoura os 5s quando
+   * ele está frio, falhando por latência e não por regressão. O mesmo vale
+   * para o `afterAll`, que apaga as fixtures uma a uma.
+   */
+  testTimeout: 30_000,
   globalSetup: '<rootDir>/setup/global-setup.ts',
   setupFiles: ['<rootDir>/setup/env.ts'],
 };
