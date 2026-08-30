@@ -16,10 +16,18 @@ export default async function globalSetup(): Promise<void> {
   const raizApi = resolve(__dirname, '../..');
   config({ path: resolve(raizApi, '.env.test'), override: true, quiet: true });
 
-  const prismaBin = resolve(raizApi, 'node_modules/.bin/prisma');
+  // No Windows, o shim sem extensão é um script POSIX que o CreateProcess
+  // nativo não executa — o `.cmd` é o equivalente que o Windows entende.
+  const prismaBin = resolve(
+    raizApi,
+    'node_modules/.bin',
+    process.platform === 'win32' ? 'prisma.cmd' : 'prisma',
+  );
   execFileSync(prismaBin, ['migrate', 'deploy'], {
     cwd: raizApi,
     stdio: 'inherit',
     env: process.env,
+    // `.cmd` é um script de lote: desde o Node 18 ele só roda via shell.
+    shell: process.platform === 'win32',
   });
 }
