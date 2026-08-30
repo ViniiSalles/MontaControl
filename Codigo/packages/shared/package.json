@@ -5,6 +5,7 @@
   "description": "Contrato de fio entre API, Web e Mobile: enums, DTOs e eventos de domínio.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "react-native": "src/index.ts",
   "files": [
     "dist"
   ],

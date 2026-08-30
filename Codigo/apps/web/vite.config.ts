@@ -12,6 +12,12 @@ const proxyApi = {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // `node-linker=hoisted` dá a vaga da raiz ao react 19.2.3 que o mobile fixa,
+  // e sobram cópias físicas do 19.2.8 em `apps/web/node_modules/react` e em
+  // `react-router/node_modules/react`. Duas cópias = dois React em memória, e
+  // o primeiro hook de `<BrowserRouter>` estoura com "Invalid hook call".
+  // `dedupe` obriga o Vite a resolver todo import para uma cópia só.
+  resolve: { dedupe: ['react', 'react-dom'] },
   server: { proxy: proxyApi },
   preview: { proxy: proxyApi },
   // `@montacontrol/shared` compila para CommonJS (consumido também pela API

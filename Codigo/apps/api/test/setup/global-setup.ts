@@ -16,8 +16,12 @@ export default async function globalSetup(): Promise<void> {
   const raizApi = resolve(__dirname, '../..');
   config({ path: resolve(raizApi, '.env.test'), override: true, quiet: true });
 
-  const prismaBin = resolve(raizApi, 'node_modules/.bin/prisma');
-  execFileSync(prismaBin, ['migrate', 'deploy'], {
+  // Chamar o entrypoint do pacote com o próprio Node, em vez do shim de
+  // `node_modules/.bin`: com `node-linker=hoisted` o shim só existe na raiz
+  // do workspace, não em `apps/api`, e no Windows ele ainda exigiria o
+  // `.cmd` e um shell. `require.resolve` acha o pacote de onde ele estiver.
+  const prismaCli = require.resolve('prisma/build/index.js');
+  execFileSync(process.execPath, [prismaCli, 'migrate', 'deploy'], {
     cwd: raizApi,
     stdio: 'inherit',
     env: process.env,

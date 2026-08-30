@@ -1,10 +1,16 @@
+import type { ReactElement } from 'react';
 import { render, screen } from '@testing-library/react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Tela } from '../Tela';
 import { Texto } from '../Texto';
 
+function renderComSafeArea(ui: ReactElement) {
+  return render(<SafeAreaProvider>{ui}</SafeAreaProvider>);
+}
+
 test('evitarTeclado monta KeyboardAvoidingView', async () => {
   // `render` é async no @testing-library/react-native v14 (ver Task 4).
-  await render(
+  await renderComSafeArea(
     <Tela evitarTeclado>
       <Texto variante="bodyMd">conteúdo</Texto>
     </Tela>,
@@ -20,7 +26,7 @@ test('evitarTeclado monta KeyboardAvoidingView', async () => {
 });
 
 test('sem evitarTeclado não monta KeyboardAvoidingView', async () => {
-  await render(
+  await renderComSafeArea(
     <Tela>
       <Texto variante="bodyMd">conteúdo</Texto>
     </Tela>,

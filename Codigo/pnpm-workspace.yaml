@@ -1,14 +1,19 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+
+# node-linker hoisted é obrigatório (React Native/Metro). No pnpm 10+ essa
+# configuração vive aqui, não no .npmrc.
+nodeLinker: hoisted
+shamefullyHoist: true
 allowBuilds:
   '@prisma/client': true
   '@prisma/engines': true
   esbuild: true
-  msgpackr-extract: set this to true or false
+  msgpackr-extract: true
   prisma: true
   unrs-resolver: true
-  workerd: set this to true or false
+  workerd: true
 minimumReleaseAgeExclude:
   - '@expo/cli@57.0.20'
   - '@expo/env@2.4.3'
