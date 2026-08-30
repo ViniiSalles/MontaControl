@@ -55,6 +55,21 @@ export class SupabaseAuthGateway {
     await this.cliente.auth.admin.signOut(accessToken);
   }
 
+  async criarUsuario(email: string, senha: string): Promise<string | null> {
+    const { data, error } = await this.cliente.auth.admin.createUser({
+      email,
+      password: senha,
+      email_confirm: true,
+    });
+    if (error || !data.user) return null;
+    return data.user.id;
+  }
+
+  /** Compensação: usada quando o cadastro no Postgres falha após o GoTrue já ter criado o usuário. */
+  async excluirUsuario(authUserId: string): Promise<void> {
+    await this.cliente.auth.admin.deleteUser(authUserId);
+  }
+
   private mapearSessao(session: Session, user: User): SessaoSupabase {
     return {
       accessToken: session.access_token,

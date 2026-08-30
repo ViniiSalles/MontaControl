@@ -11,6 +11,8 @@ function criarClienteFalso() {
       admin: {
         updateUserById: jest.fn(),
         signOut: jest.fn(),
+        createUser: jest.fn(),
+        deleteUser: jest.fn(),
       },
     },
   };
@@ -105,7 +107,10 @@ describe('SupabaseAuthGateway', () => {
       });
 
       await expect(
-        gateway.solicitarRecuperacaoSenha('inexistente@montacontrol.local', 'https://app/redefinir'),
+        gateway.solicitarRecuperacaoSenha(
+          'inexistente@montacontrol.local',
+          'https://app/redefinir',
+        ),
       ).resolves.toBeUndefined();
       expect(cliente.auth.resetPasswordForEmail).toHaveBeenCalledWith(
         'inexistente@montacontrol.local',
@@ -171,10 +176,7 @@ describe('SupabaseAuthGateway', () => {
         error: { message: 'Unable to update user' },
       });
 
-      const sucesso = await gateway.atualizarSenha(
-        '11111111-1111-1111-1111-111111111111',
-        'curta',
-      );
+      const sucesso = await gateway.atualizarSenha('11111111-1111-1111-1111-111111111111', 'curta');
 
       expect(sucesso).toBe(false);
     });
@@ -187,6 +189,47 @@ describe('SupabaseAuthGateway', () => {
       await gateway.encerrarSessao('access-token');
 
       expect(cliente.auth.admin.signOut).toHaveBeenCalledWith('access-token');
+    });
+  });
+
+  describe('criarUsuario', () => {
+    it('retorna o authUserId quando o GoTrue cria o usuário com sucesso', async () => {
+      cliente.auth.admin.createUser.mockResolvedValue({
+        data: { user: usuarioFalso },
+        error: null,
+      });
+
+      const authUserId = await gateway.criarUsuario('maria@montacontrol.local', 'senha-longa-123');
+
+      expect(authUserId).toBe('11111111-1111-1111-1111-111111111111');
+      expect(cliente.auth.admin.createUser).toHaveBeenCalledWith({
+        email: 'maria@montacontrol.local',
+        password: 'senha-longa-123',
+        email_confirm: true,
+      });
+    });
+
+    it('retorna null quando o e-mail já está cadastrado no GoTrue', async () => {
+      cliente.auth.admin.createUser.mockResolvedValue({
+        data: { user: null },
+        error: { message: 'Email address already registered' },
+      });
+
+      const authUserId = await gateway.criarUsuario('maria@montacontrol.local', 'senha-longa-123');
+
+      expect(authUserId).toBeNull();
+    });
+  });
+
+  describe('excluirUsuario', () => {
+    it('remove o usuário do GoTrue', async () => {
+      cliente.auth.admin.deleteUser.mockResolvedValue({ error: null });
+
+      await gateway.excluirUsuario('11111111-1111-1111-1111-111111111111');
+
+      expect(cliente.auth.admin.deleteUser).toHaveBeenCalledWith(
+        '11111111-1111-1111-1111-111111111111',
+      );
     });
   });
 });
