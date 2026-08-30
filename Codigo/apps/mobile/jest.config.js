@@ -32,6 +32,18 @@ module.exports = {
     '^@montacontrol/ui-contracts/barra-nav-inferior$':
       '<rootDir>/../../packages/ui-contracts/src/barraNavInferior.ts',
     '^@montacontrol/ui-contracts/(.*)$': '<rootDir>/../../packages/ui-contracts/src/$1.ts',
+    // `shared` e um pacote buildado (`main: dist/index.js`) porque a API o
+    // consome como CommonJS. Apontar o Jest para o fonte mantem a suite
+    // independente de um `pnpm -r build` previo, como ja se faz em
+    // `apps/api/jest.config` (ver Codigo/README.md, secao `packages/shared`).
+    // No app real quem resolve o TS cru e o campo `react-native` do
+    // package.json, lido pelo Metro.
+    '^@montacontrol/shared$': '<rootDir>/../../packages/shared/src/index.ts',
   },
-  setupFilesAfterEnv: [],
+  // Sem isto o default do preset (`**/__tests__/**/*.[jt]s?(x)`) coleta
+  // tambem os arquivos de apoio que moram em `__tests__/` (fixtures,
+  // helpers) e falha com "must contain at least one test". Toda suite do
+  // app termina em `.test.ts(x)`.
+  testMatch: ['**/*.test.ts?(x)'],
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
 };

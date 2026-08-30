@@ -15,6 +15,9 @@
     "plugins": [
       "expo-font",
       "expo-splash-screen"
-    ]
+    ],
+    "extra": {
+      "apiUrl": null
+    }
   }
 }

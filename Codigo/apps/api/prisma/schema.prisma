@@ -63,6 +63,14 @@ enum StatusAtestado {
   REJEITADO
 }
 
+/// Ciclo de vida de um lançamento de ponto em atraso. Espelha
+/// `StatusSolicitacaoPonto` de `@montacontrol/shared`.
+enum StatusSolicitacaoPonto {
+  PENDENTE
+  APROVADA
+  REJEITADA
+}
+
 // ─── Usuário e Autenticação ──────────────────────────────────────────────────
 
 model Usuario {
@@ -76,6 +84,8 @@ model Usuario {
   updatedAt  DateTime @updatedAt @map("updated_at")
 
   jornadas           Jornada[]
+  solicitacoesPonto  SolicitacaoPonto[] @relation("SolicitacaoPontoUsuario")
+  pontosAnalisados   SolicitacaoPonto[] @relation("SolicitacaoPontoAnalista")
   atestados          Atestado[]        @relation("AtestadoUsuario")
   atestadosValidados Atestado[]        @relation("AtestadoValidador")
   bancosHoras        BancoHoras[]
@@ -220,20 +230,63 @@ model Jornada {
   id                Int           @id @default(autoincrement())
   usuarioId         Int           @map("usuario_id")
   pedidoId          Int?          @map("pedido_id")
+  checkinIdCliente  String?       @unique @map("checkin_id_cliente") @db.Uuid
   checkinLatitude   Decimal?      @map("checkin_latitude") @db.Decimal(10, 7)
   checkinLongitude  Decimal?      @map("checkin_longitude") @db.Decimal(10, 7)
+  checkinEndereco   String?       @map("checkin_endereco")
   checkinAt         DateTime?     @map("checkin_at")
+  checkoutIdCliente String?       @unique @map("checkout_id_cliente") @db.Uuid
   checkoutLatitude  Decimal?      @map("checkout_latitude") @db.Decimal(10, 7)
   checkoutLongitude Decimal?      @map("checkout_longitude") @db.Decimal(10, 7)
+  checkoutEndereco  String?       @map("checkout_endereco")
   checkoutAt        DateTime?     @map("checkout_at")
   status            StatusJornada @default(EM_ANDAMENTO)
   createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
 
   usuario Usuario @relation(fields: [usuarioId], references: [id])
   pedido  Pedido? @relation(fields: [pedidoId], references: [id])
   pausas  Pausa[]
 
+  /// Preenchida quando a jornada nasceu da aprovação de um ponto em atraso.
+  /// É o que responde `JornadaDTO.lancadoEmAtraso` sem coluna redundante.
+  solicitacaoPonto SolicitacaoPonto?
+
+  @@index([usuarioId, checkinAt])
   @@map("jornada")
+}
+
+/// Pedido de lançamento de ponto que o montador não conseguiu bater na hora.
+/// Nasce PENDENTE e só vira jornada quando um GESTOR aprova — por isso as horas
+/// ficam aqui, e não em `jornada`, enquanto a decisão não sai.
+model SolicitacaoPonto {
+  id                 Int                    @id @default(autoincrement())
+  usuarioId          Int                    @map("usuario_id")
+  /// UUID gerado no aparelho — idempotência da outbox, igual ao check-in.
+  idCliente          String                 @unique @map("id_cliente") @db.Uuid
+  /// Dia civil do ponto no fuso de operação, sem hora.
+  data               DateTime               @db.Date
+  inicio             DateTime
+  fim                DateTime
+  minutosSolicitados Int                    @map("minutos_solicitados")
+  justificativa      String
+  status             StatusSolicitacaoPonto @default(PENDENTE)
+  /// Jornada criada pela aprovação. Nula enquanto pendente ou se rejeitada.
+  jornadaId          Int?                   @unique @map("jornada_id")
+  analisadoPor       Int?                   @map("analisado_por")
+  analisadoEm        DateTime?              @map("analisado_em")
+  motivoRejeicao     String?                @map("motivo_rejeicao")
+  createdAt          DateTime               @default(now()) @map("created_at")
+  updatedAt          DateTime               @updatedAt @map("updated_at")
+
+  usuario  Usuario  @relation("SolicitacaoPontoUsuario", fields: [usuarioId], references: [id])
+  analista Usuario? @relation("SolicitacaoPontoAnalista", fields: [analisadoPor], references: [id])
+  jornada  Jornada? @relation(fields: [jornadaId], references: [id])
+
+  /// A fila do gestor é sempre "pendentes, mais antigas primeiro".
+  @@index([status, data])
+  @@index([usuarioId, data])
+  @@map("solicitacao_ponto")
 }
 
 model Pausa {

@@ -1,7 +1,8 @@
-import { Controller, Get } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import { Perfil as PerfilCompartilhado, UsuarioDTO } from '@montacontrol/shared';
 import { Perfil } from '../../generated/prisma';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { CadastrarUsuarioDto } from './dto/cadastrar-usuario.dto';
 import { UsuarioListado } from './usuario-listado';
 import { UsuariosService } from './usuarios.service';
 
@@ -15,6 +16,14 @@ export class UsuariosController {
   async listar(): Promise<UsuarioDTO[]> {
     const usuarios = await this.usuarios.listar();
     return usuarios.map((usuario) => this.mapear(usuario));
+  }
+
+  @Roles(Perfil.RH, Perfil.GESTOR)
+  @Post()
+  @HttpCode(HttpStatus.CREATED)
+  async cadastrar(@Body() dto: CadastrarUsuarioDto): Promise<UsuarioDTO> {
+    const usuario = await this.usuarios.cadastrar(dto);
+    return this.mapear(usuario);
   }
 
   private mapear(usuario: UsuarioListado): UsuarioDTO {

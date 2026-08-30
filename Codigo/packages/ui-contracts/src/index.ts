@@ -16,3 +16,4 @@ export * from './badge';
 export * from './carregando';
 export * from './pulsoAtividade';
 export * from './barraNavInferior';
+export * from './mapaLocalizacao';
