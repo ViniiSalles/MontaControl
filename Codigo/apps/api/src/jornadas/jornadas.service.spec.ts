@@ -134,6 +134,22 @@ describe('JornadasService — check-in', () => {
     ).rejects.toBeInstanceOf(RegistroForaDaJanelaException);
   });
 
+  it('idCliente já criado é devolvido mesmo com registradoEm fora da janela', async () => {
+    // Retentativa da fila de envio: o ponto foi batido dias atrás e a jornada
+    // já existe. A janela não pode recusá-lo — ela guarda o registro novo, não
+    // a confirmação de um que o servidor já aceitou. Este caso falha se a
+    // validação de janela passar para antes da busca por `idCliente`.
+    repositorio.buscarPorCheckinIdCliente.mockResolvedValue(jornadaFake({ id: 42 }));
+
+    const resultado = await service.checkin(
+      USUARIO_ID,
+      pedido({ registradoEm: '2026-08-20T12:00:00.000Z' }),
+    );
+
+    expect(resultado.id).toBe(42);
+    expect(repositorio.criarCheckin).not.toHaveBeenCalled();
+  });
+
   it('avalia o dia no fuso de operação, não em UTC', async () => {
     // 24/08 23:00 no horário de Brasília é 25/08 02:00Z. Em UTC o dia seria
     // 25/08, que está na janela; no fuso de operação é 24/08 — anteontem —
