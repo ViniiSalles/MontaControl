@@ -3,6 +3,7 @@
 # ---------------------------------------------------------------------------
 node_modules/
 .pnpm-store/
+docs/
 
 # ---------------------------------------------------------------------------
 # Build
@@ -10,6 +11,7 @@ node_modules/
 dist/
 build/
 *.tsbuildinfo
+.superpowers/
 
 # Prisma Client gerado
 Codigo/apps/api/generated/
