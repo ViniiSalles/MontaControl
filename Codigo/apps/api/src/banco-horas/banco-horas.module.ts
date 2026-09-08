@@ -12,7 +12,8 @@ import { BancoHorasService } from './banco-horas.service';
   imports: [PrismaModule, JornadasModule],
   controllers: [BancoHorasController],
   providers: [BancoHorasService, BancoHorasRepository],
-  // A issue #25 (espelho de ponto) vai precisar do saldo consolidado.
-  exports: [BancoHorasRepository],
+  // A issue #25 (espelho de ponto) usa o Service (não só o Repository)
+  // porque precisa do saldo recalculado na hora, não do último valor salvo.
+  exports: [BancoHorasRepository, BancoHorasService],
 })
 export class BancoHorasModule {}
