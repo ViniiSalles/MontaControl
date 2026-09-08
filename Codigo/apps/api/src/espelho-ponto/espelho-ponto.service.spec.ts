@@ -67,7 +67,7 @@ describe('EspelhoPontoService', () => {
       listarNoPeriodo: jest.fn().mockResolvedValue([]),
     };
     const duploBancoHoras: Partial<jest.Mocked<BancoHorasService>> = {
-      calcular: jest.fn().mockResolvedValue(bancoHorasFake()),
+      calcularSemPersistir: jest.fn().mockResolvedValue(bancoHorasFake()),
     };
 
     const modulo = await Test.createTestingModule({
@@ -86,7 +86,7 @@ describe('EspelhoPontoService', () => {
     jest.clearAllMocks();
     usuarios.buscarPorId.mockResolvedValue(usuarioFake());
     jornadas.listarNoPeriodo.mockResolvedValue([]);
-    bancoHoras.calcular.mockResolvedValue(bancoHorasFake());
+    bancoHoras.calcularSemPersistir.mockResolvedValue(bancoHorasFake());
   });
 
   it('lança MontadorNaoEncontradoException quando o usuário não existe', async () => {
@@ -95,6 +95,13 @@ describe('EspelhoPontoService', () => {
     await expect(service.gerar(USUARIO_ID, 8, 2026)).rejects.toBeInstanceOf(
       MontadorNaoEncontradoException,
     );
+
+    expect.assertions(2);
+    try {
+      await service.gerar(USUARIO_ID, 8, 2026);
+    } catch (erro) {
+      expect((erro as MontadorNaoEncontradoException).getStatus()).toBe(404);
+    }
   });
 
   it('lança MontadorNaoEncontradoException quando o usuário existe mas não é MONTADOR', async () => {
@@ -103,6 +110,13 @@ describe('EspelhoPontoService', () => {
     await expect(service.gerar(USUARIO_ID, 8, 2026)).rejects.toBeInstanceOf(
       MontadorNaoEncontradoException,
     );
+
+    expect.assertions(2);
+    try {
+      await service.gerar(USUARIO_ID, 8, 2026);
+    } catch (erro) {
+      expect((erro as MontadorNaoEncontradoException).getStatus()).toBe(404);
+    }
   });
 
   it('consulta as jornadas do mês pedido com os limites corretos', async () => {
@@ -132,6 +146,7 @@ describe('EspelhoPontoService', () => {
     const resultado = await service.gerar(USUARIO_ID, 8, 2026);
 
     expect(resultado.dias).toHaveLength(2);
+    expect(resultado.dias.map((d) => d.data)).toEqual(['2026-08-04', '2026-08-03']);
     expect(resultado.usuarioId).toBe(USUARIO_ID);
     expect(resultado.usuarioNome).toBe('Maria Montadora');
     expect(resultado.mes).toBe(8);
@@ -140,11 +155,11 @@ describe('EspelhoPontoService', () => {
 
   it('propaga o BancoHorasDTO do BancoHorasService sem alterar', async () => {
     const saldoCalculado = bancoHorasFake({ horasTrabalhadas: 100, saldo: -68 });
-    bancoHoras.calcular.mockResolvedValue(saldoCalculado);
+    bancoHoras.calcularSemPersistir.mockResolvedValue(saldoCalculado);
 
     const resultado = await service.gerar(USUARIO_ID, 8, 2026);
 
-    expect(bancoHoras.calcular).toHaveBeenCalledWith(USUARIO_ID, 8, 2026);
+    expect(bancoHoras.calcularSemPersistir).toHaveBeenCalledWith(USUARIO_ID, 8, 2026);
     expect(resultado.bancoHoras).toEqual(saldoCalculado);
   });
 });

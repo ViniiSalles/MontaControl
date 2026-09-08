@@ -25,7 +25,7 @@ export class EspelhoPontoService {
     const { inicioIso, fimIso } = limitesDoMes(mes, ano, FUSO_OPERACAO);
     const jornadasDoMes = await this.jornadas.listarNoPeriodo(usuarioId, inicioIso, fimIso);
     const dias = agruparJornadasPorDia(jornadasDoMes, FUSO_OPERACAO);
-    const bancoHoras = await this.bancoHoras.calcular(usuarioId, mes, ano);
+    const bancoHoras = await this.bancoHoras.calcularSemPersistir(usuarioId, mes, ano);
 
     return {
       usuarioId,

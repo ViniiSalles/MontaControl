@@ -44,6 +44,7 @@ describe('BancoHorasService', () => {
   beforeEach(async () => {
     const duploBancoHoras: Partial<jest.Mocked<BancoHorasRepository>> = {
       salvar: jest.fn().mockImplementation((dados) => Promise.resolve({ id: 1, ...dados })),
+      buscar: jest.fn().mockResolvedValue(null),
     };
     const duploJornadas: Partial<jest.Mocked<JornadasRepository>> = {
       listarNoPeriodo: jest.fn().mockResolvedValue([]),
@@ -63,6 +64,7 @@ describe('BancoHorasService', () => {
     jest.clearAllMocks();
     jornadas.listarNoPeriodo.mockResolvedValue([]);
     bancoHoras.salvar.mockImplementation((dados) => Promise.resolve({ id: 1, ...dados }));
+    bancoHoras.buscar.mockResolvedValue(null);
   });
 
   it('consulta as jornadas do mês pedido com os limites corretos', async () => {
@@ -138,5 +140,96 @@ describe('BancoHorasService', () => {
       horasPrevistas: 168,
       saldo: 8 - 168,
     });
+  });
+});
+
+describe('BancoHorasService — calcularSemPersistir', () => {
+  let service: BancoHorasService;
+  let bancoHoras: jest.Mocked<BancoHorasRepository>;
+  let jornadas: jest.Mocked<JornadasRepository>;
+
+  beforeAll(() => {
+    jest.useFakeTimers().setSystemTime(AGORA);
+  });
+
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+
+  beforeEach(async () => {
+    const duploBancoHoras: Partial<jest.Mocked<BancoHorasRepository>> = {
+      salvar: jest.fn().mockImplementation((dados) => Promise.resolve({ id: 1, ...dados })),
+      buscar: jest.fn().mockResolvedValue(null),
+    };
+    const duploJornadas: Partial<jest.Mocked<JornadasRepository>> = {
+      listarNoPeriodo: jest.fn().mockResolvedValue([]),
+    };
+
+    const modulo = await Test.createTestingModule({
+      providers: [
+        BancoHorasService,
+        { provide: BancoHorasRepository, useValue: duploBancoHoras },
+        { provide: JornadasRepository, useValue: duploJornadas },
+      ],
+    }).compile();
+
+    service = modulo.get(BancoHorasService);
+    bancoHoras = modulo.get(BancoHorasRepository);
+    jornadas = modulo.get(JornadasRepository);
+    jest.clearAllMocks();
+    jornadas.listarNoPeriodo.mockResolvedValue([]);
+    bancoHoras.salvar.mockImplementation((dados) => Promise.resolve({ id: 1, ...dados }));
+    bancoHoras.buscar.mockResolvedValue(null);
+  });
+
+  it('não chama bancoHoras.salvar', async () => {
+    await service.calcularSemPersistir(USUARIO_ID, 8, 2026);
+
+    expect(bancoHoras.salvar).not.toHaveBeenCalled();
+  });
+
+  it('reaproveita o id de um registro já existente', async () => {
+    bancoHoras.buscar.mockResolvedValue({
+      id: 5,
+      usuarioId: USUARIO_ID,
+      mes: 8,
+      ano: 2026,
+      horasTrabalhadas: 0,
+      horasPrevistas: 0,
+      saldo: 0,
+    });
+
+    const resultado = await service.calcularSemPersistir(USUARIO_ID, 8, 2026);
+
+    expect(resultado.id).toBe(5);
+  });
+
+  it('retorna id: 0 quando não existe registro gravado', async () => {
+    bancoHoras.buscar.mockResolvedValue(null);
+
+    const resultado = await service.calcularSemPersistir(USUARIO_ID, 8, 2026);
+
+    expect(resultado.id).toBe(0);
+  });
+
+  it('calcula o mesmo horasTrabalhadas/horasPrevistas/saldo que calcular', async () => {
+    jornadas.listarNoPeriodo.mockResolvedValue([
+      jornadaFake({
+        id: 1,
+        checkinAt: '2026-08-03T11:00:00.000Z', // 08:00 local
+        checkoutAt: '2026-08-03T15:00:00.000Z', // 12:00 local — 240 min
+      }),
+      jornadaFake({
+        id: 2,
+        checkinAt: '2026-08-03T16:00:00.000Z', // 13:00 local
+        checkoutAt: '2026-08-03T20:00:00.000Z', // 17:00 local — 240 min
+      }),
+    ]);
+
+    const resultado = await service.calcularSemPersistir(USUARIO_ID, 8, 2026);
+
+    expect(resultado.horasTrabalhadas).toBe(8);
+    expect(resultado.horasPrevistas).toBe(168);
+    expect(resultado.saldo).toBe(8 - 168);
   });
 });
