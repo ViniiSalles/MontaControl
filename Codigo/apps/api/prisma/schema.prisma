@@ -246,7 +246,6 @@ model Jornada {
 
   usuario Usuario @relation(fields: [usuarioId], references: [id])
   pedido  Pedido? @relation(fields: [pedidoId], references: [id])
-  pausas  Pausa[]
 
   /// Preenchida quando a jornada nasceu da aprovação de um ponto em atraso.
   /// É o que responde `JornadaDTO.lancadoEmAtraso` sem coluna redundante.
@@ -287,17 +286,6 @@ model SolicitacaoPonto {
   @@index([status, data])
   @@index([usuarioId, data])
   @@map("solicitacao_ponto")
-}
-
-model Pausa {
-  id        Int       @id @default(autoincrement())
-  jornadaId Int       @map("jornada_id")
-  inicio    DateTime
-  fim       DateTime?
-
-  jornada Jornada @relation(fields: [jornadaId], references: [id])
-
-  @@map("pausa")
 }
 
 model BancoHoras {
