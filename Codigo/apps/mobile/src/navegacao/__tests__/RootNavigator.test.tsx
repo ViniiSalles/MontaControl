@@ -65,7 +65,7 @@ test('N1T1/TI01 — MONTADOR válido vai para a aba Jornada e o token é guardad
   await renderizarApp();
   await preencherEEnviar(montador.email, 'senha-correta');
 
-  await waitFor(() => expect(screen.getByText(montador.nome)).toBeTruthy());
+  await waitFor(() => expect(screen.getByText('Jornada de Trabalho')).toBeTruthy());
   expect(screen.getByText('Jornada')).toBeTruthy();
   expect(armazenamentoMock.salvarTokens).toHaveBeenCalledWith({
     accessToken: 'access',
@@ -124,7 +124,7 @@ test('sessão restaurada do aparelho abre direto na Jornada, sem passar pelo Log
     </ProvedorAuth>,
   );
 
-  await waitFor(() => expect(screen.getByText(montador.nome)).toBeTruthy());
+  await waitFor(() => expect(screen.getByText('Jornada de Trabalho')).toBeTruthy());
   expect(screen.queryByText('Entrar')).toBeNull();
 });
 
@@ -140,7 +140,7 @@ test('sair volta ao Login e limpa os tokens do aparelho', async () => {
       <RootNavigator />
     </ProvedorAuth>,
   );
-  await waitFor(() => expect(screen.getByText(montador.nome)).toBeTruthy());
+  await waitFor(() => expect(screen.getByText('Jornada de Trabalho')).toBeTruthy());
 
   await fireEvent.press(screen.getByText('Sair'));
 
@@ -165,5 +165,5 @@ test('a barra inferior traz as 5 abas com só a Jornada habilitada', async () =>
 
   // Aba ainda não entregue não troca de tela.
   await fireEvent.press(screen.getByText('Bipagem'));
-  expect(screen.getByText(montador.nome)).toBeTruthy();
+  expect(screen.getByText('Jornada de Trabalho')).toBeTruthy();
 });

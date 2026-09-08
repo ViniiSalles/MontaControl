@@ -1,16 +1,21 @@
 import type { NomeIcone } from '@montacontrol/design-tokens/icones'
 import barcodeScanner from '@material-symbols/svg-400/outlined/barcode_scanner.svg?raw'
 import cancel from '@material-symbols/svg-400/outlined/cancel.svg?raw'
+import check from '@material-symbols/svg-400/outlined/check.svg?raw'
 import checkCircle from '@material-symbols/svg-400/outlined/check_circle.svg?raw'
 import close from '@material-symbols/svg-400/outlined/close.svg?raw'
 import conveyorBelt from '@material-symbols/svg-400/outlined/conveyor_belt.svg?raw'
 import description from '@material-symbols/svg-400/outlined/description.svg?raw'
 import eventNote from '@material-symbols/svg-400/outlined/event_note.svg?raw'
+import fingerprint from '@material-symbols/svg-400/outlined/fingerprint.svg?raw'
+import history from '@material-symbols/svg-400/outlined/history.svg?raw'
 import info from '@material-symbols/svg-400/outlined/info.svg?raw'
 import lock from '@material-symbols/svg-400/outlined/lock.svg?raw'
 import mail from '@material-symbols/svg-400/outlined/mail.svg?raw'
 import menuBook from '@material-symbols/svg-400/outlined/menu_book.svg?raw'
 import report from '@material-symbols/svg-400/outlined/report.svg?raw'
+import schedule from '@material-symbols/svg-400/outlined/schedule.svg?raw'
+import sync from '@material-symbols/svg-400/outlined/sync.svg?raw'
 import visibility from '@material-symbols/svg-400/outlined/visibility.svg?raw'
 import visibilityOff from '@material-symbols/svg-400/outlined/visibility_off.svg?raw'
 import warning from '@material-symbols/svg-400/outlined/warning.svg?raw'
@@ -28,16 +33,21 @@ const comCorAtual = (bruto: string) =>
 const svgPorIcone: Record<NomeIcone, string> = {
   barcode_scanner: comCorAtual(barcodeScanner),
   cancel: comCorAtual(cancel),
+  check: comCorAtual(check),
   check_circle: comCorAtual(checkCircle),
   close: comCorAtual(close),
   conveyor_belt: comCorAtual(conveyorBelt),
   description: comCorAtual(description),
   event_note: comCorAtual(eventNote),
+  fingerprint: comCorAtual(fingerprint),
+  history: comCorAtual(history),
   info: comCorAtual(info),
   lock: comCorAtual(lock),
   mail: comCorAtual(mail),
   menu_book: comCorAtual(menuBook),
   report: comCorAtual(report),
+  schedule: comCorAtual(schedule),
+  sync: comCorAtual(sync),
   visibility: comCorAtual(visibility),
   visibility_off: comCorAtual(visibilityOff),
   warning: comCorAtual(warning),

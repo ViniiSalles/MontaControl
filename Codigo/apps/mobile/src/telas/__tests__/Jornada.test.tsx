@@ -4,11 +4,11 @@ jest.mock('../../jornada/clienteJornadas');
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { StatusJornada } from '@montacontrol/shared';
-import type { JornadaDTO } from '@montacontrol/shared';
+import type { HistoricoJornadasDTO, JornadaDTO } from '@montacontrol/shared';
 import { useAuth } from '../../auth/AuthContext';
 import { registrarCheckin, registrarCheckout } from '../../jornada/acoes';
-import { buscarJornadaAtual } from '../../jornada/clienteJornadas';
-import { formatarHora } from '../../jornada/formatacao';
+import { buscarHistorico, buscarJornadaAtual } from '../../jornada/clienteJornadas';
+import { diaCivilDe, formatarHora } from '../../jornada/formatacao';
 import { montador } from '../../auth/__tests__/apoio';
 import { Jornada } from '../Jornada';
 
@@ -21,8 +21,20 @@ function renderizar() {
 
 const useAuthMock = jest.mocked(useAuth);
 const buscarJornadaAtualMock = jest.mocked(buscarJornadaAtual);
+const buscarHistoricoMock = jest.mocked(buscarHistorico);
 const registrarCheckinMock = jest.mocked(registrarCheckin);
 const registrarCheckoutMock = jest.mocked(registrarCheckout);
+
+const HOJE = diaCivilDe(new Date().toISOString());
+
+/** Histórico vazio: nenhum turno anterior hoje — o default de todo teste que não testa a soma. */
+const HISTORICO_VAZIO: HistoricoJornadasDTO = {
+  periodoDias: 5,
+  inicioPeriodo: HOJE,
+  fimPeriodo: HOJE,
+  dias: [],
+  totalMinutos: 0,
+};
 
 /**
  * Check-in de duas horas atrás, e não uma data fixa: jornada aberta só conta
@@ -75,6 +87,7 @@ beforeEach(() => {
     sair: jest.fn(),
   });
   buscarJornadaAtualMock.mockResolvedValue(null);
+  buscarHistoricoMock.mockResolvedValue(HISTORICO_VAZIO);
 });
 
 test('sem jornada aberta, a tela oferece o ponto de entrada', async () => {
@@ -174,7 +187,7 @@ test('atualizar refaz a busca e limpa o aviso', async () => {
     expect(screen.getByText('Não foi possível carregar sua jornada')).toBeTruthy(),
   );
 
-  await fireEvent.press(screen.getByText('Atualizar'));
+  await fireEvent.press(screen.getByLabelText('Atualizar'));
 
   await waitFor(() => expect(screen.getByText(ROTULO_SAIDA)).toBeTruthy());
   expect(buscarJornadaAtualMock).toHaveBeenCalledTimes(2);
@@ -190,4 +203,54 @@ test('os atalhos de histórico e ponto em atraso chamam a navegação da aba', a
 
   await fireEvent.press(screen.getByText('Ponto em atraso'));
   expect(lancarEmAtraso).toHaveBeenCalled();
+});
+
+// Bug reportado: "trabalhadas hoje" resetava sempre que o montador abria um
+// turno novo no mesmo dia, em vez de somar com o(s) turno(s) já fechados.
+test('abrir um turno novo no mesmo dia soma com o turno anterior, não reseta "trabalhadas hoje"', async () => {
+  const turno1Fechado: JornadaDTO = {
+    id: 101,
+    usuarioId: montador.id,
+    status: StatusJornada.FINALIZADA,
+    checkinAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+    checkinLatitude: -19.9325,
+    checkinLongitude: -43.9382,
+    checkinEndereco: 'Av. Afonso Pena, 1000',
+    checkoutAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(), // turno de 2h
+    checkoutLatitude: -19.94,
+    checkoutLongitude: -43.94,
+    checkoutEndereco: 'Rua da Bahia, 200',
+    lancadoEmAtraso: false,
+    criadoEm: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+  };
+  buscarHistoricoMock.mockResolvedValue({
+    periodoDias: 5,
+    inicioPeriodo: HOJE,
+    fimPeriodo: HOJE,
+    totalMinutos: 120,
+    dias: [
+      {
+        data: HOJE,
+        inicio: turno1Fechado.checkinAt,
+        fim: turno1Fechado.checkoutAt,
+        minutosTrabalhados: 120,
+        emAndamento: false,
+        jornadas: [turno1Fechado],
+      },
+    ],
+  });
+  const turno2Aberto: JornadaDTO = { ...ABERTA, id: 102, checkinAt: new Date().toISOString() };
+  registrarCheckinMock.mockResolvedValue({ tipo: 'ok', jornada: turno2Aberto });
+
+  await renderizar();
+  // Turno 1 (2h) já fechado, nenhuma jornada aberta ainda hoje.
+  await waitFor(() => expect(screen.getByText('2h 00min')).toBeTruthy());
+
+  await fireEvent.press(screen.getByText(ROTULO_ENTRADA));
+
+  await waitFor(() => expect(screen.getByText(ROTULO_SAIDA)).toBeTruthy());
+  // Turno 2 acabou de abrir (poucos ms de duração): o total não pode cair
+  // abaixo das 2h que o turno 1 já tinha — antes da correção, resetava a
+  // "0h 00min" porque a tela só olhava para o turno aberto agora.
+  expect(screen.getByText('2h 00min')).toBeTruthy();
 });

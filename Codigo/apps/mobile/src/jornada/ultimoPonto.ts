@@ -1,5 +1,5 @@
-import { estadoJornada } from '@montacontrol/shared';
-import type { JornadaDTO } from '@montacontrol/shared';
+import { estadoJornada, minutosDaJornada } from '@montacontrol/shared';
+import type { DiaJornadaDTO, EstadoJornada, JornadaDTO } from '@montacontrol/shared';
 
 /** Os dois registros que uma jornada guarda. */
 export type TipoPonto = 'entrada' | 'saida';
@@ -66,4 +66,46 @@ export function proximaAcao(jornada: JornadaDTO | null, agoraIso: string): TipoP
 /** Rótulo em pt-BR para exibição — `'saida'` é o identificador, "saída" é o texto. */
 export function rotuloPonto(tipo: TipoPonto): string {
   return tipo === 'saida' ? 'saída' : 'entrada';
+}
+
+/**
+ * Minutos trabalhados hoje, somando **todos** os turnos do dia — não só o
+ * que a tela está exibindo agora. `diaHoje` vem do histórico
+ * (`agruparJornadasPorDia`, que já sabe somar vários turnos por dia); esta
+ * função só troca a contribuição do turno atual pela versão que a tela já
+ * tem em mãos (`jornadaExibida`), mais fresca que o histórico pode estar.
+ *
+ * Sem essa troca por id, reabrir um turno no mesmo dia "esquecia" o(s)
+ * turno(s) anteriores: a tela só olhava para o turno aberto agora, e a soma
+ * voltava a zero a cada nova entrada — bug reportado depois do primeiro
+ * refactor da tela.
+ *
+ * `null` sem nenhum turno hoje, ou com a jornada exibida vencida — aí o
+ * check-in é de mais de 24h atrás e a duração bruta não significa "tempo
+ * trabalhado hoje", é só ruído.
+ */
+export function minutosTrabalhadosHoje(
+  diaHoje: DiaJornadaDTO | null,
+  jornadaExibida: JornadaDTO | null,
+  estado: EstadoJornada,
+  agoraIso: string,
+): number | null {
+  if (estado === 'vencida') return null;
+  if (!diaHoje && !jornadaExibida) return null;
+
+  const outrosTurnos = (diaHoje?.jornadas ?? []).filter((j) => j.id !== jornadaExibida?.id);
+  const minutosOutros = outrosTurnos.reduce((soma, j) => soma + minutosDaJornada(j), 0);
+
+  if (!jornadaExibida?.checkinAt) return minutosOutros;
+
+  const minutosAtual = jornadaExibida.checkoutAt
+    ? minutosDaJornada(jornadaExibida)
+    : Math.max(
+        0,
+        Math.round(
+          (new Date(agoraIso).getTime() - new Date(jornadaExibida.checkinAt).getTime()) / 60_000,
+        ),
+      );
+
+  return minutosOutros + minutosAtual;
 }

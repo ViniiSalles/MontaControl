@@ -5,16 +5,21 @@ import { estadoJornada } from '@montacontrol/shared';
 import type { JornadaDTO } from '@montacontrol/shared';
 import { Alerta } from '../ui/Alerta';
 import { Botao } from '../ui/Botao';
+import { Cartao } from '../ui/Cartao';
 import { Carregando } from '../ui/Carregando';
+import { Icone } from '../ui/Icone';
 import { Tela } from '../ui/Tela';
 import { Texto } from '../ui/Texto';
 import { useAuth } from '../auth/AuthContext';
 import { registrarCheckin, registrarCheckout } from '../jornada/acoes';
+import { diaCivilDe, formatarDataCompleta, formatarDuracao } from '../jornada/formatacao';
 import { avisoDoResultado } from '../jornada/mensagens';
 import type { AvisoAcao } from '../jornada/mensagens';
-import { derivarUltimoPonto, proximaAcao } from '../jornada/ultimoPonto';
+import { minutosTrabalhadosHoje, proximaAcao } from '../jornada/ultimoPonto';
 import type { TipoPonto } from '../jornada/ultimoPonto';
+import { useHistoricoPontos } from '../jornada/useHistoricoPontos';
 import { useJornadaAtual } from '../jornada/useJornadaAtual';
+import { BotaoAcaoPrincipal } from './jornada/BotaoAcaoPrincipal';
 import { CartaoUltimoPonto } from './jornada/CartaoUltimoPonto';
 
 const rotuloBotao: Record<TipoPonto, string> = {
@@ -41,9 +46,11 @@ export function Jornada({ aoAbrirHistorico, aoLancarEmAtraso }: PropsJornada) {
   // `RootNavigator` só monta esta tela com sessão presente; os fallbacks
   // existem para o tipo, não para um estado alcançável.
   const token = sessao?.accessToken ?? '';
-  const nome = sessao?.usuario.nome ?? '';
 
   const { jornada, carregando, erro, recarregar } = useJornadaAtual(token);
+  // Menor período válido (`PeriodoHistorico`): só precisa alcançar hoje, o
+  // resto da janela não é usado aqui — quem quer mais dias vai pro Histórico.
+  const { dias: diasHistorico, recarregar: recarregarHistorico } = useHistoricoPontos(token, 5);
 
   // A jornada devolvida pelo próprio check-in/check-out é mais nova que a do
   // GET e tem precedência até a próxima atualização manual: recarregar logo
@@ -54,12 +61,14 @@ export function Jornada({ aoAbrirHistorico, aoLancarEmAtraso }: PropsJornada) {
   const [registrando, setRegistrando] = useState(false);
 
   const jornadaExibida = jornadaRegistrada ?? jornada;
-  const ultimoPonto = derivarUltimoPonto(jornadaExibida);
   // Um único `agora` por render: calcular de novo dentro do cartão poderia
   // deixá-lo em desacordo com o rótulo do botão na virada do limite.
   const agoraIso = new Date().toISOString();
+  const hojeCivil = diaCivilDe(agoraIso);
+  const diaHoje = diasHistorico.find((dia) => dia.data === hojeCivil) ?? null;
   const estado = jornadaExibida ? estadoJornada(jornadaExibida, agoraIso) : 'finalizada';
   const acao = proximaAcao(jornadaExibida, agoraIso);
+  const trabalhadasMin = minutosTrabalhadosHoje(diaHoje, jornadaExibida, estado, agoraIso);
 
   const baterPonto = useCallback(async () => {
     setRegistrando(true);
@@ -67,29 +76,47 @@ export function Jornada({ aoAbrirHistorico, aoLancarEmAtraso }: PropsJornada) {
     try {
       const resultado =
         acao === 'saida' ? await registrarCheckout(token) : await registrarCheckin(token);
-      if (resultado.tipo === 'ok') setJornadaRegistrada(resultado.jornada);
+      if (resultado.tipo === 'ok') {
+        setJornadaRegistrada(resultado.jornada);
+        // O turno que acabou de fechar/abrir precisa entrar na soma de hoje
+        // assim que o histórico for consultado de novo — sem isto, o próximo
+        // turno recalcularia "trabalhadas hoje" com um histórico desatualizado.
+        void recarregarHistorico();
+      }
       setAviso(avisoDoResultado(resultado));
     } finally {
       setRegistrando(false);
     }
-  }, [acao, token]);
+  }, [acao, recarregarHistorico, token]);
 
   const atualizar = useCallback(async () => {
     // Descartar o registro local é o ponto da atualização: a partir daqui
     // quem manda é o servidor de novo.
     setJornadaRegistrada(null);
     setAviso(null);
-    await recarregar();
-  }, [recarregar]);
+    await Promise.all([recarregar(), recarregarHistorico()]);
+  }, [recarregar, recarregarHistorico]);
 
   return (
     <Tela rolavel>
       <View style={{ gap: espacamentoNomeado.gapPilha }}>
-        <View style={{ gap: espacamento[4] }}>
-          <Texto variante="labelMd" cor={cores.onSurfaceVariant}>
-            BEM-VINDO
-          </Texto>
-          <Texto variante="headlineMd">{nome}</Texto>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: espacamento[12] }}>
+          <View style={{ flex: 1, gap: espacamento[4] }}>
+            <Texto variante="labelMd" cor={cores.onSurfaceVariant}>
+              {formatarDataCompleta(hojeCivil)}
+            </Texto>
+            <Texto variante="headlineMd">Jornada de Trabalho</Texto>
+          </View>
+          <Botao
+            variante="icone"
+            tamanho={40}
+            forma="pilula"
+            icone="sync"
+            rotuloAcessivel="Atualizar"
+            carregando={carregando}
+            desabilitado={registrando}
+            aoPressionar={() => void atualizar()}
+          />
         </View>
 
         {carregando && !jornadaExibida ? (
@@ -97,7 +124,7 @@ export function Jornada({ aoAbrirHistorico, aoLancarEmAtraso }: PropsJornada) {
             <Carregando tamanho={espacamento[32]} />
           </View>
         ) : (
-          <CartaoUltimoPonto ponto={ultimoPonto} estado={estado} />
+          <CartaoUltimoPonto jornada={jornadaExibida} estado={estado} />
         )}
 
         {/*
@@ -119,15 +146,31 @@ export function Jornada({ aoAbrirHistorico, aoLancarEmAtraso }: PropsJornada) {
           <Alerta variante={aviso.variante} titulo={aviso.titulo} mensagem={aviso.mensagem} />
         )}
 
-        <Botao
-          variante="primario"
-          tamanho={56}
-          forma="pilula"
+        <BotaoAcaoPrincipal
           texto={rotuloBotao[acao]}
-          larguraTotal
           carregando={registrando}
           aoPressionar={() => void baterPonto()}
         />
+
+        {trabalhadasMin !== null && (
+          <Cartao
+            elevacao="elev2"
+            tom="padrao"
+            conteudo={
+              <View style={{ gap: espacamento[8] }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: espacamento[8] }}>
+                  <Icone nome="schedule" tamanho={espacamento[16]} cor={cores.primary} />
+                  <Texto variante="labelMd" cor={cores.onSurfaceVariant}>
+                    TRABALHADAS HOJE
+                  </Texto>
+                </View>
+                <Texto variante="headlineMd" tabular>
+                  {formatarDuracao(trabalhadasMin)}
+                </Texto>
+              </View>
+            }
+          />
+        )}
 
         <View style={{ flexDirection: 'row', gap: espacamento[12] }}>
           <View style={{ flex: 1 }}>
@@ -152,30 +195,14 @@ export function Jornada({ aoAbrirHistorico, aoLancarEmAtraso }: PropsJornada) {
           </View>
         </View>
 
-        <View style={{ flexDirection: 'row', gap: espacamento[12] }}>
-          <View style={{ flex: 1 }}>
-            <Botao
-              variante="fantasma"
-              tamanho={40}
-              forma="pilula"
-              texto="Atualizar"
-              larguraTotal
-              carregando={carregando}
-              desabilitado={registrando}
-              aoPressionar={() => void atualizar()}
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Botao
-              variante="fantasma"
-              tamanho={40}
-              forma="pilula"
-              texto="Sair"
-              larguraTotal
-              aoPressionar={() => void sair()}
-            />
-          </View>
-        </View>
+        <Botao
+          variante="fantasma"
+          tamanho={40}
+          forma="pilula"
+          texto="Sair"
+          larguraTotal
+          aoPressionar={() => void sair()}
+        />
       </View>
     </Tela>
   );
