@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import {
   agruparJornadasPorDia,
+  calcularDistanciaMetros,
   comporInstante,
   diaNoFuso,
   jornadaVencida,
@@ -14,19 +15,28 @@ import type {
   PeriodoHistorico,
 } from '@montacontrol/shared';
 import { FUSO_OPERACAO } from '../common/fuso';
+import { PedidosRepository } from '../pedidos/pedidos.repository';
 import { JornadasRepository } from './jornadas.repository';
 import { JornadaEmAndamentoException } from './exceptions/jornada-em-andamento.exception';
 import { RegistroForaDaJanelaException } from './exceptions/registro-fora-da-janela.exception';
 import { SemJornadaAbertaException } from './exceptions/sem-jornada-aberta.exception';
 import { CheckoutAntesDoCheckinException } from './exceptions/checkout-antes-do-checkin.exception';
 import { JornadaVencidaException } from './exceptions/jornada-vencida.exception';
+import { PedidoInvalidoException } from './exceptions/pedido-invalido.exception';
+import { ForaDoRaioToleradoException } from './exceptions/fora-do-raio-tolerado.exception';
 
 /** Tolerância para relógio de aparelho adiantado. */
 const TOLERANCIA_FUTURO_MS = 5 * 60_000;
 
+/** Distância máxima aceita entre a marcação e o endereço do cliente do pedido. */
+const RAIO_TOLERANCIA_METROS = 200;
+
 @Injectable()
 export class JornadasService {
-  constructor(private readonly jornadas: JornadasRepository) {}
+  constructor(
+    private readonly jornadas: JornadasRepository,
+    private readonly pedidos: PedidosRepository,
+  ) {}
 
   async checkin(usuarioId: number, dados: CheckinRequest): Promise<JornadaDTO> {
     const jaCriada = await this.jornadas.buscarPorCheckinIdCliente(usuarioId, dados.idCliente);
@@ -42,6 +52,8 @@ export class JornadasService {
       throw new JornadaEmAndamentoException();
     }
 
+    await this.validarDistanciaDoPedido(dados.pedidoId, dados.latitude, dados.longitude);
+
     return this.jornadas.criarCheckin({
       usuarioId,
       idCliente: dados.idCliente,
@@ -49,6 +61,7 @@ export class JornadasService {
       longitude: dados.longitude,
       endereco: dados.endereco ?? null,
       checkinAt: new Date(dados.registradoEm),
+      pedidoId: dados.pedidoId ?? null,
     });
   }
 
@@ -69,13 +82,35 @@ export class JornadasService {
       throw new CheckoutAntesDoCheckinException();
     }
 
+    await this.validarDistanciaDoPedido(dados.pedidoId, dados.latitude, dados.longitude);
+
     return this.jornadas.registrarCheckout(aberta.id, {
       idCliente: dados.idCliente,
       latitude: dados.latitude,
       longitude: dados.longitude,
       endereco: dados.endereco ?? null,
       checkoutAt: new Date(dados.registradoEm),
+      pedidoId: dados.pedidoId ?? null,
     });
+  }
+
+  /**
+   * Sem `pedidoId` não há contra o que validar — a seleção de pedido no
+   * check-in ainda não existe no app, e bloquear todo mundo até que exista
+   * pararia o time inteiro.
+   */
+  private async validarDistanciaDoPedido(
+    pedidoId: number | undefined,
+    latitude: number,
+    longitude: number,
+  ): Promise<void> {
+    if (pedidoId === undefined) return;
+
+    const cliente = await this.pedidos.buscarCoordenadasCliente(pedidoId);
+    if (!cliente) throw new PedidoInvalidoException();
+
+    const distancia = calcularDistanciaMetros({ latitude, longitude }, cliente);
+    if (distancia > RAIO_TOLERANCIA_METROS) throw new ForaDoRaioToleradoException();
   }
 
   async buscarAtual(usuarioId: number): Promise<JornadaDTO | null> {

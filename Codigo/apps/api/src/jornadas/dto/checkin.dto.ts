@@ -1,4 +1,14 @@
-import { IsISO8601, IsLatitude, IsLongitude, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import {
+  IsInt,
+  IsISO8601,
+  IsLatitude,
+  IsLongitude,
+  IsOptional,
+  IsPositive,
+  IsString,
+  IsUUID,
+  MaxLength,
+} from 'class-validator';
 import type { CheckinRequest } from '@montacontrol/shared';
 
 export class CheckinDto implements CheckinRequest {
@@ -18,4 +28,9 @@ export class CheckinDto implements CheckinRequest {
   @IsString()
   @MaxLength(300)
   endereco?: string;
+
+  @IsOptional()
+  @IsInt()
+  @IsPositive()
+  pedidoId?: number;
 }
