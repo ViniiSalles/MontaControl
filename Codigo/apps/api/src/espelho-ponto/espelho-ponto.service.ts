@@ -16,9 +16,19 @@ export class EspelhoPontoService {
     private readonly bancoHoras: BancoHorasService,
   ) {}
 
-  async gerar(usuarioId: number, mes: number, ano: number): Promise<EspelhoPontoDTO> {
+  /**
+   * `incluirInativo` é opt-in: por padrão, um montador desligado
+   * (`ativo: false`, soft delete) não aparece — só quando o RH pede
+   * explicitamente para ver um "excluído".
+   */
+  async gerar(
+    usuarioId: number,
+    mes: number,
+    ano: number,
+    incluirInativo = false,
+  ): Promise<EspelhoPontoDTO> {
     const usuario = await this.usuarios.buscarPorId(usuarioId);
-    if (!usuario || usuario.perfil !== Perfil.MONTADOR) {
+    if (!usuario || usuario.perfil !== Perfil.MONTADOR || (!usuario.ativo && !incluirInativo)) {
       throw new MontadorNaoEncontradoException();
     }
 

@@ -119,6 +119,22 @@ describe('EspelhoPontoService', () => {
     }
   });
 
+  it('lança MontadorNaoEncontradoException quando o usuário está inativo (soft delete)', async () => {
+    usuarios.buscarPorId.mockResolvedValue(usuarioFake({ ativo: false }));
+
+    await expect(service.gerar(USUARIO_ID, 8, 2026)).rejects.toBeInstanceOf(
+      MontadorNaoEncontradoException,
+    );
+  });
+
+  it('com incluirInativo, retorna o espelho de um montador inativo', async () => {
+    usuarios.buscarPorId.mockResolvedValue(usuarioFake({ ativo: false }));
+
+    const resultado = await service.gerar(USUARIO_ID, 8, 2026, true);
+
+    expect(resultado.usuarioId).toBe(USUARIO_ID);
+  });
+
   it('consulta as jornadas do mês pedido com os limites corretos', async () => {
     await service.gerar(USUARIO_ID, 8, 2026);
 

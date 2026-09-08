@@ -1,5 +1,5 @@
-import { Type } from 'class-transformer';
-import { IsInt, Max, Min } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import { IsBoolean, IsInt, IsOptional, Max, Min } from 'class-validator';
 
 /** Query string chega como texto; `@Type` converte antes das validações numéricas. */
 export class EspelhoPontoQueryDto {
@@ -19,4 +19,14 @@ export class EspelhoPontoQueryDto {
   @Min(2020)
   @Max(2100)
   ano!: number;
+
+  /**
+   * Por padrão, um montador inativo (soft delete) não aparece. `@Type(() =>
+   * Boolean)` trataria a string "false" como truthy — por isso a conversão
+   * explícita aqui.
+   */
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  incluirInativo?: boolean;
 }

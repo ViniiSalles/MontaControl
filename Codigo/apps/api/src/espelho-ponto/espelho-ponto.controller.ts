@@ -13,6 +13,6 @@ export class EspelhoPontoController {
 
   @Get()
   async consultar(@Query() query: EspelhoPontoQueryDto): Promise<EspelhoPontoDTO> {
-    return this.espelhoPonto.gerar(query.usuarioId, query.mes, query.ano);
+    return this.espelhoPonto.gerar(query.usuarioId, query.mes, query.ano, query.incluirInativo);
   }
 }
