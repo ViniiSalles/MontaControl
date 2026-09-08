@@ -231,3 +231,12 @@ export interface SyncPushRequest {
   changes: Record<string, { created: unknown[]; updated: unknown[]; deleted: string[] }>;
   lastPulledAt: number | null;
 }
+
+export interface EspelhoPontoDTO {
+  usuarioId: number;
+  usuarioNome: string;
+  mes: number;
+  ano: number;
+  dias: DiaJornadaDTO[];
+  bancoHoras: BancoHorasDTO;
+}
