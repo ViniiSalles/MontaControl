@@ -54,6 +54,13 @@ export class UsuariosRepository {
     });
   }
 
+  async buscarPorId(id: number): Promise<UsuarioListado | null> {
+    return this.prisma.usuario.findUnique({
+      where: { id },
+      select: SELECAO_USUARIO_LISTADO,
+    });
+  }
+
   async listar(): Promise<UsuarioListado[]> {
     return this.prisma.usuario.findMany({
       select: SELECAO_USUARIO_LISTADO,
