@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD, APP_PIPE } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module';
+import { BancoHorasModule } from './banco-horas/banco-horas.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { HealthController } from './common/health.controller';
 import { validate } from './config/env.validation';
@@ -21,6 +22,7 @@ import { PrismaModule } from './prisma/prisma.module';
     AuthModule,
     JornadasModule,
     PontosEmAtrasoModule,
+    BancoHorasModule,
   ],
   controllers: [HealthController],
   providers: [
