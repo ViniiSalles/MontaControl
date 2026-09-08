@@ -1,4 +1,4 @@
-import { comporInstante, diaNoFuso, somarDias } from '@montacontrol/shared';
+import { comporInstante, diaNoFuso, limitesDoMes, somarDias } from '@montacontrol/shared';
 
 const FUSO = 'America/Sao_Paulo';
 
@@ -31,5 +31,20 @@ describe('somarDias', () => {
 
   it('soma zero devolve a mesma data', () => {
     expect(somarDias('2026-08-26', 0)).toBe('2026-08-26');
+  });
+});
+
+describe('limitesDoMes', () => {
+  it('início e fim do mês civil, no fuso local', () => {
+    const { inicioIso, fimIso } = limitesDoMes(8, 2026, FUSO);
+
+    expect(inicioIso).toBe('2026-08-01T03:00:00.000Z'); // 01/08 00:00 local
+    expect(fimIso).toBe('2026-09-01T02:59:59.999Z'); // 31/08 23:59:59.999 local
+  });
+
+  it('atravessa a virada de ano em dezembro', () => {
+    const { fimIso } = limitesDoMes(12, 2026, FUSO);
+
+    expect(fimIso).toBe('2027-01-01T02:59:59.999Z');
   });
 });
