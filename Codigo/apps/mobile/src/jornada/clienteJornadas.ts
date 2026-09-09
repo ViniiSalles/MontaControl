@@ -26,7 +26,7 @@ export class ErroApi extends Error {
   }
 }
 
-async function lerErro(resposta: Response): Promise<ErroApi> {
+export async function lerErro(resposta: Response): Promise<ErroApi> {
   const corpo = (await resposta.json().catch(() => null)) as CorpoErroPadrao | null;
   return new ErroApi(
     corpo?.codigo ?? 'ERRO_DESCONHECIDO',
