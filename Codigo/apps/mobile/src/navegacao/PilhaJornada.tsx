@@ -8,8 +8,9 @@ import { ModalPontoEmAtraso } from '../telas/jornada/ModalPontoEmAtraso';
 type Vista = 'jornada' | 'historico' | 'bancoHoras';
 
 /**
- * Navegação interna da aba Jornada: a tela de bater ponto, o histórico e o
- * formulário de ponto em atraso por cima de qualquer uma das duas.
+ * Navegação interna da aba Jornada: a tela de bater ponto, o histórico, o
+ * banco de horas e o formulário de ponto em atraso por cima de qualquer uma
+ * das três.
  *
  * É um `useState` e não uma biblioteca de navegação de propósito — a aba tem
  * três vistas (jornada, histórico, banco de horas) e uma folha modal, e
