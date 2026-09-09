@@ -12,6 +12,9 @@ const Login = lazy(() => import('./paginas/Login.tsx'))
 const Dashboard = lazy(() => import('./paginas/Dashboard.tsx'))
 const Atestados = lazy(() => import('./paginas/Atestados.tsx'))
 const Triagem = lazy(() => import('./paginas/Triagem.tsx'))
+const Montadores = lazy(() => import('./paginas/Montadores.tsx'))
+const BancoHoras = lazy(() => import('./paginas/BancoHoras.tsx'))
+const EspelhoPonto = lazy(() => import('./paginas/EspelhoPonto.tsx'))
 
 function App() {
   return (
@@ -41,6 +44,30 @@ function App() {
             element={
               <RotaProtegida perfilExigido={Perfil.DEPOSITO}>
                 <Triagem />
+              </RotaProtegida>
+            }
+          />
+          <Route
+            path="/montadores"
+            element={
+              <RotaProtegida perfilExigido={Perfil.RH}>
+                <Montadores />
+              </RotaProtegida>
+            }
+          />
+          <Route
+            path="/banco-horas"
+            element={
+              <RotaProtegida perfilExigido={Perfil.RH}>
+                <BancoHoras />
+              </RotaProtegida>
+            }
+          />
+          <Route
+            path="/espelho-ponto/:usuarioId"
+            element={
+              <RotaProtegida perfilExigido={Perfil.RH}>
+                <EspelhoPonto />
               </RotaProtegida>
             }
           />
