@@ -43,15 +43,17 @@ async function enfileirar(
   );
 }
 
+type ResultadoJornadaOtimista = { registro: Jornada; criouRegistroNovo: boolean };
+
 async function aplicarJornadaOtimista(
   database: Database,
   tipo: 'checkin' | 'checkout',
   payload: CheckinRequest | CheckoutRequest,
-): Promise<Jornada> {
+): Promise<ResultadoJornadaOtimista> {
   const colecao = database.get<Jornada>('jornadas');
   return database.write(async () => {
     if (tipo === 'checkin') {
-      return colecao.create((registro) => {
+      const registro = await colecao.create((registro) => {
         registro.remoteId = null;
         registro.usuarioId = -1;
         registro.status = StatusJornada.EM_ANDAMENTO;
@@ -68,6 +70,7 @@ async function aplicarJornadaOtimista(
         registro.idClienteCheckin = payload.idCliente;
         registro.idClienteCheckout = null;
       });
+      return { registro, criouRegistroNovo: true };
     }
 
     const abertas = await colecao.query(Q.where('status', StatusJornada.EM_ANDAMENTO)).fetch();
@@ -77,7 +80,7 @@ async function aplicarJornadaOtimista(
       // aconteceu antes da primeira sincronização deste aparelho) — cria um
       // registro só de checkout; o servidor decide o desfecho quando a fila
       // for enviada.
-      return colecao.create((registro) => {
+      const registro = await colecao.create((registro) => {
         registro.remoteId = null;
         registro.usuarioId = -1;
         registro.status = StatusJornada.FINALIZADA;
@@ -94,6 +97,7 @@ async function aplicarJornadaOtimista(
         registro.idClienteCheckin = null;
         registro.idClienteCheckout = payload.idCliente;
       });
+      return { registro, criouRegistroNovo: true };
     }
 
     await aberta.update((registro) => {
@@ -104,7 +108,7 @@ async function aplicarJornadaOtimista(
       registro.checkoutEndereco = payload.endereco ?? null;
       registro.idClienteCheckout = payload.idCliente;
     });
-    return aberta;
+    return { registro: aberta, criouRegistroNovo: false };
   });
 }
 
@@ -116,7 +120,11 @@ export async function executarAcaoJornada(
   payload: CheckinRequest | CheckoutRequest,
 ): Promise<ResultadoEnvio<JornadaDTO>> {
   const acao = await enfileirar(database, tipo, payload.idCliente, payload);
-  const registroLocal = await aplicarJornadaOtimista(database, tipo, payload);
+  const { registro: registroLocal, criouRegistroNovo } = await aplicarJornadaOtimista(
+    database,
+    tipo,
+    payload,
+  );
 
   try {
     const jornadaServidor =
@@ -145,7 +153,24 @@ export async function executarAcaoJornada(
     return { tipo: 'ok', dado: jornadaServidor };
   } catch (erro) {
     if (ehRecusaDoServidor(erro)) {
-      await database.write(() => acao.destroyPermanently());
+      await database.write(async () => {
+        await acao.destroyPermanently();
+        if (criouRegistroNovo) {
+          await registroLocal.destroyPermanently();
+        } else {
+          // Checkout recusado sobre uma jornada que já estava EM_ANDAMENTO
+          // localmente: reverte só os campos de checkout, que só podiam
+          // estar null antes (checkout só se aplica a jornada em andamento).
+          await registroLocal.update((registro) => {
+            registro.status = StatusJornada.EM_ANDAMENTO;
+            registro.checkoutAt = null;
+            registro.checkoutLatitude = null;
+            registro.checkoutLongitude = null;
+            registro.checkoutEndereco = null;
+            registro.idClienteCheckout = null;
+          });
+        }
+      });
       return { tipo: 'recusado', codigo: erro.codigo };
     }
     // Falha de rede: a linha da fila e o registro otimista ficam como estão

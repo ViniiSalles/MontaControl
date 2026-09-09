@@ -9,7 +9,7 @@ jest.mock('../../jornada/clienteJornadas', () => {
 });
 
 import { Q } from '@nozbe/watermelondb';
-import { StatusJornada, type CheckinRequest, type JornadaDTO } from '@montacontrol/shared';
+import { StatusJornada, type CheckinRequest, type CheckoutRequest, type JornadaDTO } from '@montacontrol/shared';
 import { criarBancoDeTeste } from '../../db/__tests__/apoio';
 import { AcaoPendente } from '../../db/AcaoPendente';
 import {
@@ -18,7 +18,7 @@ import {
   enviarCheckout,
   enviarSolicitacaoPonto,
 } from '../../jornada/clienteJornadas';
-import { queryJornadaAtual, paraJornadaDTO } from '../../jornada/espelhoJornada';
+import { queryJornadaAtual, queryJornadasNoPeriodo, paraJornadaDTO } from '../../jornada/espelhoJornada';
 import { executarAcaoJornada, executarAcaoPontoEmAtraso } from '../outbox';
 
 const TOKEN = 'token-de-teste';
@@ -84,7 +84,7 @@ describe('executarAcaoJornada', () => {
     expect(pendentes[0].tipo).toBe('checkin');
   });
 
-  it('recusa 4xx na tentativa imediata: devolve recusado e não deixa nada na fila', async () => {
+  it('recusa 4xx na tentativa imediata: devolve recusado e não deixa nada na fila nem no espelho', async () => {
     const database = criarBancoDeTeste();
     (enviarCheckin as jest.Mock).mockRejectedValue(
       new ErroApi('JORNADA_EM_ANDAMENTO', 'Já existe uma jornada em andamento.', 409),
@@ -98,6 +98,71 @@ describe('executarAcaoJornada', () => {
       .query(Q.where('status', 'pendente'))
       .fetch();
     expect(pendentes).toHaveLength(0);
+    // O espelho otimista criado antes da tentativa de rede precisa ser
+    // revertido — senão a jornada real do servidor, ao sincronizar depois,
+    // vira uma segunda linha local (queryJornadaAtual devolveria 2 jornadas).
+    const registrosAtuais = await queryJornadaAtual(database).fetch();
+    expect(registrosAtuais).toHaveLength(0);
+    const registrosNoPeriodo = await queryJornadasNoPeriodo(
+      database,
+      '2026-09-01T00:00:00.000Z',
+      '2026-09-10T00:00:00.000Z',
+    ).fetch();
+    expect(registrosNoPeriodo).toHaveLength(0);
+  });
+
+  it('checkout recusado (4xx) sobre jornada EM_ANDAMENTO existente: reverte o espelho para o estado anterior', async () => {
+    const database = criarBancoDeTeste();
+    const colecaoJornadas = database.get('jornadas');
+    const jornadaAberta = await database.write(() =>
+      colecaoJornadas.create((registro: any) => {
+        registro.remoteId = 42;
+        registro.usuarioId = 3;
+        registro.status = StatusJornada.EM_ANDAMENTO;
+        registro.checkinAt = '2026-09-09T12:00:00.000Z';
+        registro.checkinLatitude = -19.9;
+        registro.checkinLongitude = -43.9;
+        registro.checkinEndereco = 'Rua Falsa, 123';
+        registro.checkoutAt = null;
+        registro.checkoutLatitude = null;
+        registro.checkoutLongitude = null;
+        registro.checkoutEndereco = null;
+        registro.lancadoEmAtraso = false;
+        registro.criadoEm = '2026-09-09T12:00:00.000Z';
+        registro.idClienteCheckin = 'id-cliente-checkin-original';
+        registro.idClienteCheckout = null;
+      }),
+    );
+
+    (enviarCheckout as jest.Mock).mockRejectedValue(
+      new ErroApi('JORNADA_NAO_ENCONTRADA', 'Jornada não encontrada.', 404),
+    );
+
+    const payloadCheckout: CheckoutRequest = {
+      idCliente: 'id-cliente-checkout-1',
+      latitude: -19.91,
+      longitude: -43.91,
+      registradoEm: '2026-09-09T18:00:00.000Z',
+    };
+    const resultado = await executarAcaoJornada(database, 'checkout', TOKEN, payloadCheckout);
+
+    expect(resultado).toEqual({ tipo: 'recusado', codigo: 'JORNADA_NAO_ENCONTRADA' });
+    const pendentes = await database
+      .get<AcaoPendente>('acoes_pendentes')
+      .query(Q.where('status', 'pendente'))
+      .fetch();
+    expect(pendentes).toHaveLength(0);
+
+    const registrosAtuais = await queryJornadaAtual(database).fetch();
+    expect(registrosAtuais).toHaveLength(1);
+    const dto = paraJornadaDTO(registrosAtuais[0]);
+    expect(dto.status).toBe(StatusJornada.EM_ANDAMENTO);
+    expect(dto.checkoutAt).toBeNull();
+    expect(dto.checkoutLatitude).toBeNull();
+    expect(dto.checkoutLongitude).toBeNull();
+    expect(dto.checkoutEndereco).toBeNull();
+    expect(registrosAtuais[0].id).toBe(jornadaAberta.id);
+    expect((registrosAtuais[0] as any).idClienteCheckout).toBeNull();
   });
 
   it('checkout chama enviarCheckout, não enviarCheckin', async () => {
