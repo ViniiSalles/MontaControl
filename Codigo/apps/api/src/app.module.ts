@@ -8,6 +8,7 @@ import { BancoHorasModule } from './banco-horas/banco-horas.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { HealthController } from './common/health.controller';
 import { validate } from './config/env.validation';
+import { EspelhoPontoModule } from './espelho-ponto/espelho-ponto.module';
 import { JornadasModule } from './jornadas/jornadas.module';
 import { PontosEmAtrasoModule } from './pontos-em-atraso/pontos-em-atraso.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -25,6 +26,7 @@ import { PrismaModule } from './prisma/prisma.module';
     PontosEmAtrasoModule,
     AtestadosModule,
     BancoHorasModule,
+    EspelhoPontoModule,
   ],
   controllers: [HealthController],
   providers: [
