@@ -49,7 +49,9 @@ export function CartaoBancoHoras({ bancoHoras, aoAbrirBancoHoras }: PropsCartaoB
               <Texto variante="headlineMd" cor={cores.inverseOnSurface} tabular>
                 {formatarSaldoHoras(bancoHoras.saldo)}
               </Texto>
-              <Icone nome="trending_up" tamanho={espacamento[20]} cor={cores.inverseOnSurface} />
+              {bancoHoras.saldo > 0 && (
+                <Icone nome="trending_up" tamanho={espacamento[20]} cor={cores.inverseOnSurface} />
+              )}
             </View>
             <SeloSaldo saldo={bancoHoras.saldo} />
           </View>
