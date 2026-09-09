@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createClient } from '@supabase/supabase-js';
 import { SupabaseAuthGateway } from './supabase-auth.gateway';
+import { SupabaseStorageGateway } from './supabase-storage.gateway';
 import { SUPABASE_CLIENT } from './supabase-client.token';
 
 @Module({
@@ -17,7 +18,8 @@ import { SUPABASE_CLIENT } from './supabase-client.token';
         ),
     },
     SupabaseAuthGateway,
+    SupabaseStorageGateway,
   ],
-  exports: [SupabaseAuthGateway],
+  exports: [SupabaseAuthGateway, SupabaseStorageGateway],
 })
 export class SupabaseModule {}

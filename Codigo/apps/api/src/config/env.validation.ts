@@ -46,6 +46,10 @@ class EnvironmentVariables {
   /** `redirectTo` do `resetPasswordForEmail` — o fluxo usa o código OTP do e-mail, não o link. */
   @IsUrl({ require_tld: false })
   PASSWORD_RESET_REDIRECT_URL!: string;
+
+  /** Bucket privado das fotos de atestado. Nunca público: o acesso é só por URL assinada. */
+  @IsString()
+  SUPABASE_BUCKET_ATESTADOS!: string;
 }
 
 export function validate(config: Record<string, unknown>): EnvironmentVariables {
