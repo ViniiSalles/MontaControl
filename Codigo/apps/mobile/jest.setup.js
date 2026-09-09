@@ -14,3 +14,12 @@ jest.mock('react-native-webview', () => {
 jest.mock('react-native-safe-area-context', () =>
   require('react-native-safe-area-context/jest/mock').default,
 );
+
+// O módulo real do NetInfo cria um listener/handle nativo ao ser importado,
+// que nunca fecha sob o Jest — mesmo em testes que nunca chamam
+// `NetInfo.addEventListener` (basta o `import` no topo do arquivo), o
+// processo fica pendurado com "Jest did not exit one second after the test
+// run has completed". O mock oficial da lib evita isso.
+jest.mock('@react-native-community/netinfo', () =>
+  require('@react-native-community/netinfo/jest/netinfo-mock'),
+);
