@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import { BancoHoras } from '../telas/BancoHoras';
 import { Historico } from '../telas/Historico';
 import { Jornada } from '../telas/Jornada';
 import { ModalPontoEmAtraso } from '../telas/jornada/ModalPontoEmAtraso';
 
-type Vista = 'jornada' | 'historico';
+type Vista = 'jornada' | 'historico' | 'bancoHoras';
 
 /**
  * Navegação interna da aba Jornada: a tela de bater ponto, o histórico e o
@@ -31,9 +32,12 @@ export function PilhaJornada() {
           aoVoltar={() => setVista('jornada')}
           aoLancarEmAtraso={(data) => setPontoEmAtraso({ data })}
         />
+      ) : vista === 'bancoHoras' ? (
+        <BancoHoras aoVoltar={() => setVista('jornada')} />
       ) : (
         <Jornada
           aoAbrirHistorico={() => setVista('historico')}
+          aoAbrirBancoHoras={() => setVista('bancoHoras')}
           aoLancarEmAtraso={() => setPontoEmAtraso({ data: null })}
         />
       )}

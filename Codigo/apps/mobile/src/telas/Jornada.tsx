@@ -11,6 +11,8 @@ import { Icone } from '../ui/Icone';
 import { Tela } from '../ui/Tela';
 import { Texto } from '../ui/Texto';
 import { useAuth } from '../auth/AuthContext';
+import { useBancoHoras } from '../banco-horas/useBancoHoras';
+import { periodoAtual } from '../banco-horas/periodo';
 import { registrarCheckin, registrarCheckout } from '../jornada/acoes';
 import { diaCivilDe, formatarDataCompleta, formatarDuracao } from '../jornada/formatacao';
 import { avisoDoResultado } from '../jornada/mensagens';
@@ -20,6 +22,7 @@ import type { TipoPonto } from '../jornada/ultimoPonto';
 import { useHistoricoPontos } from '../jornada/useHistoricoPontos';
 import { useJornadaAtual } from '../jornada/useJornadaAtual';
 import { BotaoAcaoPrincipal } from './jornada/BotaoAcaoPrincipal';
+import { CartaoBancoHoras } from './jornada/CartaoBancoHoras';
 import { CartaoUltimoPonto } from './jornada/CartaoUltimoPonto';
 
 const rotuloBotao: Record<TipoPonto, string> = {
@@ -29,6 +32,7 @@ const rotuloBotao: Record<TipoPonto, string> = {
 
 interface PropsJornada {
   aoAbrirHistorico: () => void;
+  aoAbrirBancoHoras: () => void;
   aoLancarEmAtraso: () => void;
 }
 
@@ -40,7 +44,7 @@ interface PropsJornada {
  * abaixo do botão principal — o caminho do dedo até "bater o ponto" é o que
  * manda no layout.
  */
-export function Jornada({ aoAbrirHistorico, aoLancarEmAtraso }: PropsJornada) {
+export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso }: PropsJornada) {
   const { sessao, sair } = useAuth();
 
   // `RootNavigator` só monta esta tela com sessão presente; os fallbacks
@@ -65,6 +69,8 @@ export function Jornada({ aoAbrirHistorico, aoLancarEmAtraso }: PropsJornada) {
   // deixá-lo em desacordo com o rótulo do botão na virada do limite.
   const agoraIso = new Date().toISOString();
   const hojeCivil = diaCivilDe(agoraIso);
+  const { mes: mesAtual, ano: anoAtual } = periodoAtual(agoraIso);
+  const { bancoHoras } = useBancoHoras(token, mesAtual, anoAtual);
   const diaHoje = diasHistorico.find((dia) => dia.data === hojeCivil) ?? null;
   const estado = jornadaExibida ? estadoJornada(jornadaExibida, agoraIso) : 'finalizada';
   const acao = proximaAcao(jornadaExibida, agoraIso);
@@ -171,6 +177,8 @@ export function Jornada({ aoAbrirHistorico, aoLancarEmAtraso }: PropsJornada) {
             }
           />
         )}
+
+        <CartaoBancoHoras bancoHoras={bancoHoras} aoAbrirBancoHoras={aoAbrirBancoHoras} />
 
         <View style={{ flexDirection: 'row', gap: espacamento[12] }}>
           <View style={{ flex: 1 }}>

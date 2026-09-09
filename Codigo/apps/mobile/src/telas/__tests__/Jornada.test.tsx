@@ -1,6 +1,7 @@
 jest.mock('../../auth/AuthContext');
 jest.mock('../../jornada/acoes');
 jest.mock('../../jornada/clienteJornadas');
+jest.mock('../../banco-horas/clienteBancoHoras');
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { StatusJornada } from '@montacontrol/shared';
@@ -9,14 +10,22 @@ import { useAuth } from '../../auth/AuthContext';
 import { registrarCheckin, registrarCheckout } from '../../jornada/acoes';
 import { buscarHistorico, buscarJornadaAtual } from '../../jornada/clienteJornadas';
 import { diaCivilDe, formatarHora } from '../../jornada/formatacao';
+import { buscarBancoHoras } from '../../banco-horas/clienteBancoHoras';
 import { montador } from '../../auth/__tests__/apoio';
 import { Jornada } from '../Jornada';
 
 const abrirHistorico = jest.fn();
+const abrirBancoHoras = jest.fn();
 const lancarEmAtraso = jest.fn();
 
 function renderizar() {
-  return render(<Jornada aoAbrirHistorico={abrirHistorico} aoLancarEmAtraso={lancarEmAtraso} />);
+  return render(
+    <Jornada
+      aoAbrirHistorico={abrirHistorico}
+      aoAbrirBancoHoras={abrirBancoHoras}
+      aoLancarEmAtraso={lancarEmAtraso}
+    />,
+  );
 }
 
 const useAuthMock = jest.mocked(useAuth);
@@ -24,6 +33,7 @@ const buscarJornadaAtualMock = jest.mocked(buscarJornadaAtual);
 const buscarHistoricoMock = jest.mocked(buscarHistorico);
 const registrarCheckinMock = jest.mocked(registrarCheckin);
 const registrarCheckoutMock = jest.mocked(registrarCheckout);
+const buscarBancoHorasMock = jest.mocked(buscarBancoHoras);
 
 const HOJE = diaCivilDe(new Date().toISOString());
 
@@ -88,6 +98,15 @@ beforeEach(() => {
   });
   buscarJornadaAtualMock.mockResolvedValue(null);
   buscarHistoricoMock.mockResolvedValue(HISTORICO_VAZIO);
+  buscarBancoHorasMock.mockResolvedValue({
+    id: 1,
+    usuarioId: montador.id,
+    mes: 8,
+    ano: 2026,
+    horasTrabalhadas: 0,
+    horasPrevistas: 168,
+    saldo: -168,
+  });
 });
 
 test('sem jornada aberta, a tela oferece o ponto de entrada', async () => {
@@ -253,4 +272,13 @@ test('abrir um turno novo no mesmo dia soma com o turno anterior, não reseta "t
   // abaixo das 2h que o turno 1 já tinha — antes da correção, resetava a
   // "0h 00min" porque a tela só olhava para o turno aberto agora.
   expect(screen.getByText('2h 00min')).toBeTruthy();
+});
+
+test('o atalho de banco de horas chama a navegação da aba', async () => {
+  await renderizar();
+  await waitFor(() => expect(screen.getByText('Ver histórico completo')).toBeTruthy());
+
+  await fireEvent.press(screen.getByText('Ver histórico completo'));
+
+  expect(abrirBancoHoras).toHaveBeenCalled();
 });
