@@ -293,3 +293,17 @@ test('Atualizar também refaz a busca do banco de horas', async () => {
 
   await waitFor(() => expect(buscarBancoHorasMock).toHaveBeenCalledTimes(2));
 });
+
+test('bater a saída também refaz a busca do banco de horas', async () => {
+  buscarJornadaAtualMock.mockResolvedValue(ABERTA);
+  registrarCheckoutMock.mockResolvedValue({ tipo: 'ok', jornada: ENCERRADA });
+
+  await renderizar();
+  await waitFor(() => expect(screen.getByText(ROTULO_SAIDA)).toBeTruthy());
+
+  expect(buscarBancoHorasMock).toHaveBeenCalledTimes(1);
+
+  await fireEvent.press(screen.getByText(ROTULO_SAIDA));
+
+  await waitFor(() => expect(buscarBancoHorasMock).toHaveBeenCalledTimes(2));
+});

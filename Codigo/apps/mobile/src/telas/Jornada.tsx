@@ -88,12 +88,13 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
         // assim que o histórico for consultado de novo — sem isto, o próximo
         // turno recalcularia "trabalhadas hoje" com um histórico desatualizado.
         void recarregarHistorico();
+        void recarregarBancoHoras();
       }
       setAviso(avisoDoResultado(resultado));
     } finally {
       setRegistrando(false);
     }
-  }, [acao, recarregarHistorico, token]);
+  }, [acao, recarregarHistorico, recarregarBancoHoras, token]);
 
   const atualizar = useCallback(async () => {
     // Descartar o registro local é o ponto da atualização: a partir daqui
