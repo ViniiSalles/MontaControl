@@ -1,12 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { comporInstante, diaNoFuso, somarDias } from '@montacontrol/shared';
 import type { SolicitacaoPontoDTO, SolicitarPontoEmAtrasoRequest } from '@montacontrol/shared';
+import { StatusSolicitacaoPonto } from '../../generated/prisma';
 import { FUSO_OPERACAO } from '../common/fuso';
 import { JornadasRepository } from '../jornadas/jornadas.repository';
 import { PontosEmAtrasoRepository } from './pontos-em-atraso.repository';
+import { MotivoRejeicaoInvalidoException } from './exceptions/motivo-rejeicao-invalido.exception';
 import { PeriodoInvalidoException } from './exceptions/periodo-invalido.exception';
 import { PeriodoJaRegistradoException } from './exceptions/periodo-ja-registrado.exception';
 import { SolicitacaoForaDaJanelaException } from './exceptions/solicitacao-fora-da-janela.exception';
+import { SolicitacaoJaAnalisadaException } from './exceptions/solicitacao-ja-analisada.exception';
 import { SolicitacaoNaoEncontradaException } from './exceptions/solicitacao-nao-encontrada.exception';
 import { SolicitacaoPendenteNoDiaException } from './exceptions/solicitacao-pendente-no-dia.exception';
 
@@ -79,5 +82,48 @@ export class PontosEmAtrasoService {
     if (data > hoje || data < maisAntiga) {
       throw new SolicitacaoForaDaJanelaException(LIMITE_RETROATIVO_DIAS);
     }
+  }
+
+  async listarPendentes(): Promise<SolicitacaoPontoDTO[]> {
+    return this.solicitacoes.listarPendentes();
+  }
+
+  /**
+   * A sobreposição é checada de novo aqui, e não só na criação: entre o
+   * pedido e a análise o montador pode ter batido ponto normalmente no
+   * mesmo intervalo, e aprovar agora pagaria a hora duas vezes.
+   */
+  async aprovar(id: number, analistaId: number): Promise<SolicitacaoPontoDTO> {
+    const solicitacao = await this.garantirPendente(id);
+
+    if (
+      await this.jornadas.existeSobreposicao(
+        solicitacao.usuarioId,
+        solicitacao.inicio,
+        solicitacao.fim,
+      )
+    ) {
+      throw new PeriodoJaRegistradoException();
+    }
+
+    return this.solicitacoes.aprovar(id, analistaId);
+  }
+
+  async rejeitar(id: number, analistaId: number, motivo: string): Promise<SolicitacaoPontoDTO> {
+    await this.garantirPendente(id);
+
+    const motivoAparado = motivo.trim();
+    if (!motivoAparado) throw new MotivoRejeicaoInvalidoException();
+
+    return this.solicitacoes.rejeitar(id, analistaId, motivoAparado);
+  }
+
+  private async garantirPendente(id: number): Promise<SolicitacaoPontoDTO> {
+    const solicitacao = await this.solicitacoes.buscarPorId(id);
+    if (!solicitacao) throw new SolicitacaoNaoEncontradaException();
+    if (solicitacao.status !== StatusSolicitacaoPonto.PENDENTE) {
+      throw new SolicitacaoJaAnalisadaException();
+    }
+    return solicitacao;
   }
 }
