@@ -1,28 +1,28 @@
-import type { NomeIcone } from '@montacontrol/design-tokens/icones'
-import accountBalanceWallet from '@material-symbols/svg-400/outlined/account_balance_wallet.svg?raw'
-import barcodeScanner from '@material-symbols/svg-400/outlined/barcode_scanner.svg?raw'
-import cancel from '@material-symbols/svg-400/outlined/cancel.svg?raw'
-import check from '@material-symbols/svg-400/outlined/check.svg?raw'
-import checkCircle from '@material-symbols/svg-400/outlined/check_circle.svg?raw'
-import close from '@material-symbols/svg-400/outlined/close.svg?raw'
-import chevronLeft from '@material-symbols/svg-400/outlined/chevron_left.svg?raw'
-import chevronRight from '@material-symbols/svg-400/outlined/chevron_right.svg?raw'
-import conveyorBelt from '@material-symbols/svg-400/outlined/conveyor_belt.svg?raw'
-import description from '@material-symbols/svg-400/outlined/description.svg?raw'
-import eventNote from '@material-symbols/svg-400/outlined/event_note.svg?raw'
-import fingerprint from '@material-symbols/svg-400/outlined/fingerprint.svg?raw'
-import history from '@material-symbols/svg-400/outlined/history.svg?raw'
-import info from '@material-symbols/svg-400/outlined/info.svg?raw'
-import lock from '@material-symbols/svg-400/outlined/lock.svg?raw'
-import mail from '@material-symbols/svg-400/outlined/mail.svg?raw'
-import menuBook from '@material-symbols/svg-400/outlined/menu_book.svg?raw'
-import report from '@material-symbols/svg-400/outlined/report.svg?raw'
-import schedule from '@material-symbols/svg-400/outlined/schedule.svg?raw'
-import sync from '@material-symbols/svg-400/outlined/sync.svg?raw'
-import trendingUp from '@material-symbols/svg-400/outlined/trending_up.svg?raw'
-import visibility from '@material-symbols/svg-400/outlined/visibility.svg?raw'
-import visibilityOff from '@material-symbols/svg-400/outlined/visibility_off.svg?raw'
-import warning from '@material-symbols/svg-400/outlined/warning.svg?raw'
+import type { NomeIcone } from '@montacontrol/design-tokens/icones';
+import accountBalanceWallet from '@material-symbols/svg-400/outlined/account_balance_wallet.svg?raw';
+import barcodeScanner from '@material-symbols/svg-400/outlined/barcode_scanner.svg?raw';
+import cancel from '@material-symbols/svg-400/outlined/cancel.svg?raw';
+import check from '@material-symbols/svg-400/outlined/check.svg?raw';
+import checkCircle from '@material-symbols/svg-400/outlined/check_circle.svg?raw';
+import close from '@material-symbols/svg-400/outlined/close.svg?raw';
+import chevronLeft from '@material-symbols/svg-400/outlined/chevron_left.svg?raw';
+import chevronRight from '@material-symbols/svg-400/outlined/chevron_right.svg?raw';
+import conveyorBelt from '@material-symbols/svg-400/outlined/conveyor_belt.svg?raw';
+import description from '@material-symbols/svg-400/outlined/description.svg?raw';
+import eventNote from '@material-symbols/svg-400/outlined/event_note.svg?raw';
+import fingerprint from '@material-symbols/svg-400/outlined/fingerprint.svg?raw';
+import history from '@material-symbols/svg-400/outlined/history.svg?raw';
+import info from '@material-symbols/svg-400/outlined/info.svg?raw';
+import lock from '@material-symbols/svg-400/outlined/lock.svg?raw';
+import mail from '@material-symbols/svg-400/outlined/mail.svg?raw';
+import menuBook from '@material-symbols/svg-400/outlined/menu_book.svg?raw';
+import report from '@material-symbols/svg-400/outlined/report.svg?raw';
+import schedule from '@material-symbols/svg-400/outlined/schedule.svg?raw';
+import sync from '@material-symbols/svg-400/outlined/sync.svg?raw';
+import trendingUp from '@material-symbols/svg-400/outlined/trending_up.svg?raw';
+import visibility from '@material-symbols/svg-400/outlined/visibility.svg?raw';
+import visibilityOff from '@material-symbols/svg-400/outlined/visibility_off.svg?raw';
+import warning from '@material-symbols/svg-400/outlined/warning.svg?raw';
 
 // Os SVGs de @material-symbols/svg-400 não têm `fill` — herdam preto do
 // default do SVG. Injeta `fill="currentColor"` na tag raiz (os `<path>`
@@ -32,7 +32,9 @@ import warning from '@material-symbols/svg-400/outlined/warning.svg?raw'
 // ícone sempre renderiza a 48px e as classes `text-*` (font-size) não têm
 // nenhum efeito no tamanho.
 const comCorAtual = (bruto: string) =>
-  bruto.replace('<svg ', '<svg fill="currentColor" ').replace('width="48" height="48"', 'width="1em" height="1em"')
+  bruto
+    .replace('<svg ', '<svg fill="currentColor" ')
+    .replace('width="48" height="48"', 'width="1em" height="1em"');
 
 const svgPorIcone: Record<NomeIcone, string> = {
   account_balance_wallet: comCorAtual(accountBalanceWallet),
@@ -59,11 +61,11 @@ const svgPorIcone: Record<NomeIcone, string> = {
   visibility: comCorAtual(visibility),
   visibility_off: comCorAtual(visibilityOff),
   warning: comCorAtual(warning),
-}
+};
 
 export interface PropsSimboloMaterial {
-  nome: NomeIcone
-  className?: string
+  nome: NomeIcone;
+  className?: string;
 }
 
 /**
@@ -80,5 +82,5 @@ export function SimboloMaterial({ nome, className }: PropsSimboloMaterial) {
       aria-hidden="true"
       dangerouslySetInnerHTML={{ __html: svgPorIcone[nome] }}
     />
-  )
+  );
 }
