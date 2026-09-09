@@ -321,6 +321,8 @@ model BancoHoras {
 model Atestado {
   id             Int            @id @default(autoincrement())
   usuarioId      Int            @map("usuario_id")
+  /// UUID gerado no aparelho — idempotência da outbox, igual ao check-in.
+  idCliente      String         @unique @map("id_cliente") @db.Uuid
   dataInicio     DateTime       @map("data_inicio") @db.Date
   dataFim        DateTime       @map("data_fim") @db.Date
   status         StatusAtestado @default(PENDENTE)

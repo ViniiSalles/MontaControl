@@ -2,6 +2,7 @@ import { Module, ValidationPipe } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD, APP_PIPE } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { AtestadosModule } from './atestados/atestados.module';
 import { AuthModule } from './auth/auth.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { HealthController } from './common/health.controller';
@@ -21,6 +22,7 @@ import { PrismaModule } from './prisma/prisma.module';
     AuthModule,
     JornadasModule,
     PontosEmAtrasoModule,
+    AtestadosModule,
   ],
   controllers: [HealthController],
   providers: [
