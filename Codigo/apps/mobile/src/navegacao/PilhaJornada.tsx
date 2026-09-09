@@ -12,9 +12,8 @@ type Vista = 'jornada' | 'historico' | 'bancoHoras';
  * formulário de ponto em atraso por cima de qualquer uma das duas.
  *
  * É um `useState` e não uma biblioteca de navegação de propósito — a aba tem
- * duas vistas e uma folha modal, e `BarraNavInferior` já resolve o nível de
- * cima. Se surgir uma terceira vista com histórico de voltar, aí sim vale a
- * troca.
+ * três vistas (jornada, histórico, banco de horas) e uma folha modal, e
+ * `BarraNavInferior` já resolve o nível de cima.
  */
 export function PilhaJornada() {
   const { sessao } = useAuth();
