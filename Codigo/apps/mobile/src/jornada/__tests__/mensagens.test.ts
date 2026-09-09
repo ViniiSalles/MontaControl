@@ -64,11 +64,4 @@ describe('avisoDoResultado', () => {
       /recusado pelo servidor/i,
     );
   });
-
-  it('falha de rede é aviso, não erro — retentar resolve', () => {
-    const aviso = avisoDoResultado({ tipo: 'sem_rede' });
-
-    expect(aviso.variante).toBe('aviso');
-    expect(aviso.mensagem).toMatch(/internet/i);
-  });
 });

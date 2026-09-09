@@ -66,11 +66,5 @@ export function avisoDoResultado(resultado: ResultadoAcao): AvisoAcao {
         titulo: 'Ponto não registrado',
         mensagem: mensagemPorCodigo[resultado.codigo] ?? MENSAGEM_RECUSA_PADRAO,
       };
-    case 'sem_rede':
-      return {
-        variante: 'aviso',
-        titulo: 'Sem conexão',
-        mensagem: 'O ponto não chegou ao servidor. Verifique a internet e toque de novo.',
-      };
   }
 }
