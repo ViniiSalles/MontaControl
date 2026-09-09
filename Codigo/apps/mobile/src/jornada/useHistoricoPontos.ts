@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { DiaJornadaDTO, PeriodoHistorico } from '@montacontrol/shared';
-import { buscarHistorico } from './clienteJornadas';
+import { useDatabaseOuFalha } from '../db/useDatabase';
+import { construirHistoricoDTO, janelaDoPeriodo, queryJornadasNoPeriodo } from './espelhoJornada';
+import { puxarJornadas } from '../sincronizacao/syncManager';
 
 export interface EstadoHistorico {
   dias: DiaJornadaDTO[];
@@ -10,30 +12,41 @@ export interface EstadoHistorico {
   recarregar: () => Promise<void>;
 }
 
-/** Histórico de pontos do período escolhido. Recarrega ao trocar de período. */
+/** Histórico de pontos do período escolhido, lido do espelho local. Recarrega ao trocar de período. */
 export function useHistoricoPontos(token: string, periodo: PeriodoHistorico): EstadoHistorico {
+  const database = useDatabaseOuFalha();
   const [dias, setDias] = useState<DiaJornadaDTO[]>([]);
   const [totalMinutos, setTotalMinutos] = useState(0);
-  const [carregando, setCarregando] = useState(true);
-  const [erro, setErro] = useState(false);
+  const [carregandoLocal, setCarregandoLocal] = useState(true);
+  const [falhaRede, setFalhaRede] = useState(false);
 
   const recarregar = useCallback(async () => {
-    setCarregando(true);
     try {
-      const historico = await buscarHistorico(token, periodo);
-      setDias(historico.dias);
-      setTotalMinutos(historico.totalMinutos);
-      setErro(false);
+      await puxarJornadas(database, token);
+      setFalhaRede(false);
     } catch {
-      setErro(true);
-    } finally {
-      setCarregando(false);
+      setFalhaRede(true);
     }
-  }, [token, periodo]);
+  }, [database, token]);
+
+  useEffect(() => {
+    const agoraIso = new Date().toISOString();
+    const { inicioIso, fimIso } = janelaDoPeriodo(periodo, agoraIso);
+
+    const assinatura = queryJornadasNoPeriodo(database, inicioIso, fimIso)
+      .observe()
+      .subscribe((registros) => {
+        const historico = construirHistoricoDTO(registros, periodo, agoraIso);
+        setDias(historico.dias);
+        setTotalMinutos(historico.totalMinutos);
+        setCarregandoLocal(false);
+      });
+    return () => assinatura.unsubscribe();
+  }, [database, periodo]);
 
   useEffect(() => {
     void recarregar();
   }, [recarregar]);
 
-  return { dias, totalMinutos, carregando, erro, recarregar };
+  return { dias, totalMinutos, carregando: carregandoLocal, erro: falhaRede && dias.length === 0, recarregar };
 }

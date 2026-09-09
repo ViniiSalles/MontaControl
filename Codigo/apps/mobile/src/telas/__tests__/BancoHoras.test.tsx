@@ -1,17 +1,22 @@
 jest.mock('../../auth/AuthContext');
-jest.mock('../../banco-horas/clienteBancoHoras');
+jest.mock('../../sincronizacao/syncManager');
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { DatabaseProvider } from '@nozbe/watermelondb/react';
 import type { BancoHorasDTO } from '@montacontrol/shared';
+import { criarBancoDeTeste } from '../../db/__tests__/apoio';
+import { upsertBancoHoras } from '../../banco-horas/espelhoBancoHoras';
 import { useAuth } from '../../auth/AuthContext';
-import { buscarBancoHoras } from '../../banco-horas/clienteBancoHoras';
+import { puxarBancoHoras } from '../../sincronizacao/syncManager';
 import { montador } from '../../auth/__tests__/apoio';
 import { BancoHoras } from '../BancoHoras';
 
 const useAuthMock = jest.mocked(useAuth);
-const buscarBancoHorasMock = jest.mocked(buscarBancoHoras);
+const puxarBancoHorasMock = jest.mocked(puxarBancoHoras);
 
 const voltar = jest.fn();
+
+let database = criarBancoDeTeste();
 
 function bancoHorasFake(parcial: Partial<BancoHorasDTO> = {}): BancoHorasDTO {
   return {
@@ -27,11 +32,16 @@ function bancoHorasFake(parcial: Partial<BancoHorasDTO> = {}): BancoHorasDTO {
 }
 
 function renderizar() {
-  return render(<BancoHoras aoVoltar={voltar} />);
+  return render(
+    <DatabaseProvider database={database}>
+      <BancoHoras aoVoltar={voltar} />
+    </DatabaseProvider>,
+  );
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
+  database = criarBancoDeTeste();
   jest.useFakeTimers().setSystemTime(new Date('2026-08-26T17:00:00.000Z')); // 14:00 local
   useAuthMock.mockReturnValue({
     sessao: { accessToken: 'access', refreshToken: 'refresh', usuario: montador },
@@ -39,7 +49,7 @@ beforeEach(() => {
     entrar: jest.fn(),
     sair: jest.fn(),
   });
-  buscarBancoHorasMock.mockResolvedValue(bancoHorasFake());
+  puxarBancoHorasMock.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -47,10 +57,12 @@ afterEach(() => {
 });
 
 test('abre no mês corrente e mostra o saldo', async () => {
+  await upsertBancoHoras(database, bancoHorasFake());
+
   await renderizar();
 
   await waitFor(() => expect(screen.getByText('-8h 00min')).toBeTruthy());
-  expect(buscarBancoHorasMock).toHaveBeenCalledWith('access', 8, 2026);
+  expect(puxarBancoHorasMock).toHaveBeenCalledWith(database, 'access', 8, 2026);
   expect(screen.getByText('Agosto de 2026')).toBeTruthy();
   expect(screen.getByText('160h 00min')).toBeTruthy();
   expect(screen.getByText('168h 00min')).toBeTruthy();
@@ -65,7 +77,7 @@ test('botão "próximo mês" não avança quando já está no mês corrente', as
   // `desabilitado` no `Botao` impede o `onPress` (mesmo padrão de
   // `ui/__tests__/Botao.test.tsx`, "desabilitado não dispara aoPressionar") —
   // nenhuma busca nova, mês exibido continua o mesmo.
-  expect(buscarBancoHorasMock).toHaveBeenCalledTimes(1);
+  expect(puxarBancoHorasMock).toHaveBeenCalledTimes(1);
   expect(screen.getByText('Agosto de 2026')).toBeTruthy();
 });
 
@@ -75,17 +87,25 @@ test('mês anterior refaz a busca e volta a permitir avançar', async () => {
 
   await fireEvent.press(screen.getByLabelText('Mês anterior'));
 
-  await waitFor(() => expect(buscarBancoHorasMock).toHaveBeenLastCalledWith('access', 7, 2026));
+  await waitFor(() =>
+    expect(puxarBancoHorasMock).toHaveBeenLastCalledWith(database, 'access', 7, 2026),
+  );
   await waitFor(() => expect(screen.getByText('Julho de 2026')).toBeTruthy());
 
   await fireEvent.press(screen.getByLabelText('Próximo mês'));
 
-  await waitFor(() => expect(buscarBancoHorasMock).toHaveBeenLastCalledWith('access', 8, 2026));
+  await waitFor(() =>
+    expect(puxarBancoHorasMock).toHaveBeenLastCalledWith(database, 'access', 8, 2026),
+  );
   await waitFor(() => expect(screen.getByText('Agosto de 2026')).toBeTruthy());
 });
 
 test('falha na busca mostra erro e permite tentar de novo', async () => {
-  buscarBancoHorasMock.mockRejectedValueOnce(new Error('offline'));
+  puxarBancoHorasMock
+    .mockRejectedValueOnce(new Error('offline'))
+    .mockImplementationOnce(async () => {
+      await upsertBancoHoras(database, bancoHorasFake());
+    });
 
   await renderizar();
   await waitFor(() =>

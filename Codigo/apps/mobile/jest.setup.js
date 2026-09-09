@@ -23,3 +23,20 @@ jest.mock('react-native-safe-area-context', () =>
 jest.mock('@react-native-community/netinfo', () =>
   require('@react-native-community/netinfo/jest/netinfo-mock'),
 );
+
+// `SQLiteAdapter` (usado pelo banco local real, `db/database.ts`, importado a
+// partir de `App.tsx` e de `AuthContext.tsx#sair`) tenta inicializar bindings
+// JSI nativos assim que é construído — bindings que não existem sob o Jest,
+// derrubando qualquer suíte que sequer importe esses arquivos (mesmo que o
+// banco de teste real usado nos testes seja outro, via `criarBancoDeTeste`/
+// LokiJSAdapter). Nenhum teste consulta esse adapter de verdade, então um
+// stub que só guarda o `schema` recebido é suficiente — `new Database(...)`
+// lê `adapter.schema.tables` na hora de montar as coleções, mesmo sem
+// nenhuma query real ser feita.
+jest.mock('@nozbe/watermelondb/adapters/sqlite', () => {
+  return class SQLiteAdapterMock {
+    constructor(options) {
+      this.schema = options?.schema;
+    }
+  };
+});

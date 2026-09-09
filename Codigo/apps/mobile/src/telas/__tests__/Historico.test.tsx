@@ -1,19 +1,24 @@
 jest.mock('../../auth/AuthContext');
-jest.mock('../../jornada/clienteJornadas');
+jest.mock('../../sincronizacao/syncManager');
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { DatabaseProvider } from '@nozbe/watermelondb/react';
 import { StatusJornada } from '@montacontrol/shared';
-import type { DiaJornadaDTO, HistoricoJornadasDTO, JornadaDTO } from '@montacontrol/shared';
+import type { JornadaDTO } from '@montacontrol/shared';
+import { criarBancoDeTeste } from '../../db/__tests__/apoio';
+import { upsertJornadas } from '../../jornada/espelhoJornada';
 import { useAuth } from '../../auth/AuthContext';
-import { buscarHistorico } from '../../jornada/clienteJornadas';
+import { puxarJornadas } from '../../sincronizacao/syncManager';
 import { montador } from '../../auth/__tests__/apoio';
 import { Historico } from '../Historico';
 
 const useAuthMock = jest.mocked(useAuth);
-const buscarHistoricoMock = jest.mocked(buscarHistorico);
+const puxarJornadasMock = jest.mocked(puxarJornadas);
 
 const voltar = jest.fn();
 const lancarEmAtraso = jest.fn();
+
+let database = criarBancoDeTeste();
 
 function jornada(parcial: Partial<JornadaDTO> & { id: number }): JornadaDTO {
   return {
@@ -33,89 +38,98 @@ function jornada(parcial: Partial<JornadaDTO> & { id: number }): JornadaDTO {
   };
 }
 
-// `jornadas` precisa vir preenchido: o card do dia lista turno a turno, não
-// mais o resumo min/max do dia.
-function dia(parcial: Partial<DiaJornadaDTO> = {}): DiaJornadaDTO {
-  return {
-    data: '2026-08-26',
-    inicio: '2026-08-26T11:00:00.000Z', // 08:00 local
-    fim: '2026-08-26T20:00:00.000Z', // 17:00 local
-    minutosTrabalhados: 540,
-    emAndamento: false,
-    jornadas: [
-      jornada({
-        id: 1,
-        checkinAt: '2026-08-26T11:00:00.000Z',
-        checkoutAt: '2026-08-26T20:00:00.000Z',
-      }),
-    ],
-    ...parcial,
-  };
-}
+// Turno padrão do dia 26/08 — 08:00 às 17:00 local (9h). "Agora" é congelado
+// em 27/08 (ver `beforeEach`), então cai dentro da janela de qualquer
+// período (5/15/30 dias) usada pelos testes.
+const TURNO_26_AGO: JornadaDTO = jornada({
+  id: 1,
+  checkinAt: '2026-08-26T11:00:00.000Z', // 08:00 local
+  checkoutAt: '2026-08-26T20:00:00.000Z', // 17:00 local
+});
 
-// Total do período diferente do total do dia de propósito: os dois usam
-// `formatarDuracao`, e valores iguais dariam dois nós com o mesmo texto.
-function historico(dias: DiaJornadaDTO[], totalMinutos = 600): HistoricoJornadasDTO {
-  return {
-    periodoDias: 15,
-    inicioPeriodo: '2026-08-15',
-    fimPeriodo: '2026-08-29',
-    dias,
-    totalMinutos,
-  };
-}
+// Segundo turno, dia anterior (24/08), curto (1h) — usado sempre que um
+// teste precisa que o total do período (soma dos dias) fique visivelmente
+// diferente do total do card de um único dia, evitando dois nós de texto
+// iguais ("9h 00min" apareceria tanto no card do dia quanto no total).
+const TURNO_24_AGO: JornadaDTO = jornada({
+  id: 2,
+  checkinAt: '2026-08-24T12:00:00.000Z', // 09:00 local
+  checkoutAt: '2026-08-24T13:00:00.000Z', // 10:00 local
+});
 
 function renderizar() {
-  return render(<Historico aoVoltar={voltar} aoLancarEmAtraso={lancarEmAtraso} />);
+  return render(
+    <DatabaseProvider database={database}>
+      <Historico aoVoltar={voltar} aoLancarEmAtraso={lancarEmAtraso} />
+    </DatabaseProvider>,
+  );
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
+  database = criarBancoDeTeste();
+  jest.useFakeTimers().setSystemTime(new Date('2026-08-27T15:00:00.000Z')); // 12:00 local, dia seguinte
   useAuthMock.mockReturnValue({
     sessao: { accessToken: 'access', refreshToken: 'refresh', usuario: montador },
     restaurando: false,
     entrar: jest.fn(),
     sair: jest.fn(),
   });
-  buscarHistoricoMock.mockResolvedValue(historico([dia()]));
+  puxarJornadasMock.mockResolvedValue(undefined);
+});
+
+afterEach(() => {
+  jest.useRealTimers();
 });
 
 test('abre em 15 dias e lista os dias do período com o total', async () => {
+  await upsertJornadas(database, [TURNO_26_AGO, TURNO_24_AGO]);
+
   await renderizar();
 
   await waitFor(() => expect(screen.getByText('10h 00min')).toBeTruthy());
-  expect(buscarHistoricoMock).toHaveBeenCalledWith('access', 15);
+  expect(puxarJornadasMock).toHaveBeenCalledWith(database, 'access');
   expect(screen.getByText('9h 00min')).toBeTruthy();
   expect(screen.getByText('08:00')).toBeTruthy();
 });
 
-test('trocar o período refaz a busca com o novo recorte', async () => {
+// A busca de rede (`puxarJornadas`) não recebe mais o período — ela sempre
+// traz os últimos 5 dias (ver `syncManager.ts`) e grava no espelho local; é a
+// LEITURA local que passa a reagir à troca de período, ampliando a janela
+// (`janelaDoPeriodo`). Turno de 20 dias atrás só entra na conta em 30 dias.
+test('trocar o período amplia a janela lida do espelho local', async () => {
+  const TURNO_20_DIAS_ATRAS: JornadaDTO = jornada({
+    id: 3,
+    checkinAt: '2026-08-07T12:00:00.000Z', // 09:00 local
+    checkoutAt: '2026-08-07T13:00:00.000Z', // 10:00 local — turno de 1h
+  });
+  // TURNO_24_AGO entra desde já (dentro dos 15 dias); TURNO_20_DIAS_ATRAS só
+  // entra depois de trocar para 30 dias — os totais (10h, depois 11h) ficam
+  // cada um só uma vez na tela, sem colidir com o total de nenhum card de dia.
+  await upsertJornadas(database, [TURNO_26_AGO, TURNO_24_AGO, TURNO_20_DIAS_ATRAS]);
+
   await renderizar();
-  await waitFor(() => expect(screen.getByText('30 dias')).toBeTruthy());
+  await waitFor(() => expect(screen.getByText('10h 00min')).toBeTruthy());
 
   await fireEvent.press(screen.getByText('30 dias'));
 
-  await waitFor(() => expect(buscarHistoricoMock).toHaveBeenCalledWith('access', 30));
+  await waitFor(() => expect(screen.getByText('11h 00min')).toBeTruthy());
 });
 
 test('período sem pontos mostra estado vazio, não uma lista em branco', async () => {
-  buscarHistoricoMock.mockResolvedValue(historico([], 0));
-
   await renderizar();
 
   await waitFor(() => expect(screen.getByText('Nenhum ponto no período')).toBeTruthy());
 });
 
 test('dia sem check-out oferece o atalho de ponto em atraso com a data do card', async () => {
-  const semSaida = dia({
-    fim: null,
-    emAndamento: true,
-    minutosTrabalhados: 0,
-    jornadas: [
-      jornada({ id: 1, status: StatusJornada.EM_ANDAMENTO, checkinAt: '2026-08-26T11:00:00.000Z' }),
-    ],
+  const semSaida: JornadaDTO = jornada({
+    id: 1,
+    status: StatusJornada.EM_ANDAMENTO,
+    checkinAt: '2026-08-26T11:00:00.000Z',
+    checkoutAt: null,
   });
-  buscarHistoricoMock.mockResolvedValue(historico([semSaida], 0));
+  await upsertJornadas(database, [semSaida]);
 
   await renderizar();
   await waitFor(() => expect(screen.getByText('Lançar ponto em atraso')).toBeTruthy());
@@ -126,7 +140,11 @@ test('dia sem check-out oferece o atalho de ponto em atraso com a data do card',
 });
 
 test('falha na busca mostra erro e permite tentar de novo', async () => {
-  buscarHistoricoMock.mockRejectedValueOnce(new Error('offline'));
+  puxarJornadasMock
+    .mockRejectedValueOnce(new Error('offline'))
+    .mockImplementationOnce(async () => {
+      await upsertJornadas(database, [TURNO_26_AGO, TURNO_24_AGO]);
+    });
 
   await renderizar();
   await waitFor(() =>
@@ -135,7 +153,7 @@ test('falha na busca mostra erro e permite tentar de novo', async () => {
 
   await fireEvent.press(screen.getByText('Tentar de novo'));
 
-  await waitFor(() => expect(screen.getByText('9h 00min')).toBeTruthy());
+  await waitFor(() => expect(screen.getByText('10h 00min')).toBeTruthy());
 });
 
 test('voltar devolve o controle para a tela de jornada', async () => {

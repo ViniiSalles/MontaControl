@@ -12,6 +12,7 @@ import {
 } from './clienteAuth';
 import { limparTokens, lerTokens, salvarTokens } from './armazenamentoSessao';
 import type { TokensPersistidos } from './armazenamentoSessao';
+import { limparBancoLocal } from '../db/database';
 
 export const CODIGO_PERFIL_EXCLUSIVO_WEB = 'PERFIL_EXCLUSIVO_WEB';
 
@@ -113,6 +114,9 @@ export function ProvedorAuth({ children }: { children: ReactNode }) {
     const encerrando = sessao;
     setSessao(null);
     await limparTokens();
+    // Sem isto, um segundo montador que logar neste aparelho veria o
+    // espelho de jornada do anterior até a primeira sincronização.
+    await limparBancoLocal();
     if (encerrando) {
       await encerrarSessaoNoServidor(encerrando.accessToken).catch(() => undefined);
     }
