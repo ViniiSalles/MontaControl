@@ -141,7 +141,7 @@ test('bater a entrada registra o ponto e a tela passa a pedir a saída', async (
   await fireEvent.press(screen.getByText(ROTULO_ENTRADA));
 
   await waitFor(() => expect(screen.getByText(ROTULO_SAIDA)).toBeTruthy());
-  expect(registrarCheckinMock).toHaveBeenCalledWith('access');
+  expect(registrarCheckinMock).toHaveBeenCalledWith('access', database);
   expect(screen.getByText(`Ponto de entrada registrado às ${HORA_CHECKIN}.`)).toBeTruthy();
   expect(screen.getByText(HORA_CHECKIN)).toBeTruthy();
 });
@@ -158,6 +158,7 @@ test('bater a saída mantém o check-out na tela em vez de voltar ao estado vazi
   // A jornada da resposta tem precedência sobre a leitura local: o ponto
   // recém-batido continua visível, e o botão volta a oferecer a entrada.
   await waitFor(() => expect(screen.getByText(HORA_CHECKOUT)).toBeTruthy());
+  expect(registrarCheckoutMock).toHaveBeenCalledWith('access', database);
   expect(screen.getByText(ROTULO_ENTRADA)).toBeTruthy();
   expect(screen.queryByText('Nenhum ponto registrado')).toBeNull();
 });
@@ -171,6 +172,7 @@ test('localização negada não registra ponto e instrui o montador', async () =
   await fireEvent.press(screen.getByText(ROTULO_ENTRADA));
 
   await waitFor(() => expect(screen.getByText(/ajustes do aparelho/i)).toBeTruthy());
+  expect(registrarCheckinMock).toHaveBeenCalledWith('access', database);
   // Falhou: o botão continua oferecendo a entrada.
   expect(screen.getByText(ROTULO_ENTRADA)).toBeTruthy();
   expect(screen.getByText('Nenhum ponto registrado')).toBeTruthy();
@@ -267,6 +269,7 @@ test('abrir um turno novo no mesmo dia soma com o turno anterior, não reseta "t
   await fireEvent.press(screen.getByText(ROTULO_ENTRADA));
 
   await waitFor(() => expect(screen.getByText(ROTULO_SAIDA)).toBeTruthy());
+  expect(registrarCheckinMock).toHaveBeenCalledWith('access', database);
   // Turno 2 acabou de abrir (poucos ms de duração): o total não pode cair
   // abaixo das 2h que o turno 1 já tinha — antes da correção, resetava a
   // "0h 00min" porque a tela só olhava para o turno aberto agora.
@@ -293,6 +296,12 @@ test('Atualizar também refaz a busca do banco de horas', async () => {
   await waitFor(() => expect(puxarBancoHorasMock).toHaveBeenCalledTimes(2));
 });
 
+test('a sincronização automática liga ao montar a tela, com o banco e o token certos', async () => {
+  await renderizar();
+
+  await waitFor(() => expect(iniciarSincronizacaoMock).toHaveBeenCalledWith(database, 'access'));
+});
+
 test('bater a saída também refaz a busca do banco de horas', async () => {
   await upsertJornadas(database, [ABERTA]);
   registrarCheckoutMock.mockResolvedValue({ tipo: 'ok', jornada: ENCERRADA });
@@ -305,4 +314,5 @@ test('bater a saída também refaz a busca do banco de horas', async () => {
   await fireEvent.press(screen.getByText(ROTULO_SAIDA));
 
   await waitFor(() => expect(puxarBancoHorasMock).toHaveBeenCalledTimes(2));
+  expect(registrarCheckoutMock).toHaveBeenCalledWith('access', database);
 });

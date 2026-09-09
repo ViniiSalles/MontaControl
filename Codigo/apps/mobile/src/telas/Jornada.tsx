@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { cores, espacamento, espacamentoNomeado } from '@montacontrol/design-tokens/native';
 import { estadoJornada } from '@montacontrol/shared';
@@ -13,6 +13,7 @@ import { Texto } from '../ui/Texto';
 import { useAuth } from '../auth/AuthContext';
 import { useBancoHoras } from '../banco-horas/useBancoHoras';
 import { periodoAtual } from '../banco-horas/periodo';
+import { useDatabaseOuFalha } from '../db/useDatabase';
 import { registrarCheckin, registrarCheckout } from '../jornada/acoes';
 import { diaCivilDe, formatarDataCompleta, formatarDuracao } from '../jornada/formatacao';
 import { avisoDoResultado } from '../jornada/mensagens';
@@ -21,6 +22,7 @@ import { minutosTrabalhadosHoje, proximaAcao } from '../jornada/ultimoPonto';
 import type { TipoPonto } from '../jornada/ultimoPonto';
 import { useHistoricoPontos } from '../jornada/useHistoricoPontos';
 import { useJornadaAtual } from '../jornada/useJornadaAtual';
+import { iniciarSincronizacao } from '../sincronizacao/syncManager';
 import { BotaoAcaoPrincipal } from './jornada/BotaoAcaoPrincipal';
 import { CartaoBancoHoras } from './jornada/CartaoBancoHoras';
 import { CartaoUltimoPonto } from './jornada/CartaoUltimoPonto';
@@ -50,6 +52,13 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
   // `RootNavigator` só monta esta tela com sessão presente; os fallbacks
   // existem para o tipo, não para um estado alcançável.
   const token = sessao?.accessToken ?? '';
+
+  const database = useDatabaseOuFalha();
+
+  useEffect(() => {
+    if (!token) return;
+    return iniciarSincronizacao(database, token);
+  }, [database, token]);
 
   const { jornada, carregando, erro, recarregar } = useJornadaAtual(token);
   // Menor período válido (`PeriodoHistorico`): só precisa alcançar hoje, o
@@ -81,7 +90,9 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
     setAviso(null);
     try {
       const resultado =
-        acao === 'saida' ? await registrarCheckout(token) : await registrarCheckin(token);
+        acao === 'saida'
+          ? await registrarCheckout(token, database)
+          : await registrarCheckin(token, database);
       if (resultado.tipo === 'ok') {
         setJornadaRegistrada(resultado.jornada);
         // O turno que acabou de fechar/abrir precisa entrar na soma de hoje
@@ -94,7 +105,7 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
     } finally {
       setRegistrando(false);
     }
-  }, [acao, recarregarHistorico, recarregarBancoHoras, token]);
+  }, [acao, database, recarregarHistorico, recarregarBancoHoras, token]);
 
   const atualizar = useCallback(async () => {
     // Descartar o registro local é o ponto da atualização: a partir daqui
