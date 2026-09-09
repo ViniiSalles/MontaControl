@@ -12,5 +12,7 @@ import { PontosEmAtrasoService } from './pontos-em-atraso.service';
   imports: [PrismaModule, JornadasModule],
   controllers: [PontosEmAtrasoController],
   providers: [PontosEmAtrasoService, PontosEmAtrasoRepository],
+  // O banco de horas conta compensações pendentes por montador no painel do RH.
+  exports: [PontosEmAtrasoRepository],
 })
 export class PontosEmAtrasoModule {}
