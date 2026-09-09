@@ -282,3 +282,14 @@ test('o atalho de banco de horas chama a navegação da aba', async () => {
 
   expect(abrirBancoHoras).toHaveBeenCalled();
 });
+
+test('Atualizar também refaz a busca do banco de horas', async () => {
+  await renderizar();
+  await waitFor(() => expect(screen.getByText('Ver histórico completo')).toBeTruthy());
+
+  expect(buscarBancoHorasMock).toHaveBeenCalledTimes(1);
+
+  await fireEvent.press(screen.getByLabelText('Atualizar'));
+
+  await waitFor(() => expect(buscarBancoHorasMock).toHaveBeenCalledTimes(2));
+});

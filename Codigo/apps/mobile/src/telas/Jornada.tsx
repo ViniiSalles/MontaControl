@@ -70,7 +70,7 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
   const agoraIso = new Date().toISOString();
   const hojeCivil = diaCivilDe(agoraIso);
   const { mes: mesAtual, ano: anoAtual } = periodoAtual(agoraIso);
-  const { bancoHoras } = useBancoHoras(token, mesAtual, anoAtual);
+  const { bancoHoras, recarregar: recarregarBancoHoras } = useBancoHoras(token, mesAtual, anoAtual);
   const diaHoje = diasHistorico.find((dia) => dia.data === hojeCivil) ?? null;
   const estado = jornadaExibida ? estadoJornada(jornadaExibida, agoraIso) : 'finalizada';
   const acao = proximaAcao(jornadaExibida, agoraIso);
@@ -100,8 +100,8 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
     // quem manda é o servidor de novo.
     setJornadaRegistrada(null);
     setAviso(null);
-    await Promise.all([recarregar(), recarregarHistorico()]);
-  }, [recarregar, recarregarHistorico]);
+    await Promise.all([recarregar(), recarregarHistorico(), recarregarBancoHoras()]);
+  }, [recarregar, recarregarHistorico, recarregarBancoHoras]);
 
   return (
     <Tela rolavel>
