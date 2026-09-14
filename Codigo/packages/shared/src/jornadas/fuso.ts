@@ -103,3 +103,30 @@ export function somarDias(data: string, dias: number): string {
     deslocada.getUTCDate(),
   )}`;
 }
+
+/**
+ * Início e fim do mês civil (`mes` 1-12) no fuso informado, como instantes
+ * ISO em UTC — mesma técnica de "-1ms" que `JornadasService.historico` usa
+ * para o período de dias, agora por mês inteiro. O fim é o último
+ * milissegundo do mês, não a meia-noite do mês seguinte: `23:59` perderia o
+ * que aconteceu entre `23:59:01` e a virada.
+ */
+export function limitesDoMes(
+  mes: number,
+  ano: number,
+  fuso: string,
+): { inicioIso: string; fimIso: string } {
+  const inicioIso = comporInstante(`${ano}-${doisDigitos(mes)}-01`, '00:00', fuso);
+
+  const proximoMes = mes === 12 ? 1 : mes + 1;
+  const anoDoProximoMes = mes === 12 ? ano + 1 : ano;
+  const inicioProximoMes = comporInstante(
+    `${anoDoProximoMes}-${doisDigitos(proximoMes)}-01`,
+    '00:00',
+    fuso,
+  );
+
+  const fimIso = new Date(new Date(inicioProximoMes).getTime() - 1).toISOString();
+
+  return { inicioIso, fimIso };
+}

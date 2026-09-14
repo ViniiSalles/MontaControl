@@ -1,22 +1,23 @@
-// Automock inteiro trocaria também o `ErroApi` por um construtor vazio, e o
-// teste da recusa da API perderia a `message` que a tela exibe.
-jest.mock('../../../jornada/clienteJornadas', () => ({
-  ...jest.requireActual('../../../jornada/clienteJornadas'),
-  enviarSolicitacaoPonto: jest.fn(),
+jest.mock('../../../sincronizacao/outbox', () => ({
+  executarAcaoPontoEmAtraso: jest.fn(),
 }));
 jest.mock('expo-crypto', () => ({ randomUUID: () => '11111111-1111-4111-8111-111111111111' }));
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import type { SolicitacaoPontoDTO } from '@montacontrol/shared';
-import { ErroApi, enviarSolicitacaoPonto } from '../../../jornada/clienteJornadas';
+import DatabaseProvider from '@nozbe/watermelondb/react/DatabaseProvider';
+import { executarAcaoPontoEmAtraso } from '../../../sincronizacao/outbox';
+import { criarBancoDeTeste } from '../../../db/__tests__/apoio';
 import { ModalPontoEmAtraso } from '../ModalPontoEmAtraso';
 
-const enviarMock = jest.mocked(enviarSolicitacaoPonto);
+const executarMock = jest.mocked(executarAcaoPontoEmAtraso);
 const fechar = jest.fn();
+let database: ReturnType<typeof criarBancoDeTeste>;
 
 function renderizar(dataInicial: string | null = null) {
   return render(
-    <ModalPontoEmAtraso token="access" dataInicial={dataInicial} aoFechar={fechar} />,
+    <DatabaseProvider database={database}>
+      <ModalPontoEmAtraso token="access" dataInicial={dataInicial} aoFechar={fechar} />
+    </DatabaseProvider>,
   );
 }
 
@@ -32,6 +33,7 @@ async function preencher(campos: { entrada: string; saida: string; motivo: strin
 
 beforeEach(() => {
   jest.clearAllMocks();
+  database = criarBancoDeTeste();
 });
 
 test('abre com a data do card já preenchida, em formato brasileiro', async () => {
@@ -41,7 +43,7 @@ test('abre com a data do card já preenchida, em formato brasileiro', async () =
 });
 
 test('envia a solicitação com a data em ISO e o id do aparelho', async () => {
-  enviarMock.mockResolvedValue({} as SolicitacaoPontoDTO);
+  executarMock.mockResolvedValue({ tipo: 'ok' });
 
   await renderizar('2026-08-26');
   await preencher({ entrada: '0800', saida: '1700', motivo: 'Celular sem bateria a manhã toda.' });
@@ -49,13 +51,17 @@ test('envia a solicitação com a data em ISO e o id do aparelho', async () => {
   await fireEvent.press(screen.getByText('Enviar solicitação'));
 
   await waitFor(() =>
-    expect(enviarMock).toHaveBeenCalledWith('access', {
-      idCliente: '11111111-1111-4111-8111-111111111111',
-      data: '2026-08-26',
-      horaInicio: '08:00',
-      horaFim: '17:00',
-      justificativa: 'Celular sem bateria a manhã toda.',
-    }),
+    expect(executarMock).toHaveBeenCalledWith(
+      expect.anything(), // database
+      'access',
+      {
+        idCliente: '11111111-1111-4111-8111-111111111111',
+        data: '2026-08-26',
+        horaInicio: '08:00',
+        horaFim: '17:00',
+        justificativa: 'Celular sem bateria a manhã toda.',
+      },
+    ),
   );
   expect(screen.getByText('Solicitação enviada')).toBeTruthy();
 });
@@ -66,31 +72,31 @@ test('formulário inválido não chega à rede e aponta o campo', async () => {
 
   await fireEvent.press(screen.getByText('Enviar solicitação'));
 
-  expect(enviarMock).not.toHaveBeenCalled();
+  expect(executarMock).not.toHaveBeenCalled();
   expect(screen.getByText(/depois da entrada/i)).toBeTruthy();
   expect(screen.getByText(/pelo menos 10 caracteres/i)).toBeTruthy();
 });
 
-test('recusa da API aparece com a mensagem do servidor', async () => {
-  enviarMock.mockRejectedValue(new ErroApi('PERIODO_JA_LANCADO', 'Já existe ponto neste dia.', 409));
+test('recusa da API aparece com a mensagem padrão', async () => {
+  executarMock.mockResolvedValue({ tipo: 'recusado', codigo: 'PERIODO_JA_LANCADO' });
 
   await renderizar('2026-08-26');
   await preencher({ entrada: '0800', saida: '1700', motivo: 'Celular sem bateria a manhã toda.' });
 
   await fireEvent.press(screen.getByText('Enviar solicitação'));
 
-  await waitFor(() => expect(screen.getByText('Já existe ponto neste dia.')).toBeTruthy());
+  await waitFor(() => expect(screen.getByText('O pedido foi recusado. Confira os dados e tente de novo.')).toBeTruthy());
 });
 
-test('falha de rede não é confundida com recusa de regra', async () => {
-  enviarMock.mockRejectedValue(new TypeError('Network request failed'));
+test('offline: mesmo sem confirmação do servidor, mostra a tela de enviada', async () => {
+  executarMock.mockResolvedValue({ tipo: 'ok' });
 
   await renderizar('2026-08-26');
   await preencher({ entrada: '0800', saida: '1700', motivo: 'Celular sem bateria a manhã toda.' });
 
   await fireEvent.press(screen.getByText('Enviar solicitação'));
 
-  await waitFor(() => expect(screen.getByText(/verifique a internet/i)).toBeTruthy());
+  await waitFor(() => expect(screen.getByText('Solicitação enviada')).toBeTruthy());
 });
 
 test('cancelar fecha sem enviar nada', async () => {
@@ -99,5 +105,5 @@ test('cancelar fecha sem enviar nada', async () => {
   await fireEvent.press(screen.getByText('Cancelar'));
 
   expect(fechar).toHaveBeenCalled();
-  expect(enviarMock).not.toHaveBeenCalled();
+  expect(executarMock).not.toHaveBeenCalled();
 });

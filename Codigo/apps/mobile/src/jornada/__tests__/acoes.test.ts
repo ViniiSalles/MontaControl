@@ -1,20 +1,16 @@
 jest.mock('expo-crypto');
 jest.mock('../../localizacao/localizacao');
 jest.mock('../../localizacao/nominatim');
-jest.mock('../clienteJornadas', () => {
-  const real = jest.requireActual('../clienteJornadas');
-  return {
-    ErroApi: real.ErroApi,
-    enviarCheckin: jest.fn(),
-    enviarCheckout: jest.fn(),
-  };
-});
+jest.mock('../../sincronizacao/outbox', () => ({
+  executarAcaoJornada: jest.fn(),
+}));
 
 import { randomUUID } from 'expo-crypto';
 import { StatusJornada, type JornadaDTO } from '@montacontrol/shared';
+import { criarBancoDeTeste } from '../../db/__tests__/apoio';
 import { capturarLocalizacao } from '../../localizacao/localizacao';
 import { resolverEndereco } from '../../localizacao/nominatim';
-import { ErroApi, enviarCheckin, enviarCheckout } from '../clienteJornadas';
+import { executarAcaoJornada } from '../../sincronizacao/outbox';
 import { registrarCheckin, registrarCheckout } from '../acoes';
 
 const TOKEN = 'token-de-teste';
@@ -36,6 +32,8 @@ const JORNADA_FALSA: JornadaDTO = {
 };
 
 describe('registrarCheckin / registrarCheckout', () => {
+  const database = criarBancoDeTeste();
+
   beforeEach(() => {
     jest.clearAllMocks();
     (randomUUID as jest.Mock).mockReturnValue('id-cliente-falso');
@@ -48,15 +46,16 @@ describe('registrarCheckin / registrarCheckout', () => {
     (resolverEndereco as jest.Mock).mockResolvedValue(
       'Rua dos Aimorés, 1000 — Funcionários, Belo Horizonte',
     );
-    (enviarCheckin as jest.Mock).mockResolvedValue(JORNADA_FALSA);
-    (enviarCheckout as jest.Mock).mockResolvedValue(JORNADA_FALSA);
+    (executarAcaoJornada as jest.Mock).mockResolvedValue({ tipo: 'ok', dado: JORNADA_FALSA });
   });
 
-  it('sucesso: envia latitude, longitude e endereço, e devolve a jornada', async () => {
-    const resultado = await registrarCheckin(TOKEN);
+  it('sucesso: chama a outbox com tipo checkin e o payload com localização', async () => {
+    const resultado = await registrarCheckin(TOKEN, database);
 
     expect(resultado).toEqual({ tipo: 'ok', jornada: JORNADA_FALSA });
-    expect(enviarCheckin).toHaveBeenCalledWith(
+    expect(executarAcaoJornada).toHaveBeenCalledWith(
+      database,
+      'checkin',
       TOKEN,
       expect.objectContaining({
         idCliente: 'id-cliente-falso',
@@ -67,48 +66,44 @@ describe('registrarCheckin / registrarCheckout', () => {
     );
   });
 
-  it('permissão negada: não chama a API e devolve o motivo', async () => {
+  it('permissão negada: não chama a outbox e devolve o motivo', async () => {
     (capturarLocalizacao as jest.Mock).mockResolvedValue({ tipo: 'permissao_negada' });
 
-    const resultado = await registrarCheckin(TOKEN);
+    const resultado = await registrarCheckin(TOKEN, database);
 
     expect(resultado).toEqual({ tipo: 'sem_localizacao', motivo: 'permissao_negada' });
-    expect(enviarCheckin).not.toHaveBeenCalled();
+    expect(executarAcaoJornada).not.toHaveBeenCalled();
   });
 
-  it('Nominatim sem resposta: o check-in acontece sem endereço no payload', async () => {
+  it('Nominatim sem resposta: o payload vai sem endereço', async () => {
     (resolverEndereco as jest.Mock).mockResolvedValue(null);
 
-    const resultado = await registrarCheckin(TOKEN);
+    await registrarCheckin(TOKEN, database);
 
-    expect(resultado).toEqual({ tipo: 'ok', jornada: JORNADA_FALSA });
-    const [, payload] = (enviarCheckin as jest.Mock).mock.calls[0];
+    const [, , , payload] = (executarAcaoJornada as jest.Mock).mock.calls[0];
     expect(payload.endereco).toBeUndefined();
   });
 
-  it('erro 409 da API: devolve recusado com o código', async () => {
-    (enviarCheckin as jest.Mock).mockRejectedValue(
-      new ErroApi('JORNADA_EM_ANDAMENTO', 'Já existe uma jornada em andamento.', 409),
-    );
+  it('recusa da outbox: devolve recusado com o código', async () => {
+    (executarAcaoJornada as jest.Mock).mockResolvedValue({
+      tipo: 'recusado',
+      codigo: 'JORNADA_EM_ANDAMENTO',
+    });
 
-    const resultado = await registrarCheckin(TOKEN);
+    const resultado = await registrarCheckin(TOKEN, database);
 
     expect(resultado).toEqual({ tipo: 'recusado', codigo: 'JORNADA_EM_ANDAMENTO' });
   });
 
-  it('falha de rede: devolve sem_rede', async () => {
-    (enviarCheckin as jest.Mock).mockRejectedValue(new TypeError('Network request failed'));
-
-    const resultado = await registrarCheckin(TOKEN);
-
-    expect(resultado).toEqual({ tipo: 'sem_rede' });
-  });
-
-  it('registrarCheckout chama enviarCheckout, não enviarCheckin', async () => {
-    const resultado = await registrarCheckout(TOKEN);
+  it('registrarCheckout chama a outbox com tipo checkout', async () => {
+    const resultado = await registrarCheckout(TOKEN, database);
 
     expect(resultado).toEqual({ tipo: 'ok', jornada: JORNADA_FALSA });
-    expect(enviarCheckout).toHaveBeenCalled();
-    expect(enviarCheckin).not.toHaveBeenCalled();
+    expect(executarAcaoJornada).toHaveBeenCalledWith(
+      database,
+      'checkout',
+      TOKEN,
+      expect.anything(),
+    );
   });
 });

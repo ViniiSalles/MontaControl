@@ -1,22 +1,37 @@
+import type { ReactNode } from 'react';
 import { View } from 'react-native';
-import { cores, espacamento } from '@montacontrol/design-tokens/native';
+import { cores, espacamento, raio } from '@montacontrol/design-tokens/native';
 import { LIMITE_JORNADA_HORAS } from '@montacontrol/shared';
-import type { EstadoJornada } from '@montacontrol/shared';
+import type { EstadoJornada, JornadaDTO } from '@montacontrol/shared';
 import { Badge } from '../../ui/Badge';
 import { Cartao } from '../../ui/Cartao';
+import { Icone } from '../../ui/Icone';
 import { MapaLocalizacao } from '../../ui/MapaLocalizacao';
 import { PulsoAtividade } from '../../ui/PulsoAtividade';
 import { Texto } from '../../ui/Texto';
-import { diaCivilDe, formatarDiaCurto, formatarHora } from '../../jornada/formatacao';
-import type { TipoPonto, UltimoPonto } from '../../jornada/ultimoPonto';
-
-const rotuloExibido: Record<TipoPonto, string> = { entrada: 'Entrada', saida: 'Saída' };
+import { formatarHora } from '../../jornada/formatacao';
+import { derivarUltimoPonto } from '../../jornada/ultimoPonto';
 
 interface PropsCartaoUltimoPonto {
   /** `null` = montador ainda não bateu nenhum ponto na jornada corrente. */
-  ponto: UltimoPonto | null;
-  /** Estado da jornada a que o ponto pertence — decide o selo e o aviso. */
+  jornada: JornadaDTO | null;
+  /** Estado da jornada — decide o selo, o item pendente e o aviso. */
   estado: EstadoJornada;
+  /** Há ação de jornada na fila de sincronização (issue #18). */
+  pendenteSincronizacao?: boolean;
+}
+
+function Cabecalho({ filho }: { filho?: ReactNode }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: espacamento[8] }}>
+      <Icone nome="history" tamanho={espacamento[16]} cor={cores.onSurfaceVariant} />
+      <Texto variante="labelMd" cor={cores.onSurfaceVariant}>
+        MARCAÇÕES DE HOJE
+      </Texto>
+      <View style={{ flex: 1 }} />
+      {filho}
+    </View>
+  );
 }
 
 function CartaoVazio() {
@@ -25,10 +40,8 @@ function CartaoVazio() {
       elevacao="elev2"
       tom="padrao"
       conteudo={
-        <View style={{ gap: espacamento[8] }}>
-          <Texto variante="labelMd" cor={cores.onSurfaceVariant}>
-            ÚLTIMO PONTO
-          </Texto>
+        <View style={{ gap: espacamento[12] }}>
+          <Cabecalho />
           <Texto variante="titleLg">Nenhum ponto registrado</Texto>
           <Texto variante="bodyMd" cor={cores.onSurfaceVariant}>
             Registre a entrada para iniciar sua jornada de hoje.
@@ -45,43 +58,103 @@ function SeloEstado({ estado }: { estado: EstadoJornada }) {
   return <Badge variante="neutro" texto="Encerrada" />;
 }
 
-/**
- * Cartão de leitura do último registro: hora em destaque, tipo/dia logo
- * abaixo e o mapa do lugar onde o ponto caiu. O mapa só aparece com
- * coordenada — ponto lançado em atraso nasce sem GPS (`JornadaDTO.lancadoEmAtraso`).
- */
-export function CartaoUltimoPonto({ ponto, estado }: PropsCartaoUltimoPonto) {
-  if (!ponto) return <CartaoVazio />;
+interface PropsLinhaMarcacao {
+  rotulo: string;
+  descricao: string;
+  hora: string | null;
+  concluido: boolean;
+  /** Só o próximo item pendente pulsa — os demais ficam parados. */
+  pulsando: boolean;
+}
 
+function LinhaMarcacao({ rotulo, descricao, hora, concluido, pulsando }: PropsLinhaMarcacao) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: espacamento[12] }}>
+      <View
+        style={{
+          width: espacamento[24],
+          height: espacamento[24],
+          borderRadius: raio.full,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: concluido ? cores.primary : cores.surfaceContainerHigh,
+          borderWidth: concluido ? 0 : 2,
+          borderColor: cores.primary,
+        }}
+      >
+        {concluido ? (
+          <Icone nome="check" tamanho={espacamento[16]} cor={cores.onPrimary} preenchido />
+        ) : pulsando ? (
+          <PulsoAtividade />
+        ) : null}
+      </View>
+      <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <View style={{ opacity: concluido ? 1 : 0.6 }}>
+          <Texto variante="titleSm">{rotulo}</Texto>
+          <Texto variante="bodySm" cor={cores.onSurfaceVariant}>
+            {descricao}
+          </Texto>
+        </View>
+        <Texto variante="titleMd" tabular>
+          {hora ?? '—:—'}
+        </Texto>
+      </View>
+    </View>
+  );
+}
+
+/**
+ * Cartão "MARCAÇÕES DE HOJE" (`jornada_home:110-160`): linha do tempo com
+ * entrada e saída do dia, selo de estado e o mapa do último ponto batido.
+ * Com só check-in, a saída aparece como próximo item pendente — pulsando
+ * quando a jornada ainda está em curso, parada quando já venceu (o aviso
+ * abaixo explica o que fazer nesse caso).
+ */
+export function CartaoUltimoPonto({
+  jornada,
+  estado,
+  pendenteSincronizacao = false,
+}: PropsCartaoUltimoPonto) {
+  if (!jornada) return <CartaoVazio />;
+
+  const ultimoPonto = derivarUltimoPonto(jornada);
   // Desestruturar antes do JSX é o que faz o TS estreitar `number | null`
   // para `number` dentro do bloco condicional do mapa.
-  const { latitude, longitude } = ponto;
+  const latitude = ultimoPonto?.latitude ?? null;
+  const longitude = ultimoPonto?.longitude ?? null;
 
   return (
     <Cartao
       elevacao="elev2"
       tom="padrao"
       conteudo={
-        <View style={{ gap: espacamento[12] }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: espacamento[8] }}>
-            <Texto variante="labelMd" cor={cores.onSurfaceVariant}>
-              ÚLTIMO PONTO
-            </Texto>
-            <View style={{ flex: 1 }} />
-            <SeloEstado estado={estado} />
-            {ponto.lancadoEmAtraso && <Badge variante="aviso" texto="Em atraso" />}
-          </View>
+        <View style={{ gap: espacamento[16] }}>
+          <Cabecalho
+            filho={
+              <View style={{ flexDirection: 'row', gap: espacamento[6] }}>
+                {pendenteSincronizacao && <Badge variante="neutro" texto="Sincronizando" />}
+                <SeloEstado estado={estado} />
+                {jornada.lancadoEmAtraso && <Badge variante="aviso" texto="Em atraso" />}
+              </View>
+            }
+          />
 
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: espacamento[12] }}>
-            {estado === 'em_andamento' && <PulsoAtividade />}
-            <Texto variante="displaySm" tabular>
-              {formatarHora(ponto.registradoEm)}
-            </Texto>
+          <View style={{ gap: espacamento[16] }}>
+            <LinhaMarcacao
+              rotulo="Entrada"
+              descricao="Início do expediente"
+              hora={formatarHora(jornada.checkinAt)}
+              concluido={!!jornada.checkinAt}
+              pulsando={false}
+            />
+            <LinhaMarcacao
+              rotulo="Saída"
+              descricao={jornada.checkoutAt ? 'Fim do expediente' : 'Pendente'}
+              hora={jornada.checkoutAt ? formatarHora(jornada.checkoutAt) : null}
+              concluido={!!jornada.checkoutAt}
+              pulsando={!jornada.checkoutAt && estado === 'em_andamento'}
+            />
           </View>
-
-          <Texto variante="bodyMd" cor={cores.onSurfaceVariant}>
-            {`${rotuloExibido[ponto.tipo]} · ${formatarDiaCurto(diaCivilDe(ponto.registradoEm))}`}
-          </Texto>
 
           {estado === 'vencida' && (
             <Texto variante="bodyMd" cor={cores.error}>
@@ -90,7 +163,7 @@ export function CartaoUltimoPonto({ ponto, estado }: PropsCartaoUltimoPonto) {
           )}
 
           {latitude !== null && longitude !== null && (
-            <MapaLocalizacao latitude={latitude} longitude={longitude} endereco={ponto.endereco} />
+            <MapaLocalizacao latitude={latitude} longitude={longitude} endereco={ultimoPonto?.endereco} />
           )}
         </View>
       }

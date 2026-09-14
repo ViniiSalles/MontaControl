@@ -10,6 +10,8 @@ import {
   Inter_700Bold,
   Inter_800ExtraBold,
 } from '@expo-google-fonts/inter';
+import { DatabaseProvider } from '@nozbe/watermelondb/react';
+import { database } from './src/db/database';
 import { ProvedorAuth, useAuth } from './src/auth/AuthContext';
 import { RootNavigator } from './src/navegacao/RootNavigator';
 
@@ -59,10 +61,12 @@ export default function App() {
   });
 
   return (
-    <SafeAreaProvider>
-      <ProvedorAuth>
-        <PortaoDeBoot fontesCarregadas={fontesCarregadas} />
-      </ProvedorAuth>
-    </SafeAreaProvider>
+    <DatabaseProvider database={database}>
+      <SafeAreaProvider>
+        <ProvedorAuth>
+          <PortaoDeBoot fontesCarregadas={fontesCarregadas} />
+        </ProvedorAuth>
+      </SafeAreaProvider>
+    </DatabaseProvider>
   );
 }

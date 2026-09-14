@@ -34,6 +34,7 @@ export function Botao({
   forma,
   texto,
   icone,
+  rotuloAcessivel,
   carregando = false,
   larguraTotal = false,
   desabilitado = false,
@@ -79,6 +80,7 @@ export function Botao({
   return (
     <Pressable
       testID="botao-pressable"
+      accessibilityLabel={rotuloAcessivel}
       disabled={desabilitado || carregando}
       onPress={aoPressionar}
       style={({ pressed }) => [{ width: larguraTotal ? '100%' : undefined, transform: [{ scale: pressed ? 0.98 : 1 }] }]}

@@ -2,20 +2,20 @@ import { Controller, Get, Param, ParseIntPipe, Query } from '@nestjs/common';
 import type { EspelhoPontoDTO } from '@montacontrol/shared';
 import { Perfil } from '../../generated/prisma';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { CompetenciaQueryDto } from '../banco-horas/dto/competencia.query.dto';
+import { EspelhoPontoQueryDto } from './dto/espelho-ponto.query.dto';
 import { EspelhoPontoService } from './espelho-ponto.service';
 
-/** Ponto de terceiro: só RH e GESTOR. O montador vê o próprio em `/jornadas/historico`. */
+/** Ponto de terceiro: só o RH consulta o espelho de ponto de um montador. */
 @Controller('espelho-ponto')
-@Roles(Perfil.RH, Perfil.GESTOR)
+@Roles(Perfil.RH)
 export class EspelhoPontoController {
-  constructor(private readonly espelho: EspelhoPontoService) {}
+  constructor(private readonly espelhoPonto: EspelhoPontoService) {}
 
   @Get(':usuarioId')
   async montar(
     @Param('usuarioId', ParseIntPipe) usuarioId: number,
-    @Query() query: CompetenciaQueryDto,
+    @Query() query: EspelhoPontoQueryDto,
   ): Promise<EspelhoPontoDTO> {
-    return this.espelho.montar(usuarioId, query.ano, query.mes);
+    return this.espelhoPonto.montar(usuarioId, query.ano, query.mes, query.incluirInativo);
   }
 }

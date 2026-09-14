@@ -36,6 +36,22 @@ export function formatarDiaCurto(data: string): string {
 }
 
 /**
+ * `"2026-08-26"` → `"Quarta-feira, 26 de agosto"`. Mesma construção UTC de
+ * `formatarDiaCurto` (ver o comentário lá) — só maiúscula a inicial, já que
+ * o `Intl` devolve tudo em minúsculo em pt-BR.
+ */
+export function formatarDataCompleta(data: string): string {
+  const [ano, mes, dia] = data.split('-').map(Number);
+  const bruto = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'UTC',
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  }).format(new Date(Date.UTC(ano, mes - 1, dia)));
+  return bruto.charAt(0).toUpperCase() + bruto.slice(1);
+}
+
+/**
  * Instante ISO -> dia civil `YYYY-MM-DD` no fuso de operação. `en-CA` é o
  * atalho de sempre para esse formato no `Intl`; montar a string à mão a
  * partir de `getFullYear()` etc. usaria o fuso do aparelho, que é o que se

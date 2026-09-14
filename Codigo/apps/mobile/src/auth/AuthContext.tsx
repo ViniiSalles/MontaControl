@@ -12,6 +12,7 @@ import {
 } from './clienteAuth';
 import { limparTokens, lerTokens, salvarTokens } from './armazenamentoSessao';
 import type { TokensPersistidos } from './armazenamentoSessao';
+import { limparBancoLocal } from '../db/database';
 
 export const CODIGO_PERFIL_EXCLUSIVO_WEB = 'PERFIL_EXCLUSIVO_WEB';
 
@@ -62,6 +63,9 @@ export function ProvedorAuth({ children }: { children: ReactNode }) {
         const usuario = await buscarUsuarioAtual(tokens.accessToken);
         if (usuario.perfil !== Perfil.MONTADOR) {
           await limparTokens();
+          // Sem isto, o espelho de jornada do usuário anterior fica no
+          // aparelho até a primeira sincronização de quem logar depois.
+          await limparBancoLocal().catch(() => undefined);
           return;
         }
         if (!cancelado) setSessao({ ...tokens, usuario });
@@ -84,6 +88,9 @@ export function ProvedorAuth({ children }: { children: ReactNode }) {
           if (!cancelado) setSessao({ ...novosTokens, usuario: renovada.usuario });
         } catch {
           await limparTokens();
+          // Idem: refresh falhou, a sessão acabou — não deixar o espelho do
+          // usuário anterior vazar para o próximo que logar no aparelho.
+          await limparBancoLocal().catch(() => undefined);
         }
       }
     }
@@ -113,6 +120,13 @@ export function ProvedorAuth({ children }: { children: ReactNode }) {
     const encerrando = sessao;
     setSessao(null);
     await limparTokens();
+    // Sem isto, um segundo montador que logar neste aparelho veria o
+    // espelho de jornada do anterior até a primeira sincronização. `.catch`
+    // porque uma falha aqui (ex.: adapter SQLite indisponível) não pode
+    // impedir de chegar em `encerrarSessaoNoServidor` logo abaixo — `sair()`
+    // é chamado como `void sair()` em `Jornada.tsx`, e uma rejeição não
+    // tratada aqui viraria unhandled rejection.
+    await limparBancoLocal().catch(() => undefined);
     if (encerrando) {
       await encerrarSessaoNoServidor(encerrando.accessToken).catch(() => undefined);
     }

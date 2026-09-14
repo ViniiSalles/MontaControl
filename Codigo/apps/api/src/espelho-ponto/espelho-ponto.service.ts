@@ -9,11 +9,12 @@ import {
   somarDias,
 } from '@montacontrol/shared';
 import type { DiaEspelhoDTO, DiaJornadaDTO, EspelhoPontoDTO } from '@montacontrol/shared';
+import { Perfil } from '../../generated/prisma';
 import { AtestadosRepository } from '../atestados/atestados.repository';
 import { FUSO_OPERACAO } from '../common/fuso';
 import { JornadasRepository } from '../jornadas/jornadas.repository';
-import { UsuarioNaoEncontradoException } from '../usuarios/exceptions/usuario-nao-encontrado.exception';
 import { UsuariosRepository } from '../usuarios/usuarios.repository';
+import { MontadorNaoEncontradoException } from './exceptions/montador-nao-encontrado.exception';
 
 @Injectable()
 export class EspelhoPontoService {
@@ -27,10 +28,21 @@ export class EspelhoPontoService {
    * O espelho é um documento de conferência: todos os dias do mês aparecem,
    * mesmo os sem marcação. Dia vazio é informação — é o buraco que o RH
    * precisa enxergar para cobrar o lançamento em atraso.
+   *
+   * `incluirInativo` é opt-in: por padrão, um montador desligado
+   * (`ativo: false`, soft delete) não aparece — só quando o RH pede
+   * explicitamente para ver um "excluído".
    */
-  async montar(usuarioId: number, ano: number, mes: number): Promise<EspelhoPontoDTO> {
-    const usuario = (await this.usuarios.listar()).find((item) => item.id === usuarioId);
-    if (!usuario) throw new UsuarioNaoEncontradoException();
+  async montar(
+    usuarioId: number,
+    ano: number,
+    mes: number,
+    incluirInativo = false,
+  ): Promise<EspelhoPontoDTO> {
+    const usuario = await this.usuarios.buscarPorId(usuarioId);
+    if (!usuario || usuario.perfil !== Perfil.MONTADOR || (!usuario.ativo && !incluirInativo)) {
+      throw new MontadorNaoEncontradoException();
+    }
 
     const { inicio, fim } = periodoDoMes(ano, mes);
     const inicioIso = comporInstante(inicio, '00:00', FUSO_OPERACAO);
@@ -38,9 +50,9 @@ export class EspelhoPontoService {
       new Date(comporInstante(somarDias(fim, 1), '00:00', FUSO_OPERACAO)).getTime() - 1,
     ).toISOString();
 
-    const jornadas = await this.jornadas.listarNoPeriodo(usuarioId, inicioIso, fimIso);
+    const jornadasDoMes = await this.jornadas.listarNoPeriodo(usuarioId, inicioIso, fimIso);
     const porDia = new Map<string, DiaJornadaDTO>(
-      agruparJornadasPorDia(jornadas, FUSO_OPERACAO).map((dia) => [dia.data, dia]),
+      agruparJornadasPorDia(jornadasDoMes, FUSO_OPERACAO).map((dia) => [dia.data, dia]),
     );
 
     const validados = await this.atestados.listarValidadosNoPeriodo(usuarioId, inicio, fim);

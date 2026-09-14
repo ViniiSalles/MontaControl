@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { JornadaDTO } from '@montacontrol/shared';
-import { buscarJornadaAtual } from './clienteJornadas';
+import { useDatabaseOuFalha } from '../db/useDatabase';
+import { paraJornadaDTO, queryJornadaAtual } from './espelhoJornada';
+import { puxarJornadas } from '../sincronizacao/syncManager';
 
 export interface EstadoJornadaAtual {
   jornada: JornadaDTO | null;
@@ -9,27 +11,35 @@ export interface EstadoJornadaAtual {
   recarregar: () => Promise<void>;
 }
 
-/** Jornada aberta do montador, ou `null` quando não há nenhuma. */
+/** Jornada aberta do montador, lida do espelho local — atualiza sozinha quando o espelho muda. */
 export function useJornadaAtual(token: string): EstadoJornadaAtual {
+  const database = useDatabaseOuFalha();
   const [jornada, setJornada] = useState<JornadaDTO | null>(null);
-  const [carregando, setCarregando] = useState(true);
-  const [erro, setErro] = useState(false);
+  const [carregandoLocal, setCarregandoLocal] = useState(true);
+  const [falhaRede, setFalhaRede] = useState(false);
 
   const recarregar = useCallback(async () => {
-    setCarregando(true);
     try {
-      setJornada(await buscarJornadaAtual(token));
-      setErro(false);
+      await puxarJornadas(database, token);
+      setFalhaRede(false);
     } catch {
-      setErro(true);
-    } finally {
-      setCarregando(false);
+      setFalhaRede(true);
     }
-  }, [token]);
+  }, [database, token]);
+
+  useEffect(() => {
+    const assinatura = queryJornadaAtual(database)
+      .observe()
+      .subscribe((registros) => {
+        setJornada(registros.length > 0 ? paraJornadaDTO(registros[0]) : null);
+        setCarregandoLocal(false);
+      });
+    return () => assinatura.unsubscribe();
+  }, [database]);
 
   useEffect(() => {
     void recarregar();
   }, [recarregar]);
 
-  return { jornada, carregando, erro, recarregar };
+  return { jornada, carregando: carregandoLocal, erro: falhaRede && jornada === null, recarregar };
 }

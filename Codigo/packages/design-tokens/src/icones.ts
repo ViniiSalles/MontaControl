@@ -5,18 +5,27 @@
  * componentes/telas forem construídos.
  */
 export type NomeIcone =
+  | 'account_balance_wallet'
   | 'barcode_scanner'
   | 'cancel'
+  | 'check'
   | 'check_circle'
+  | 'chevron_left'
+  | 'chevron_right'
   | 'close'
   | 'conveyor_belt'
   | 'description'
   | 'event_note'
+  | 'fingerprint'
+  | 'history'
   | 'info'
   | 'lock'
   | 'mail'
   | 'menu_book'
   | 'report'
+  | 'schedule'
+  | 'sync'
+  | 'trending_up'
   | 'visibility'
   | 'visibility_off'
   | 'warning';

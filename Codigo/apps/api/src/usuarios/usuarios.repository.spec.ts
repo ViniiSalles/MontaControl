@@ -57,6 +57,40 @@ describe('UsuariosRepository', () => {
     });
   });
 
+  describe('buscarPorId', () => {
+    it('retorna o usuário mapeado quando encontrado', async () => {
+      prisma.usuario.findUnique.mockResolvedValue({
+        id: 7,
+        nome: 'Maria Montadora',
+        email: 'maria@montacontrol.local',
+        perfil: Perfil.MONTADOR,
+        ativo: true,
+      });
+
+      const usuario = await repository.buscarPorId(7);
+
+      expect(usuario).toEqual({
+        id: 7,
+        nome: 'Maria Montadora',
+        email: 'maria@montacontrol.local',
+        perfil: Perfil.MONTADOR,
+        ativo: true,
+      });
+      expect(prisma.usuario.findUnique).toHaveBeenCalledWith({
+        where: { id: 7 },
+        select: { id: true, nome: true, email: true, perfil: true, ativo: true },
+      });
+    });
+
+    it('retorna null quando não há usuário com o id informado', async () => {
+      prisma.usuario.findUnique.mockResolvedValue(null);
+
+      const usuario = await repository.buscarPorId(999);
+
+      expect(usuario).toBeNull();
+    });
+  });
+
   describe('listar', () => {
     it('retorna os usuários ordenados por nome, sem o authUserId', async () => {
       const usuarios = [

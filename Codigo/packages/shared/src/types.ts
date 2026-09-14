@@ -75,6 +75,8 @@ export interface CheckinRequest {
   registradoEm: string;
   /** Endereço resolvido pelo Nominatim; ausente quando o check-in foi feito offline. */
   endereco?: string;
+  /** Pedido ao qual a marcação se refere. Quando ausente, a distância não é validada. */
+  pedidoId?: number;
 }
 
 export interface CheckoutRequest {
@@ -83,6 +85,8 @@ export interface CheckoutRequest {
   longitude: number;
   registradoEm: string;
   endereco?: string;
+  /** Pedido ao qual a marcação se refere. Quando ausente, a distância não é validada. */
+  pedidoId?: number;
 }
 
 export interface JornadaDTO {

@@ -14,7 +14,15 @@
     },
     "plugins": [
       "expo-font",
-      "expo-splash-screen"
+      "expo-splash-screen",
+      "@lovesworking/watermelondb-expo-plugin-sdk-52-plus",
+      [
+        "expo-build-properties",
+        {
+          "ios": { "newArchEnabled": true, "usePrecompiledModules": false },
+          "android": { "newArchEnabled": true }
+        }
+      ]
     ],
     "extra": {
       "apiUrl": null
