@@ -19,7 +19,7 @@
       [
         "expo-build-properties",
         {
-          "ios": { "newArchEnabled": true },
+          "ios": { "newArchEnabled": true, "usePrecompiledModules": false },
           "android": { "newArchEnabled": true }
         }
       ]
