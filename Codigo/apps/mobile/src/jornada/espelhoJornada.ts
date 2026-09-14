@@ -116,6 +116,13 @@ export function construirHistoricoDTO(
  * que a ação enfileirada offline finalmente sincroniza; sem isto, o próximo
  * `upsertJornadas` (que casa por `remote_id`) criaria uma segunda linha
  * local para a mesma jornada.
+ *
+ * Também busca por `remote_id` porque um `puxarJornadas` (GET) pode ter
+ * adiantado e criado a linha definitiva via `upsertJornadas` antes da
+ * drenagem reenviar a ação — nesse caso existem DUAS linhas para a mesma
+ * jornada (a otimista, achada pelo `idCliente`, e a definitiva, achada pelo
+ * `remote_id`): atualiza a definitiva e apaga a otimista órfã, em vez de
+ * deixar as duas (o que duplicaria minutos no histórico).
  */
 export async function reconciliarJornadaOtimista(
   database: Database,
@@ -123,11 +130,21 @@ export async function reconciliarJornadaOtimista(
   jornadaServidor: JornadaDTO,
 ): Promise<void> {
   const colecao = database.get<Jornada>('jornadas');
+  const porRemoteId = await colecao.query(Q.where('remote_id', jornadaServidor.id)).fetch();
   const porCheckin = await colecao.query(Q.where('id_cliente_checkin', idCliente)).fetch();
   const porCheckout = await colecao.query(Q.where('id_cliente_checkout', idCliente)).fetch();
-  const registro = porCheckin[0] ?? porCheckout[0];
+  const otimista = porCheckin[0] ?? porCheckout[0];
+  const doServidor = porRemoteId[0];
 
   await database.write(async () => {
+    if (doServidor && otimista && doServidor.id !== otimista.id) {
+      // upsertJornadas (GET) já criou a linha definitiva antes da drenagem
+      // reconciliar — atualiza essa e apaga a otimista órfã, sem duplicar.
+      await doServidor.update((r) => preencherJornada(r, jornadaServidor));
+      await otimista.destroyPermanently();
+      return;
+    }
+    const registro = doServidor ?? otimista;
     if (registro) {
       await registro.update((r) => preencherJornada(r, jornadaServidor));
     } else {

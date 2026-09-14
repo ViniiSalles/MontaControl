@@ -90,7 +90,20 @@ describe('useHistoricoPontos', () => {
 
     await rerender({ periodo: 30 });
 
-    await waitFor(() => expect(puxarJornadas).toHaveBeenLastCalledWith(database, TOKEN));
+    await waitFor(() => expect(puxarJornadas).toHaveBeenLastCalledWith(database, TOKEN, 30));
     await waitFor(() => expect(result.current.totalMinutos).toBe(480));
+  });
+
+  it('recarregar repassa o período pedido pra rede — não fica preso em 5 dias fixos', async () => {
+    const { puxarJornadas } = jest.requireMock('../../sincronizacao/syncManager');
+    (puxarJornadas as jest.Mock).mockResolvedValue(undefined);
+    const database = criarBancoDeTeste();
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <DatabaseProvider database={database}>{children}</DatabaseProvider>
+    );
+
+    await renderHook(() => useHistoricoPontos(TOKEN, 15), { wrapper });
+
+    await waitFor(() => expect(puxarJornadas).toHaveBeenCalledWith(database, TOKEN, 15));
   });
 });

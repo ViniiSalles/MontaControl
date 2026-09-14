@@ -136,4 +136,41 @@ describe('reconciliarJornadaOtimista', () => {
     expect(registros).toHaveLength(1);
     expect(paraJornadaDTO(registros[0]).id).toBe(88);
   });
+
+  it('já existe linha definitiva pelo remote_id (upsertJornadas adiantou o GET) — reconcilia sem duplicar', async () => {
+    const database = criarBancoDeTeste();
+    const jornadaServidor = jornadaFalsa({ id: 99, status: StatusJornada.EM_ANDAMENTO, checkoutAt: null });
+
+    // Linha otimista: check-in offline, ainda na fila, remote_id null,
+    // casável só pelo idCliente (outbox.aplicarJornadaOtimista).
+    await database.write(() =>
+      database.get<Jornada>('jornadas').create((registro) => {
+        registro.remoteId = null;
+        registro.usuarioId = -1;
+        registro.status = StatusJornada.EM_ANDAMENTO;
+        registro.checkinAt = '2026-09-09T12:00:00.000Z';
+        registro.checkinLatitude = -19.9;
+        registro.checkinLongitude = -43.9;
+        registro.checkinEndereco = 'Rua Falsa, 123';
+        registro.checkoutAt = null;
+        registro.checkoutLatitude = null;
+        registro.checkoutLongitude = null;
+        registro.checkoutEndereco = null;
+        registro.lancadoEmAtraso = false;
+        registro.criadoEm = '2026-09-09T12:00:00.000Z';
+        registro.idClienteCheckin = 'id-cliente-2';
+        registro.idClienteCheckout = null;
+      }),
+    );
+    // Linha "do servidor": um GET (upsertJornadas) já trouxe a jornada 99
+    // antes de a drenagem reenviar a ação pendente — casável só pelo
+    // remote_id, sem idCliente nenhum.
+    await upsertJornadas(database, [jornadaServidor]);
+
+    await reconciliarJornadaOtimista(database, 'id-cliente-2', jornadaServidor);
+
+    const registros = await queryJornadaAtual(database).fetch();
+    expect(registros).toHaveLength(1); // não duplicou
+    expect(paraJornadaDTO(registros[0]).id).toBe(99);
+  });
 });

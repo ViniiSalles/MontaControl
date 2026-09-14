@@ -22,12 +22,12 @@ export function useHistoricoPontos(token: string, periodo: PeriodoHistorico): Es
 
   const recarregar = useCallback(async () => {
     try {
-      await puxarJornadas(database, token);
+      await puxarJornadas(database, token, periodo);
       setFalhaRede(false);
     } catch {
       setFalhaRede(true);
     }
-  }, [database, token]);
+  }, [database, token, periodo]);
 
   useEffect(() => {
     const agoraIso = new Date().toISOString();

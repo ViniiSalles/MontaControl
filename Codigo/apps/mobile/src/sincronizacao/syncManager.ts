@@ -15,11 +15,25 @@ import {
 } from '../jornada/clienteJornadas';
 import { reconciliarJornadaOtimista, upsertJornadas } from '../jornada/espelhoJornada';
 import { AcaoPendente } from '../db/AcaoPendente';
-import type { JornadaDTO } from '@montacontrol/shared';
+import type { JornadaDTO, PeriodoHistorico } from '@montacontrol/shared';
 
-/** Refaz o GET de jornada atual + histórico (5 dias) e grava no espelho local. Propaga erro de rede. */
-export async function puxarJornadas(database: Database, token: string): Promise<void> {
-  const [atual, historico] = await Promise.all([buscarJornadaAtual(token), buscarHistorico(token, 5)]);
+/**
+ * Refaz o GET de jornada atual + histórico e grava no espelho local.
+ * `periodo` default 5 dias — heartbeat razoável para as chamadas em segundo
+ * plano (boot, volta de rede, retorno ao app); quem lê o histórico com um
+ * período maior (`useHistoricoPontos`) repassa o período explicitamente,
+ * senão o espelho local nunca é abastecido além de 5 dias. Propaga erro de
+ * rede.
+ */
+export async function puxarJornadas(
+  database: Database,
+  token: string,
+  periodo: PeriodoHistorico = 5,
+): Promise<void> {
+  const [atual, historico] = await Promise.all([
+    buscarJornadaAtual(token),
+    buscarHistorico(token, periodo),
+  ]);
   const jornadasParaEspelhar = [
     ...(atual ? [atual] : []),
     ...historico.dias.flatMap((dia) => dia.jornadas),

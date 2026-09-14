@@ -88,15 +88,18 @@ test('abre em 15 dias e lista os dias do período com o total', async () => {
   await renderizar();
 
   await waitFor(() => expect(screen.getByText('10h 00min')).toBeTruthy());
-  expect(puxarJornadasMock).toHaveBeenCalledWith(database, 'access');
+  // Período padrão da tela é 15 dias — a busca de rede precisa repassar
+  // esse período, senão o espelho local nunca é abastecido além de 5 dias
+  // (heartbeat das chamadas em segundo plano) e o total fica incompleto.
+  expect(puxarJornadasMock).toHaveBeenCalledWith(database, 'access', 15);
   expect(screen.getByText('9h 00min')).toBeTruthy();
   expect(screen.getByText('08:00')).toBeTruthy();
 });
 
-// A busca de rede (`puxarJornadas`) não recebe mais o período — ela sempre
-// traz os últimos 5 dias (ver `syncManager.ts`) e grava no espelho local; é a
-// LEITURA local que passa a reagir à troca de período, ampliando a janela
-// (`janelaDoPeriodo`). Turno de 20 dias atrás só entra na conta em 30 dias.
+// A LEITURA local reage à troca de período, ampliando a janela
+// (`janelaDoPeriodo`) — Turno de 20 dias atrás só entra na conta em 30 dias,
+// mesmo que a busca de rede (`puxarJornadas`) também já repasse o período
+// novo (ver teste acima e `useHistoricoPontos.ts`).
 test('trocar o período amplia a janela lida do espelho local', async () => {
   const TURNO_20_DIAS_ATRAS: JornadaDTO = jornada({
     id: 3,
