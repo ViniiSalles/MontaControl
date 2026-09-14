@@ -17,6 +17,8 @@ interface PropsCartaoUltimoPonto {
   jornada: JornadaDTO | null;
   /** Estado da jornada — decide o selo, o item pendente e o aviso. */
   estado: EstadoJornada;
+  /** Há ação de jornada na fila de sincronização (issue #18). */
+  pendenteSincronizacao?: boolean;
 }
 
 function Cabecalho({ filho }: { filho?: ReactNode }) {
@@ -108,7 +110,11 @@ function LinhaMarcacao({ rotulo, descricao, hora, concluido, pulsando }: PropsLi
  * quando a jornada ainda está em curso, parada quando já venceu (o aviso
  * abaixo explica o que fazer nesse caso).
  */
-export function CartaoUltimoPonto({ jornada, estado }: PropsCartaoUltimoPonto) {
+export function CartaoUltimoPonto({
+  jornada,
+  estado,
+  pendenteSincronizacao = false,
+}: PropsCartaoUltimoPonto) {
   if (!jornada) return <CartaoVazio />;
 
   const ultimoPonto = derivarUltimoPonto(jornada);
@@ -126,6 +132,7 @@ export function CartaoUltimoPonto({ jornada, estado }: PropsCartaoUltimoPonto) {
           <Cabecalho
             filho={
               <View style={{ flexDirection: 'row', gap: espacamento[6] }}>
+                {pendenteSincronizacao && <Badge variante="neutro" texto="Sincronizando" />}
                 <SeloEstado estado={estado} />
                 {jornada.lancadoEmAtraso && <Badge variante="aviso" texto="Em atraso" />}
               </View>

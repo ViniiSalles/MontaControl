@@ -91,4 +91,18 @@ describe('CartaoUltimoPonto', () => {
     expect(screen.queryByTestId('mapa-webview')).toBeNull();
     expect(screen.getByText(/em atraso/i)).toBeTruthy();
   });
+
+  it('pendenteSincronizacao true mostra o selo "Sincronizando"', async () => {
+    await render(
+      <CartaoUltimoPonto jornada={jornada()} estado="em_andamento" pendenteSincronizacao />,
+    );
+
+    expect(screen.getByText(/sincronizando/i)).toBeTruthy();
+  });
+
+  it('pendenteSincronizacao false (padrão) não mostra o selo', async () => {
+    await render(<CartaoUltimoPonto jornada={jornada()} estado="em_andamento" />);
+
+    expect(screen.queryByText(/sincronizando/i)).toBeNull();
+  });
 });

@@ -7,6 +7,7 @@ import { DatabaseProvider } from '@nozbe/watermelondb/react';
 import { StatusJornada } from '@montacontrol/shared';
 import type { JornadaDTO } from '@montacontrol/shared';
 import { criarBancoDeTeste } from '../../db/__tests__/apoio';
+import { AcaoPendente } from '../../db/AcaoPendente';
 import { upsertBancoHoras } from '../../banco-horas/espelhoBancoHoras';
 import { upsertJornadas } from '../../jornada/espelhoJornada';
 import { useAuth } from '../../auth/AuthContext';
@@ -315,4 +316,23 @@ test('bater a saída também refaz a busca do banco de horas', async () => {
 
   await waitFor(() => expect(puxarBancoHorasMock).toHaveBeenCalledTimes(2));
   expect(registrarCheckoutMock).toHaveBeenCalledWith('access', database);
+});
+
+test('ação descartada na fila aparece como aviso ao abrir a tela', async () => {
+  await database.write(() =>
+    database.get<AcaoPendente>('acoes_pendentes').create((registro) => {
+      registro.tipo = 'checkin';
+      registro.idCliente = 'id-1';
+      registro.payload = '{}';
+      registro.criadoEm = '2026-09-09T12:00:00.000Z';
+      registro.status = 'descartada';
+      registro.mensagemDescarte = 'Ação recusada: JORNADA_EM_ANDAMENTO.';
+    }),
+  );
+
+  await renderizar();
+
+  await waitFor(() =>
+    expect(screen.getByText('Ação recusada: JORNADA_EM_ANDAMENTO.')).toBeTruthy(),
+  );
 });

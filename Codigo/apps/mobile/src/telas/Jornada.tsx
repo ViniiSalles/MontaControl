@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
+import { Q } from '@nozbe/watermelondb';
 import { cores, espacamento, espacamentoNomeado } from '@montacontrol/design-tokens/native';
 import { estadoJornada } from '@montacontrol/shared';
 import type { JornadaDTO } from '@montacontrol/shared';
@@ -13,6 +14,7 @@ import { Texto } from '../ui/Texto';
 import { useAuth } from '../auth/AuthContext';
 import { useBancoHoras } from '../banco-horas/useBancoHoras';
 import { periodoAtual } from '../banco-horas/periodo';
+import { AcaoPendente } from '../db/AcaoPendente';
 import { useDatabaseOuFalha } from '../db/useDatabase';
 import { registrarCheckin, registrarCheckout } from '../jornada/acoes';
 import { diaCivilDe, formatarDataCompleta, formatarDuracao } from '../jornada/formatacao';
@@ -59,6 +61,34 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
     if (!token) return;
     return iniciarSincronizacao(database, token);
   }, [database, token]);
+
+  const [pendentes, setPendentes] = useState(0);
+  const [avisosDescartados, setAvisosDescartados] = useState<string[]>([]);
+
+  useEffect(() => {
+    const colecao = database.get<AcaoPendente>('acoes_pendentes');
+
+    const assinaturaPendentes = colecao
+      .query(Q.where('status', 'pendente'))
+      .observeCount()
+      .subscribe(setPendentes);
+
+    const assinaturaDescartadas = colecao
+      .query(Q.where('status', 'descartada'))
+      .observe()
+      .subscribe((registros) => {
+        if (registros.length === 0) return;
+        setAvisosDescartados(registros.map((registro) => registro.mensagemDescarte ?? ''));
+        void database.write(() =>
+          database.batch(...registros.map((registro) => registro.prepareDestroyPermanently())),
+        );
+      });
+
+    return () => {
+      assinaturaPendentes.unsubscribe();
+      assinaturaDescartadas.unsubscribe();
+    };
+  }, [database]);
 
   const { jornada, carregando, erro, recarregar } = useJornadaAtual(token);
   // Menor período válido (`PeriodoHistorico`): só precisa alcançar hoje, o
@@ -142,7 +172,11 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
             <Carregando tamanho={espacamento[32]} />
           </View>
         ) : (
-          <CartaoUltimoPonto jornada={jornadaExibida} estado={estado} />
+          <CartaoUltimoPonto
+            jornada={jornadaExibida}
+            estado={estado}
+            pendenteSincronizacao={pendentes > 0}
+          />
         )}
 
         {/*
@@ -163,6 +197,15 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
         {aviso && (
           <Alerta variante={aviso.variante} titulo={aviso.titulo} mensagem={aviso.mensagem} />
         )}
+
+        {avisosDescartados.map((mensagem, indice) => (
+          <Alerta
+            key={`${mensagem}-${indice}`}
+            variante="erro"
+            titulo="Uma ação não foi sincronizada"
+            mensagem={mensagem}
+          />
+        ))}
 
         <BotaoAcaoPrincipal
           texto={rotuloBotao[acao]}
