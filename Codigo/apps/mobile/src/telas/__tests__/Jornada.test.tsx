@@ -13,7 +13,7 @@ import { upsertJornadas } from '../../jornada/espelhoJornada';
 import { useAuth } from '../../auth/AuthContext';
 import { registrarCheckin, registrarCheckout } from '../../jornada/acoes';
 import { iniciarSincronizacao, puxarBancoHoras, puxarJornadas } from '../../sincronizacao/syncManager';
-import { diaCivilDe, formatarHora } from '../../jornada/formatacao';
+import { formatarHora } from '../../jornada/formatacao';
 import { periodoAtual } from '../../banco-horas/periodo';
 import { montador } from '../../auth/__tests__/apoio';
 import { Jornada } from '../Jornada';
@@ -42,8 +42,6 @@ const registrarCheckoutMock = jest.mocked(registrarCheckout);
 const puxarJornadasMock = jest.mocked(puxarJornadas);
 const puxarBancoHorasMock = jest.mocked(puxarBancoHoras);
 const iniciarSincronizacaoMock = jest.mocked(iniciarSincronizacao);
-
-const HOJE = diaCivilDe(new Date().toISOString());
 
 /**
  * Check-in de duas horas atrás, e não uma data fixa: jornada aberta só conta

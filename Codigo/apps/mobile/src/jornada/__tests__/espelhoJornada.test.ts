@@ -1,5 +1,6 @@
 import { StatusJornada, type JornadaDTO } from '@montacontrol/shared';
 import { criarBancoDeTeste } from '../../db/__tests__/apoio';
+import { Jornada } from '../../db/Jornada';
 import {
   construirHistoricoDTO,
   janelaDoPeriodo,
@@ -96,7 +97,7 @@ describe('reconciliarJornadaOtimista', () => {
     // Simula o que `outbox.aplicarJornadaOtimista` (Task 5) grava ao enfileirar
     // um check-in offline: remote_id null, casável só pelo idCliente.
     await database.write(() =>
-      database.get('jornadas').create((registro: any) => {
+      database.get<Jornada>('jornadas').create((registro) => {
         registro.remoteId = null;
         registro.usuarioId = -1;
         registro.status = StatusJornada.EM_ANDAMENTO;

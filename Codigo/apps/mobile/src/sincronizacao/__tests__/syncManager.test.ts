@@ -15,6 +15,7 @@ import { Q } from '@nozbe/watermelondb';
 import { StatusJornada, type JornadaDTO } from '@montacontrol/shared';
 import { criarBancoDeTeste } from '../../db/__tests__/apoio';
 import { AcaoPendente } from '../../db/AcaoPendente';
+import { Jornada } from '../../db/Jornada';
 import { buscarBancoHoras } from '../../banco-horas/clienteBancoHoras';
 import {
   ErroApi,
@@ -119,7 +120,7 @@ describe('drenarFila', () => {
       // Registro otimista, do jeito que `outbox.aplicarJornadaOtimista`
       // (Task 5) grava enquanto a ação só está na fila — remoteId null,
       // casável só pelo idCliente.
-      await database.get('jornadas').create((registro: any) => {
+      await database.get<Jornada>('jornadas').create((registro) => {
         registro.remoteId = null;
         registro.usuarioId = -1;
         registro.status = StatusJornada.EM_ANDAMENTO;

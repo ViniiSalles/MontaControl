@@ -12,6 +12,7 @@ import { Q } from '@nozbe/watermelondb';
 import { StatusJornada, type CheckinRequest, type CheckoutRequest, type JornadaDTO } from '@montacontrol/shared';
 import { criarBancoDeTeste } from '../../db/__tests__/apoio';
 import { AcaoPendente } from '../../db/AcaoPendente';
+import { Jornada } from '../../db/Jornada';
 import {
   ErroApi,
   enviarCheckin,
@@ -113,9 +114,9 @@ describe('executarAcaoJornada', () => {
 
   it('checkout recusado (4xx) sobre jornada EM_ANDAMENTO existente: reverte o espelho para o estado anterior', async () => {
     const database = criarBancoDeTeste();
-    const colecaoJornadas = database.get('jornadas');
+    const colecaoJornadas = database.get<Jornada>('jornadas');
     const jornadaAberta = await database.write(() =>
-      colecaoJornadas.create((registro: any) => {
+      colecaoJornadas.create((registro) => {
         registro.remoteId = 42;
         registro.usuarioId = 3;
         registro.status = StatusJornada.EM_ANDAMENTO;
@@ -162,7 +163,7 @@ describe('executarAcaoJornada', () => {
     expect(dto.checkoutLongitude).toBeNull();
     expect(dto.checkoutEndereco).toBeNull();
     expect(registrosAtuais[0].id).toBe(jornadaAberta.id);
-    expect((registrosAtuais[0] as any).idClienteCheckout).toBeNull();
+    expect(registrosAtuais[0].idClienteCheckout).toBeNull();
   });
 
   it('checkout chama enviarCheckout, não enviarCheckin', async () => {
