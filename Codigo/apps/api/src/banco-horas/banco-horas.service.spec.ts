@@ -42,6 +42,7 @@ function usuarioFake(parcial: Partial<UsuarioListado> = {}): UsuarioListado {
     id: USUARIO_ID,
     nome: 'Montador Um',
     email: 'm1@x.local',
+    telefone: null,
     perfil: Perfil.MONTADOR,
     ativo: true,
     ...parcial,

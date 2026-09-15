@@ -102,6 +102,34 @@ export class JornadasRepository {
     return linhas.map(paraJornadaDTO);
   }
 
+  /**
+   * Justificativa da solicitação de ponto por trás de cada jornada lançada em
+   * atraso no período — o espelho mostra o mesmo texto da fila de
+   * compensações, em vez de um rótulo genérico.
+   */
+  async mapaJustificativasLancadasNoPeriodo(
+    usuarioId: number,
+    inicioIso: string,
+    fimIso: string,
+  ): Promise<Map<number, string>> {
+    const linhas = await this.prisma.jornada.findMany({
+      where: {
+        usuarioId,
+        checkinAt: { gte: new Date(inicioIso), lte: new Date(fimIso) },
+        solicitacaoPonto: { isNot: null },
+      },
+      select: { id: true, solicitacaoPonto: { select: { justificativa: true } } },
+    });
+    return new Map(
+      linhas
+        .filter(
+          (linha): linha is typeof linha & { solicitacaoPonto: { justificativa: string } } =>
+            linha.solicitacaoPonto !== null,
+        )
+        .map((linha) => [linha.id, linha.solicitacaoPonto.justificativa]),
+    );
+  }
+
   /** Cursor do pull do WatermelonDB: tudo que mudou depois de `desdeMs`. */
   async listarAlteradasDesde(usuarioId: number, desdeMs: number): Promise<JornadaDTO[]> {
     const linhas = await this.prisma.jornada.findMany({

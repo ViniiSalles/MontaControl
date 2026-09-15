@@ -54,6 +54,11 @@ export class EspelhoPontoService {
     const porDia = new Map<string, DiaJornadaDTO>(
       agruparJornadasPorDia(jornadasDoMes, FUSO_OPERACAO).map((dia) => [dia.data, dia]),
     );
+    const justificativas = await this.jornadas.mapaJustificativasLancadasNoPeriodo(
+      usuarioId,
+      inicioIso,
+      fimIso,
+    );
 
     const validados = await this.atestados.listarValidadosNoPeriodo(usuarioId, inicio, fim);
     const abonados = diasAbonados(validados, ano, mes);
@@ -64,6 +69,7 @@ export class EspelhoPontoService {
     for (let numero = 1; numero <= ultimoDia; numero += 1) {
       const data = `${fim.slice(0, 8)}${String(numero).padStart(2, '0')}`;
       const doDia = porDia.get(data);
+      const jornadaEmAtraso = doDia?.jornadas.find((jornada) => jornada.lancadoEmAtraso);
 
       dias.push({
         data,
@@ -71,7 +77,8 @@ export class EspelhoPontoService {
         fim: doDia?.fim ?? null,
         minutosTrabalhados: doDia?.minutosTrabalhados ?? 0,
         emAndamento: doDia?.emAndamento ?? false,
-        lancadoEmAtraso: doDia?.jornadas.some((jornada) => jornada.lancadoEmAtraso) ?? false,
+        lancadoEmAtraso: jornadaEmAtraso !== undefined,
+        justificativaLancamento: jornadaEmAtraso ? justificativas.get(jornadaEmAtraso.id) ?? null : null,
         abonado: abonados.has(data),
         diaUtil: uteis.has(data),
       });

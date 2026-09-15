@@ -80,7 +80,7 @@ export default function EspelhoPonto() {
                         <td className="py-8 text-on-surface-variant">
                           {[
                             dia.abonado ? 'Abonado' : null,
-                            dia.lancadoEmAtraso ? 'Lançado em atraso' : null,
+                            dia.lancadoEmAtraso ? (dia.justificativaLancamento ?? 'Lançado em atraso') : null,
                             dia.emAndamento ? 'Sem check-out' : null,
                             !dia.diaUtil ? 'Não útil' : null,
                           ]

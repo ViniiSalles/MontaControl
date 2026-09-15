@@ -15,13 +15,27 @@ describe('UsuariosController', () => {
   describe('listar', () => {
     it('mapeia os usuários listados para UsuarioDTO', async () => {
       usuarios.listar.mockResolvedValue([
-        { id: 1, nome: 'Ana RH', email: 'ana@montacontrol.local', perfil: Perfil.RH, ativo: true },
+        {
+          id: 1,
+          nome: 'Ana RH',
+          email: 'ana@montacontrol.local',
+          telefone: null,
+          perfil: Perfil.RH,
+          ativo: true,
+        },
       ]);
 
       const resultado = await controller.listar();
 
       expect(resultado).toEqual([
-        { id: 1, nome: 'Ana RH', email: 'ana@montacontrol.local', perfil: Perfil.RH, ativo: true },
+        {
+          id: 1,
+          nome: 'Ana RH',
+          email: 'ana@montacontrol.local',
+          telefone: null,
+          perfil: Perfil.RH,
+          ativo: true,
+        },
       ]);
     });
   });
@@ -32,12 +46,14 @@ describe('UsuariosController', () => {
         nome: 'Nova Montadora',
         email: 'nova@montacontrol.local',
         senha: 'senha-longa-123',
+        telefone: '(11) 91234-5678',
         perfil: Perfil.MONTADOR,
       };
       usuarios.cadastrar.mockResolvedValue({
         id: 9,
         nome: dto.nome,
         email: dto.email,
+        telefone: dto.telefone ?? null,
         perfil: dto.perfil,
         ativo: true,
       });
@@ -48,6 +64,7 @@ describe('UsuariosController', () => {
         id: 9,
         nome: dto.nome,
         email: dto.email,
+        telefone: dto.telefone,
         perfil: dto.perfil,
         ativo: true,
       });

@@ -18,6 +18,7 @@ function usuarioFake(parcial: Partial<UsuarioListado> = {}): UsuarioListado {
     id: USUARIO_ID,
     nome: 'Maria Montadora',
     email: 'maria@montacontrol.local',
+    telefone: null,
     perfil: Perfil.MONTADOR,
     ativo: true,
     ...parcial,
@@ -59,6 +60,7 @@ describe('EspelhoPontoService', () => {
     };
     const duploJornadas: Partial<jest.Mocked<JornadasRepository>> = {
       listarNoPeriodo: jest.fn().mockResolvedValue([]),
+      mapaJustificativasLancadasNoPeriodo: jest.fn().mockResolvedValue(new Map()),
     };
     const duploAtestados: Partial<jest.Mocked<AtestadosRepository>> = {
       listarValidadosNoPeriodo: jest.fn().mockResolvedValue([]),
@@ -80,6 +82,7 @@ describe('EspelhoPontoService', () => {
     jest.clearAllMocks();
     usuarios.buscarPorId.mockResolvedValue(usuarioFake());
     jornadas.listarNoPeriodo.mockResolvedValue([]);
+    jornadas.mapaJustificativasLancadasNoPeriodo.mockResolvedValue(new Map());
     atestados.listarValidadosNoPeriodo.mockResolvedValue([]);
   });
 
@@ -161,6 +164,25 @@ describe('EspelhoPontoService', () => {
     const espelho = await service.montar(USUARIO_ID, ANO, MES);
 
     expect(espelho.dias[1].lancadoEmAtraso).toBe(true);
+  });
+
+  it('usa a justificativa da solicitação aprovada como observação do dia — mesmo texto da fila de compensações', async () => {
+    jornadas.listarNoPeriodo.mockResolvedValue([jornadaFake('2026-09-02', '11:00', '20:00', true)]);
+    jornadas.mapaJustificativasLancadasNoPeriodo.mockResolvedValue(
+      new Map([[1, 'Esqueci de bater o ponto de entrada']]),
+    );
+
+    const espelho = await service.montar(USUARIO_ID, ANO, MES);
+
+    expect(espelho.dias[1].justificativaLancamento).toBe('Esqueci de bater o ponto de entrada');
+  });
+
+  it('observação vem nula fora de um dia lançado em atraso', async () => {
+    jornadas.listarNoPeriodo.mockResolvedValue([jornadaFake('2026-09-01', '11:00', '20:00')]);
+
+    const espelho = await service.montar(USUARIO_ID, ANO, MES);
+
+    expect(espelho.dias[0].justificativaLancamento).toBeNull();
   });
 
   it('marca o dia em andamento quando falta o check-out', async () => {

@@ -90,4 +90,19 @@ describe('agruparJornadasPorDia', () => {
   it('ignora jornada sem check-in — não há dia ao qual pertencer', () => {
     expect(agruparJornadasPorDia([jornada({ id: 1 })], FUSO)).toEqual([]);
   });
+
+  it('descarta segundos em vez de arredondar: 15:30:00 até 15:35:45 é 5 minutos', () => {
+    const dias = agruparJornadasPorDia(
+      [
+        jornada({
+          id: 1,
+          checkinAt: '2026-08-26T18:30:00.000Z', // 15:30 local
+          checkoutAt: '2026-08-26T18:35:45.000Z', // 15:35:45 local
+        }),
+      ],
+      FUSO,
+    );
+
+    expect(dias[0].minutosTrabalhados).toBe(5);
+  });
 });

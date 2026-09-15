@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import type { SaldoMontadorDTO, SolicitacaoPontoDTO } from '@montacontrol/shared'
 import { useAuth } from '../auth/AuthContext'
 import { ErroApi } from '../api/clienteHttp'
-import { listarBancoHoras } from '../api/bancoHoras'
+import { listarBancoHorasDaEquipe } from '../api/bancoHoras'
 import {
   aprovarCompensacao,
   listarCompensacoesPendentes,
@@ -37,6 +37,7 @@ export default function BancoHoras() {
   const [ano, setAno] = useState(agora.getFullYear())
   const [mes, setMes] = useState(agora.getMonth() + 1)
   const [saldos, setSaldos] = useState<SaldoMontadorDTO[]>([])
+  const [busca, setBusca] = useState('')
   const [compensacoes, setCompensacoes] = useState<SolicitacaoPontoDTO[]>([])
   const [emRejeicao, setEmRejeicao] = useState<SolicitacaoPontoDTO | null>(null)
   const [motivo, setMotivo] = useState('')
@@ -46,7 +47,7 @@ export default function BancoHoras() {
 
   useEffect(() => {
     let ativo = true
-    Promise.all([listarBancoHoras(token, ano, mes), listarCompensacoesPendentes(token)])
+    Promise.all([listarBancoHorasDaEquipe(token, ano, mes), listarCompensacoesPendentes(token)])
       .then(([linhas, pendentes]) => {
         if (!ativo) return
         setSaldos(linhas)
@@ -70,6 +71,10 @@ export default function BancoHoras() {
       setErro(causa instanceof ErroApi ? causa.message : 'Falha ao aprovar a compensação.')
     }
   }
+
+  const saldosFiltrados = saldos.filter((linha) =>
+    linha.usuarioNome.toLowerCase().includes(busca.trim().toLowerCase()),
+  )
 
   async function aoConfirmarRejeicao() {
     if (!emRejeicao) return
@@ -121,6 +126,13 @@ export default function BancoHoras() {
                   </select>
                 </label>
               </div>
+              <CampoTexto
+                rotulo="Buscar montador"
+                iconeEsquerda="search"
+                placeholder="Nome do montador"
+                valor={busca}
+                aoAlterar={setBusca}
+              />
               <table className="w-full text-body-md text-on-surface">
                 <thead className="text-label-md uppercase text-on-surface-variant">
                   <tr>
@@ -133,7 +145,7 @@ export default function BancoHoras() {
                   </tr>
                 </thead>
                 <tbody>
-                  {saldos.map((linha) => (
+                  {saldosFiltrados.map((linha) => (
                     <tr key={linha.usuarioId} className="border-t border-outline-variant/30">
                       <td className="py-8">{linha.usuarioNome}</td>
                       <td className="py-8 text-right">{linha.horasTrabalhadas}h</td>

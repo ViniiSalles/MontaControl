@@ -10,7 +10,7 @@ import { CampoTexto } from '../ui/CampoTexto'
 import { Cartao } from '../ui/Cartao'
 import { LayoutAutenticado } from './LayoutAutenticado'
 
-const FORMULARIO_VAZIO = { nome: '', email: '', senha: '' }
+const FORMULARIO_VAZIO = { nome: '', email: '', senha: '', telefone: '' }
 
 /** US12/UC17 — cadastro e desligamento de montadores pelo RH (Figura 31). */
 export default function Montadores() {
@@ -42,7 +42,11 @@ export default function Montadores() {
     setSalvando(true)
 
     try {
-      const criado = await cadastrarUsuario(token, { ...formulario, perfil: Perfil.MONTADOR })
+      const criado = await cadastrarUsuario(token, {
+        ...formulario,
+        telefone: formulario.telefone.trim() || undefined,
+        perfil: Perfil.MONTADOR,
+      })
       setMontadores((atuais) => [...atuais, criado].sort((a, b) => a.nome.localeCompare(b.nome)))
       setFormulario(FORMULARIO_VAZIO)
       setAviso(`Montador ${criado.nome} cadastrado.`)
@@ -76,7 +80,7 @@ export default function Montadores() {
               <h1 className="text-title-lg font-bold text-on-surface">Cadastro de Montadores</h1>
               {erro && <Alerta variante="erro" mensagem={erro} />}
               {aviso && <Alerta variante="sucesso" mensagem={aviso} />}
-              <div className="grid grid-cols-3 gap-16">
+              <div className="grid grid-cols-4 gap-16">
                 <CampoTexto
                   rotulo="Nome"
                   valor={formulario.nome}
@@ -93,6 +97,12 @@ export default function Montadores() {
                   tipo="senha"
                   valor={formulario.senha}
                   aoAlterar={(valor) => setFormulario((atual) => ({ ...atual, senha: valor }))}
+                />
+                <CampoTexto
+                  rotulo="Telefone"
+                  placeholder="(11) 91234-5678"
+                  valor={formulario.telefone}
+                  aoAlterar={(valor) => setFormulario((atual) => ({ ...atual, telefone: valor }))}
                 />
               </div>
               <Botao
@@ -115,6 +125,7 @@ export default function Montadores() {
                 <tr>
                   <th className="py-8 text-left">Nome</th>
                   <th className="py-8 text-left">E-mail</th>
+                  <th className="py-8 text-left">Telefone</th>
                   <th className="py-8 text-left">Situação</th>
                   <th className="py-8 text-right">Ações</th>
                 </tr>
@@ -124,6 +135,7 @@ export default function Montadores() {
                   <tr key={montador.id} className="border-t border-outline-variant/30">
                     <td className="py-8">{montador.nome}</td>
                     <td className="py-8">{montador.email}</td>
+                    <td className="py-8">{montador.telefone ?? '—'}</td>
                     <td className="py-8">{montador.ativo ? 'Ativo' : 'Inativo'}</td>
                     <td className="py-8 text-right">
                       <Botao

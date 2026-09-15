@@ -10,6 +10,7 @@ const CODIGO_PRISMA_REGISTRO_NAO_ENCONTRADO = 'P2025';
 export interface DadosNovoUsuario {
   nome: string;
   email: string;
+  telefone: string | null;
   perfil: Perfil;
   authUserId: string;
 }
@@ -49,6 +50,7 @@ const SELECAO_USUARIO_LISTADO = {
   id: true,
   nome: true,
   email: true,
+  telefone: true,
   perfil: true,
   ativo: true,
 } as const;

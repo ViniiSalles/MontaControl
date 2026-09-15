@@ -50,6 +50,7 @@ describe('UsuariosService', () => {
         id: 9,
         nome: dadosCadastro.nome,
         email: dadosCadastro.email,
+        telefone: null,
         perfil: dadosCadastro.perfil,
         ativo: true,
       });
@@ -60,6 +61,7 @@ describe('UsuariosService', () => {
         id: 9,
         nome: dadosCadastro.nome,
         email: dadosCadastro.email,
+        telefone: null,
         perfil: dadosCadastro.perfil,
         ativo: true,
       });
@@ -67,10 +69,29 @@ describe('UsuariosService', () => {
       expect(repository.criar).toHaveBeenCalledWith({
         nome: dadosCadastro.nome,
         email: dadosCadastro.email,
+        telefone: null,
         perfil: dadosCadastro.perfil,
         authUserId,
       });
       expect(supabase.excluirUsuario).not.toHaveBeenCalled();
+    });
+
+    it('repassa o telefone informado para o repositório', async () => {
+      supabase.criarUsuario.mockResolvedValue(authUserId);
+      repository.criar.mockResolvedValue({
+        id: 9,
+        nome: dadosCadastro.nome,
+        email: dadosCadastro.email,
+        telefone: '(11) 91234-5678',
+        perfil: dadosCadastro.perfil,
+        ativo: true,
+      });
+
+      await service.cadastrar({ ...dadosCadastro, telefone: '(11) 91234-5678' });
+
+      expect(repository.criar).toHaveBeenCalledWith(
+        expect.objectContaining({ telefone: '(11) 91234-5678' }),
+      );
     });
 
     it('rejeita com 409 quando o e-mail já existe no Supabase Auth', async () => {

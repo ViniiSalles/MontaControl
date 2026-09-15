@@ -11,6 +11,7 @@ export interface DadosCadastroUsuario {
   nome: string;
   email: string;
   senha: string;
+  telefone?: string;
   perfil: Perfil;
 }
 
@@ -37,6 +38,7 @@ export class UsuariosService {
     const usuario = await this.usuarios.criar({
       nome: dados.nome,
       email: dados.email,
+      telefone: dados.telefone ?? null,
       perfil: dados.perfil,
       authUserId,
     });

@@ -51,6 +51,8 @@ export interface UsuarioDTO {
   id: number;
   nome: string;
   email: string;
+  /** Ausente nas respostas de `/auth` (login/me) — só a listagem de usuários projeta telefone. */
+  telefone?: string | null;
   perfil: Perfil;
   ativo: boolean;
 }
@@ -59,6 +61,7 @@ export interface CadastrarUsuarioRequest {
   nome: string;
   email: string;
   senha: string;
+  telefone?: string;
   perfil: Perfil;
 }
 
@@ -271,6 +274,8 @@ export interface DiaEspelhoDTO {
   emAndamento: boolean;
   /** Alguma jornada do dia nasceu de ponto em atraso aprovado. */
   lancadoEmAtraso: boolean;
+  /** Justificativa da solicitação aprovada — mesmo texto da fila de compensações. `null` fora de `lancadoEmAtraso`. */
+  justificativaLancamento: string | null;
   /** Coberto por atestado validado. */
   abonado: boolean;
   diaUtil: boolean;

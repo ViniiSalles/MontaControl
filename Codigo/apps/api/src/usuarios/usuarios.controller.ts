@@ -45,6 +45,7 @@ export class UsuariosController {
       id: usuario.id,
       nome: usuario.nome,
       email: usuario.email,
+      telefone: usuario.telefone,
       perfil: usuario.perfil as unknown as PerfilCompartilhado,
       ativo: usuario.ativo,
     };
