@@ -60,6 +60,10 @@ export class AtestadosService {
     return this.atestados.listarPorStatus(StatusAtestado.PENDENTE);
   }
 
+  async listarHistorico(): Promise<AtestadoDTO[]> {
+    return this.atestados.listarAnalisados();
+  }
+
   async listarDoUsuario(usuarioId: number): Promise<AtestadoDTO[]> {
     return this.atestados.listarPorUsuario(usuarioId);
   }

@@ -78,6 +78,16 @@ export class AtestadosRepository {
     return linhas.map(paraAtestadoDTO);
   }
 
+  /** Histórico do RH: tudo que já saiu de PENDENTE, mais recente analisado primeiro. */
+  async listarAnalisados(): Promise<AtestadoDTO[]> {
+    const linhas = await this.prisma.atestado.findMany({
+      where: { status: { in: [StatusAtestado.VALIDADO, StatusAtestado.REJEITADO] } },
+      orderBy: { validadoAt: 'desc' },
+      select: SELECAO_ATESTADO,
+    });
+    return linhas.map(paraAtestadoDTO);
+  }
+
   async listarPorUsuario(usuarioId: number): Promise<AtestadoDTO[]> {
     const linhas = await this.prisma.atestado.findMany({
       where: { usuarioId },

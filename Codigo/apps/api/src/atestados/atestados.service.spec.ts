@@ -36,6 +36,7 @@ describe('AtestadosService', () => {
     buscarPorIdCliente: jest.Mock;
     buscarPorId: jest.Mock;
     listarPorStatus: jest.Mock;
+    listarAnalisados: jest.Mock;
     listarPorUsuario: jest.Mock;
     analisar: jest.Mock;
   };
@@ -48,6 +49,7 @@ describe('AtestadosService', () => {
       buscarPorIdCliente: jest.fn().mockResolvedValue(null),
       buscarPorId: jest.fn(),
       listarPorStatus: jest.fn(),
+      listarAnalisados: jest.fn(),
       listarPorUsuario: jest.fn(),
       analisar: jest.fn(),
     };
@@ -169,6 +171,21 @@ describe('AtestadosService', () => {
 
       await expect(service.rejeitar(5, 2, '   ')).rejects.toThrow(UnprocessableEntityException);
       expect(repository.analisar).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('listarHistorico', () => {
+    it('delega ao repositório os atestados já analisados', async () => {
+      const analisados = [
+        { ...atestadoPendente, status: StatusAtestado.VALIDADO },
+        { ...atestadoPendente, id: 6, status: StatusAtestado.REJEITADO, motivoRejeicao: 'Ilegível' },
+      ];
+      repository.listarAnalisados.mockResolvedValue(analisados);
+
+      const resultado = await service.listarHistorico();
+
+      expect(resultado).toEqual(analisados);
+      expect(repository.listarAnalisados).toHaveBeenCalled();
     });
   });
 

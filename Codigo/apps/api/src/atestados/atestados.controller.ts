@@ -39,6 +39,13 @@ export class AtestadosController {
     return this.atestados.listarPendentes();
   }
 
+  /** Tudo que já saiu de PENDENTE — antes de `:id`, senão "historico" vira um id inválido. */
+  @Roles(Perfil.RH)
+  @Get('historico')
+  async historico(): Promise<AtestadoDTO[]> {
+    return this.atestados.listarHistorico();
+  }
+
   @Roles(Perfil.RH)
   @Get(':id')
   async detalhar(@Param('id', ParseIntPipe) id: number): Promise<AtestadoDetalhadoDTO> {
