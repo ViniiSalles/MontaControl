@@ -5,6 +5,7 @@ import {
   comporInstante,
   diasAbonados,
   diasUteisNoMes,
+  minutosDaJornada,
   periodoDoMes,
   somarDias,
 } from '@montacontrol/shared';
@@ -81,6 +82,15 @@ export class EspelhoPontoService {
         justificativaLancamento: jornadaEmAtraso ? justificativas.get(jornadaEmAtraso.id) ?? null : null,
         abonado: abonados.has(data),
         diaUtil: uteis.has(data),
+        turnos: (doDia?.jornadas ?? [])
+          .slice()
+          .sort((a, b) => (a.checkinAt ?? '').localeCompare(b.checkinAt ?? ''))
+          .map((jornada) => ({
+            inicio: jornada.checkinAt,
+            fim: jornada.checkoutAt,
+            minutosTrabalhados: minutosDaJornada(jornada),
+            lancadoEmAtraso: jornada.lancadoEmAtraso,
+          })),
       });
     }
 
