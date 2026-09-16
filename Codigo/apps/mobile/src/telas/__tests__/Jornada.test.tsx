@@ -242,6 +242,12 @@ test('os atalhos de histórico e ponto em atraso chamam a navegação da aba', a
 // Bug reportado: "trabalhadas hoje" resetava sempre que o montador abria um
 // turno novo no mesmo dia, em vez de somar com o(s) turno(s) já fechados.
 test('abrir um turno novo no mesmo dia soma com o turno anterior, não reseta "trabalhadas hoje"', async () => {
+  // Hora fixa e bem longe da virada do dia civil (12:00 local): com
+  // `Date.now()` puro, rodar o teste perto da meia-noite em
+  // America/Sao_Paulo jogava o "checkin 5h atrás" pro dia civil anterior,
+  // e "hoje" aparecia sem nenhum turno — falso negativo, não bug de produto.
+  jest.useFakeTimers().setSystemTime(new Date('2026-01-15T15:00:00.000Z'));
+
   const turno1Fechado: JornadaDTO = {
     id: 101,
     usuarioId: montador.id,
@@ -273,6 +279,8 @@ test('abrir um turno novo no mesmo dia soma com o turno anterior, não reseta "t
   // abaixo das 2h que o turno 1 já tinha — antes da correção, resetava a
   // "0h 00min" porque a tela só olhava para o turno aberto agora.
   expect(screen.getByText('2h 00min')).toBeTruthy();
+
+  jest.useRealTimers();
 });
 
 test('o atalho de banco de horas chama a navegação da aba', async () => {
