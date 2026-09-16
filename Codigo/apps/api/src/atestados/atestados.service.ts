@@ -87,8 +87,7 @@ export class AtestadosService {
       fotos.push({ id: foto.id, url, expiraEm });
     }
 
-    const { fotos: _caminhos, ...semCaminhos } = atestado;
-    return { ...semCaminhos, fotos };
+    return { ...atestado, fotos };
   }
 
   async validar(id: number, analistaId: number): Promise<AtestadoDTO> {

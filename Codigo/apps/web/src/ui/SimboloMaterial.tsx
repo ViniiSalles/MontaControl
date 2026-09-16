@@ -1,5 +1,6 @@
 import type { NomeIcone } from '@montacontrol/design-tokens/icones';
 import accountBalanceWallet from '@material-symbols/svg-400/outlined/account_balance_wallet.svg?raw';
+import addAPhoto from '@material-symbols/svg-400/outlined/add_a_photo.svg?raw';
 import barcodeScanner from '@material-symbols/svg-400/outlined/barcode_scanner.svg?raw';
 import cancel from '@material-symbols/svg-400/outlined/cancel.svg?raw';
 import check from '@material-symbols/svg-400/outlined/check.svg?raw';
@@ -39,6 +40,7 @@ const comCorAtual = (bruto: string) =>
 
 const svgPorIcone: Record<NomeIcone, string> = {
   account_balance_wallet: comCorAtual(accountBalanceWallet),
+  add_a_photo: comCorAtual(addAPhoto),
   barcode_scanner: comCorAtual(barcodeScanner),
   cancel: comCorAtual(cancel),
   check: comCorAtual(check),
