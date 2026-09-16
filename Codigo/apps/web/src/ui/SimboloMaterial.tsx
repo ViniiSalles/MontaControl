@@ -18,6 +18,7 @@ import mail from '@material-symbols/svg-400/outlined/mail.svg?raw';
 import menuBook from '@material-symbols/svg-400/outlined/menu_book.svg?raw';
 import report from '@material-symbols/svg-400/outlined/report.svg?raw';
 import schedule from '@material-symbols/svg-400/outlined/schedule.svg?raw';
+import search from '@material-symbols/svg-400/outlined/search.svg?raw';
 import sync from '@material-symbols/svg-400/outlined/sync.svg?raw';
 import trendingUp from '@material-symbols/svg-400/outlined/trending_up.svg?raw';
 import visibility from '@material-symbols/svg-400/outlined/visibility.svg?raw';
@@ -56,6 +57,7 @@ const svgPorIcone: Record<NomeIcone, string> = {
   menu_book: comCorAtual(menuBook),
   report: comCorAtual(report),
   schedule: comCorAtual(schedule),
+  search: comCorAtual(search),
   sync: comCorAtual(sync),
   trending_up: comCorAtual(trendingUp),
   visibility: comCorAtual(visibility),

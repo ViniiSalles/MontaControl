@@ -25,6 +25,7 @@ export type NomeIcone =
   | 'menu_book'
   | 'report'
   | 'schedule'
+  | 'search'
   | 'sync'
   | 'trending_up'
   | 'visibility'
