@@ -265,6 +265,13 @@ export interface SaldoMontadorDTO extends BancoHorasDTO {
   compensacoesPendentes: number;
 }
 
+export interface TurnoEspelhoDTO {
+  inicio: string | null;
+  fim: string | null;
+  minutosTrabalhados: number;
+  lancadoEmAtraso: boolean;
+}
+
 export interface DiaEspelhoDTO {
   /** `YYYY-MM-DD` no fuso de operação. */
   data: string;
@@ -279,6 +286,8 @@ export interface DiaEspelhoDTO {
   /** Coberto por atestado validado. */
   abonado: boolean;
   diaUtil: boolean;
+  /** Um turno por jornada do dia, em ordem cronológica. Vazio nos dias sem marcação. */
+  turnos: TurnoEspelhoDTO[];
 }
 
 export interface EspelhoPontoDTO {
