@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import type { EspelhoPontoDTO } from '@montacontrol/shared'
 import { useAuth } from '../auth/AuthContext'
@@ -31,6 +31,16 @@ export default function EspelhoPonto() {
   const mes = Number(parametros.get('mes') ?? agora.getMonth() + 1)
   const [espelho, setEspelho] = useState<EspelhoPontoDTO | null>(null)
   const [erro, setErro] = useState<string | null>(null)
+  const [diasExpandidos, setDiasExpandidos] = useState<Set<string>>(new Set())
+
+  function alternarDia(data: string) {
+    setDiasExpandidos((atual) => {
+      const proximo = new Set(atual)
+      if (proximo.has(data)) proximo.delete(data)
+      else proximo.add(data)
+      return proximo
+    })
+  }
 
   useEffect(() => {
     let ativo = true
@@ -71,24 +81,63 @@ export default function EspelhoPonto() {
                     </tr>
                   </thead>
                   <tbody>
-                    {espelho.dias.map((dia) => (
-                      <tr key={dia.data} className="border-t border-outline-variant/30">
-                        <td className="py-8">{dia.data.slice(8, 10)}</td>
-                        <td className="py-8">{formatarHora(dia.inicio)}</td>
-                        <td className="py-8">{formatarHora(dia.fim)}</td>
-                        <td className="py-8 text-right">{formatarMinutos(dia.minutosTrabalhados)}</td>
-                        <td className="py-8 text-on-surface-variant">
-                          {[
-                            dia.abonado ? 'Abonado' : null,
-                            dia.lancadoEmAtraso ? (dia.justificativaLancamento ?? 'Lançado em atraso') : null,
-                            dia.emAndamento ? 'Sem check-out' : null,
-                            !dia.diaUtil ? 'Não útil' : null,
-                          ]
-                            .filter(Boolean)
-                            .join(' · ')}
-                        </td>
-                      </tr>
-                    ))}
+                    {espelho.dias.map((dia) => {
+                      const multiploTurnos = dia.turnos.length > 1
+                      const expandido = diasExpandidos.has(dia.data)
+                      return (
+                        <Fragment key={dia.data}>
+                          <tr className="border-t border-outline-variant/30">
+                            <td className="py-8">{dia.data.slice(8, 10)}</td>
+                            {multiploTurnos ? (
+                              <td className="py-8" colSpan={2}>
+                                <button
+                                  type="button"
+                                  onClick={() => alternarDia(dia.data)}
+                                  aria-expanded={expandido}
+                                  className="text-primary underline underline-offset-2"
+                                >
+                                  {dia.turnos.length} turnos {expandido ? '▲' : '▼'}
+                                </button>
+                              </td>
+                            ) : (
+                              <>
+                                <td className="py-8">{formatarHora(dia.inicio)}</td>
+                                <td className="py-8">{formatarHora(dia.fim)}</td>
+                              </>
+                            )}
+                            <td className="py-8 text-right">{formatarMinutos(dia.minutosTrabalhados)}</td>
+                            <td className="py-8 text-on-surface-variant">
+                              {[
+                                dia.abonado ? 'Abonado' : null,
+                                dia.lancadoEmAtraso
+                                  ? (dia.justificativaLancamento ?? 'Lançado em atraso')
+                                  : null,
+                                dia.emAndamento ? 'Sem check-out' : null,
+                                !dia.diaUtil ? 'Não útil' : null,
+                              ]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            </td>
+                          </tr>
+                          {multiploTurnos &&
+                            expandido &&
+                            dia.turnos.map((turno, indice) => (
+                              <tr
+                                key={`${dia.data}-turno-${indice}`}
+                                className="border-t border-outline-variant/10 text-on-surface-variant"
+                              >
+                                <td className="py-4" />
+                                <td className="py-4">{formatarHora(turno.inicio)}</td>
+                                <td className="py-4">{formatarHora(turno.fim)}</td>
+                                <td className="py-4 text-right">
+                                  {formatarMinutos(turno.minutosTrabalhados)}
+                                </td>
+                                <td className="py-4">{turno.lancadoEmAtraso ? 'Lançado em atraso' : ''}</td>
+                              </tr>
+                            ))}
+                        </Fragment>
+                      )
+                    })}
                   </tbody>
                 </table>
                 <dl className="flex gap-32 text-body-md text-on-surface">

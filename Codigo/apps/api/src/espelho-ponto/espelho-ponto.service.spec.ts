@@ -194,6 +194,29 @@ describe('EspelhoPontoService', () => {
     expect(espelho.dias[2].minutosTrabalhados).toBe(0);
   });
 
+  it('expõe um turno por jornada do dia', async () => {
+    jornadas.listarNoPeriodo.mockResolvedValue([jornadaFake('2026-09-01', '11:00', '20:00')]);
+
+    const espelho = await service.montar(USUARIO_ID, ANO, MES);
+
+    expect(espelho.dias[0].turnos).toEqual([
+      { inicio: '2026-09-01T11:00:00.000Z', fim: '2026-09-01T20:00:00.000Z', minutosTrabalhados: 540, lancadoEmAtraso: false },
+    ]);
+  });
+
+  it('ordena os turnos do dia por horário de início, do primeiro ao último', async () => {
+    jornadas.listarNoPeriodo.mockResolvedValue([
+      jornadaFake('2026-09-01', '18:00', '20:00'),
+      jornadaFake('2026-09-01', '08:00', '12:00'),
+    ]);
+
+    const espelho = await service.montar(USUARIO_ID, ANO, MES);
+
+    expect(espelho.dias[0].turnos).toHaveLength(2);
+    expect(espelho.dias[0].turnos[0].inicio).toBe('2026-09-01T08:00:00.000Z');
+    expect(espelho.dias[0].turnos[1].inicio).toBe('2026-09-01T18:00:00.000Z');
+  });
+
   it('marca como abonado o dia útil coberto por atestado validado e fecha o saldo', async () => {
     atestados.listarValidadosNoPeriodo.mockResolvedValue([
       { dataInicio: '2026-09-01', dataFim: '2026-09-04' },
