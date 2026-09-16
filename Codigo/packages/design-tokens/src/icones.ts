@@ -6,6 +6,7 @@
  */
 export type NomeIcone =
   | 'account_balance_wallet'
+  | 'add_a_photo'
   | 'barcode_scanner'
   | 'cancel'
   | 'check'

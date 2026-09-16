@@ -23,6 +23,6 @@ export const ABAS: readonly DefinicaoAba[] = [
   { id: 'jornada', rotulo: 'Jornada', icone: 'event_note', disponivel: true },
   { id: 'bipagem', rotulo: 'Bipagem', icone: 'barcode_scanner', disponivel: false },
   { id: 'avarias', rotulo: 'Avarias', icone: 'report', disponivel: false },
-  { id: 'atestados', rotulo: 'Atestados', icone: 'description', disponivel: false },
+  { id: 'atestados', rotulo: 'Atestados', icone: 'description', disponivel: true },
   { id: 'normas', rotulo: 'Normas', icone: 'menu_book', disponivel: false },
 ];

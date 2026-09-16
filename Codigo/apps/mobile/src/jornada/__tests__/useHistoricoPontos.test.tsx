@@ -15,8 +15,13 @@ const TOKEN = 'token-de-teste';
 // `janelaDoPeriodo` calculada a partir de "agora" (a leitura reativa filtra
 // pelo relógio real, não por um mock de rede), então a fixture não pode usar
 // uma data fixa no passado como as suítes antigas faziam.
-const CHECKOUT_HA_1H = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-const CHECKIN_HA_9H = new Date(Date.now() - 9 * 60 * 60 * 1000).toISOString();
+// Mesma base (`AGORA_MS`) pras duas pontas: `minutosDaJornada` não arredonda
+// mais (descarta segundos, não aproxima) — com `Date.now()` chamado duas
+// vezes, o jitter de alguns milissegundos entre as chamadas vira 479 em vez
+// de 480 de tempos em tempos.
+const AGORA_MS = Date.now();
+const CHECKOUT_HA_1H = new Date(AGORA_MS - 60 * 60 * 1000).toISOString();
+const CHECKIN_HA_9H = new Date(AGORA_MS - 9 * 60 * 60 * 1000).toISOString();
 
 function jornadaFalsa(parcial: Partial<JornadaDTO> = {}): JornadaDTO {
   return {
