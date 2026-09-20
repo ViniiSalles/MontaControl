@@ -13,7 +13,7 @@ Caminhos relativos a `Codigo/apps/mobile/`, salvo quando indicado.
 | -------------- | ------------------------------------------------------------------- |
 | Node           | ver `.nvmrc` na raiz de `Codigo/`                                   |
 | pnpm           | gerenciador do monorepo                                             |
-| JDK            | 17+ (validado com o JDK 23 da máquina)                              |
+| JDK            | 17–21 (validado com JDK 23; **JDK 24+ quebra o build**, ver seção 11) |
 | Android SDK    | `C:\Users\<voce>\AppData\Local\Android\Sdk`                         |
 | Android NDK    | instalado junto com o SDK — obrigatório, o RN compila código nativo |
 | Build Tools 36 | `build-tools/36.0.0`                                                |
@@ -60,6 +60,18 @@ Rode de novo só se alterar `app.json` (nome, `package`, permissões, plugins na
 >
 > - os dois ajustes de MAX_PATH (seção 4);
 > - `reactNativeArchitectures` (seção 6), se quiser o build rápido de emulador.
+>
+> Pra não ter que passar `-Pmc.cxxDir` toda hora na linha de comando (o que importa quando você usa
+> `expo run:android`/`pnpm android`, que não deixa passar `-P` customizado), dá pra fixar os dois
+> ajustes direto em `android/gradle.properties` em vez de só na CLI:
+>
+> ```properties
+> org.gradle.java.home=C:/Program Files/Java/jdk-21.0.12
+> mc.cxxDir=C:/mcx
+> ```
+>
+> (ajuste o caminho do JDK pro que você tiver instalado — ver seção 11 sobre por que isso é
+> necessário no Windows).
 
 ## 4. Windows: o limite de 260 caracteres
 
@@ -114,6 +126,25 @@ Em Linux/macOS nada disso é necessário (nem atrapalha) — pode omitir o `-Pmc
 > unidade virtual de volta para o caminho real, então parte do build enxerga `M:\...` e parte
 > `D:\...`, e o codegen morre com
 > `this and base files have different roots`.
+
+**4.3 — o mesmo problema existe fora de `android/app`.** O WatermelonDB compila um módulo nativo
+próprio (`watermelondb-jsi`, JSI/SQLite) cujo `.cxx` fica em
+`node_modules/@nozbe/watermelondb/native/android-jsi/`, mais fundo ainda no caminho do repositório —
+aqui o build falha de verdade (não é só warning): `ninja: error: mkdir(...): No such file or
+directory`. Precisa dos mesmos dois ajustes (4.1 e 4.2) no `build.gradle` desse módulo. Só que esse
+arquivo mora em `node_modules`, não em `android/` — reaplicar à mão a cada `pnpm install` não é
+viável, então isso é persistido via `pnpm patch`:
+
+```bash
+pnpm patch @nozbe/watermelondb
+# edita o build.gradle do "native/android-jsi" na pasta temporária que o comando imprime
+pnpm patch-commit <caminho-temporário>
+```
+
+O patch fica em `patches/@nozbe__watermelondb.patch` e é referenciado em
+`pnpm-workspace.yaml` (`patchedDependencies`) — se aplica sozinho em todo `pnpm install`, sem passo
+manual. Se o WatermelonDB for atualizado de versão, o patch pode parar de aplicar (o `pnpm install`
+avisa) e precisa ser refeito.
 
 ## 5. Gerar o APK
 
@@ -259,6 +290,14 @@ ajustes das seções 4 e 6.
 
 **`ninja: error: ... Filename longer than 260 characters`**
 Faltam os ajustes da seção 4 (provavelmente o `build.gradle` foi regenerado por um `expo prebuild`).
+
+**`Execution failed for task ':...:configureCMakeDebug[...]'. > WARNING: A restricted method in java.lang.System has been called`**
+JDK 24+ (o JBR embutido em versões recentes do Android Studio já é a 25) faz a JVM imprimir esse
+aviso, e o Android Gradle Plugin (`GeneratePrefabPackages.kt`, ao empacotar Prefab pra módulos
+nativos) trata qualquer linha com "WARNING" na saída como erro fatal — não é um problema no código
+do projeto. Corrige usando um JDK 17–21 pra rodar o Gradle: instale um (ex. Temurin/Adoptium) e fixe
+`org.gradle.java.home` em `android/gradle.properties` (seção 3) em vez de depender do JBR do Android
+Studio.
 
 **`this and base files have different roots: M:\... and D:\...`**
 Você está compilando por uma unidade `subst`. Compile pelo caminho real (`D:\...`). Ver seção 4.

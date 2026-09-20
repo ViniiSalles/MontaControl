@@ -23,3 +23,5 @@ minimumReleaseAgeExclude:
   - expo-font@57.0.2
   - expo@57.0.18
   - expo-image-picker@57.0.18
+patchedDependencies:
+  '@nozbe/watermelondb': patches/@nozbe__watermelondb.patch

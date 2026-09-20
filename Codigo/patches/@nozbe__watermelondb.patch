@@ -1,0 +1,20 @@
+diff --git a/native/android-jsi/build.gradle b/native/android-jsi/build.gradle
+index 9ae589d01fd5ce6a52ef613ab2fcc5c341420e91..3b38cbff4792ceb394349dc9faac46cf8f968a1e 100644
+--- a/native/android-jsi/build.gradle
++++ b/native/android-jsi/build.gradle
+@@ -21,6 +21,7 @@ android {
+         versionName "1.0"
+         externalNativeBuild {
+             cmake {
++                arguments "-DCMAKE_OBJECT_PATH_MAX=250"
+                 // Not sure if this is necessary. I added this in attempt to fix catching
+                 // C++ errors across .so bounds, but it still doesn't work, so can probably get rid
+                 // of this
+@@ -41,6 +42,7 @@ android {
+         cmake {
+             // version '3.10.2'
+             path "src/main/cpp/CMakeLists.txt"
++            buildStagingDirectory = file(findProperty('mc.cxxDir') ? "${findProperty('mc.cxxDir')}-wmdb" : "${projectDir}/.cxx")
+         }
+     }
+ 
