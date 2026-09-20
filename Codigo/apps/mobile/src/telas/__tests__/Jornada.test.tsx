@@ -246,7 +246,9 @@ test('abrir um turno novo no mesmo dia soma com o turno anterior, não reseta "t
   // `Date.now()` puro, rodar o teste perto da meia-noite em
   // America/Sao_Paulo jogava o "checkin 5h atrás" pro dia civil anterior,
   // e "hoje" aparecia sem nenhum turno — falso negativo, não bug de produto.
-  jest.useFakeTimers().setSystemTime(new Date('2026-01-15T15:00:00.000Z'));
+  // `advanceTimers: true` é obrigatório com `waitFor`: sem isso o polling do
+  // Testing Library nunca avança e a suíte trava (CI do PR fica em loop).
+  jest.useFakeTimers({ advanceTimers: true }).setSystemTime(new Date('2026-01-15T15:00:00.000Z'));
 
   const turno1Fechado: JornadaDTO = {
     id: 101,

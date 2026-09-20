@@ -68,7 +68,9 @@ function renderizar() {
 beforeEach(() => {
   jest.clearAllMocks();
   database = criarBancoDeTeste();
-  jest.useFakeTimers().setSystemTime(new Date('2026-08-27T15:00:00.000Z')); // 12:00 local, dia seguinte
+  // `advanceTimers: true` é obrigatório com `waitFor`: sem isso o polling do
+  // Testing Library nunca avança e a suíte trava (CI do PR fica em loop).
+  jest.useFakeTimers({ advanceTimers: true }).setSystemTime(new Date('2026-08-27T15:00:00.000Z')); // 12:00 local, dia seguinte
   useAuthMock.mockReturnValue({
     sessao: { accessToken: 'access', refreshToken: 'refresh', usuario: montador },
     restaurando: false,
