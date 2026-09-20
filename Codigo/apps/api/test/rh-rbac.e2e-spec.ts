@@ -50,7 +50,7 @@ describe('Rotas de RH — autorização (e2e)', () => {
 
   it('MONTADOR leva 403 no banco de horas, no espelho e na inativação', async () => {
     await request(app.getHttpServer())
-      .get('/api/banco-horas')
+      .get('/api/banco-horas/equipe')
       .query(COMPETENCIA)
       .set('Authorization', `Bearer ${tokenMontador}`)
       .expect(403);
@@ -75,7 +75,7 @@ describe('Rotas de RH — autorização (e2e)', () => {
 
   it('RH lê banco de horas e espelho de ponto', async () => {
     const banco = await request(app.getHttpServer())
-      .get('/api/banco-horas')
+      .get('/api/banco-horas/equipe')
       .query(COMPETENCIA)
       .set('Authorization', `Bearer ${tokenRh}`)
       .expect(200);
@@ -91,7 +91,7 @@ describe('Rotas de RH — autorização (e2e)', () => {
 
   it('competência inválida é barrada na borda com 400', async () => {
     await request(app.getHttpServer())
-      .get('/api/banco-horas')
+      .get('/api/banco-horas/equipe')
       .query({ ano: 2026, mes: 13 })
       .set('Authorization', `Bearer ${tokenRh}`)
       .expect(400);
