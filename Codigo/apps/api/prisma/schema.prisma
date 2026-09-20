@@ -159,6 +159,9 @@ model Ambiente {
   pedido Pedido @relation(fields: [pedidoId], references: [id])
   pecas  Peca[]
 
+  // Agrupamento automático da triagem (US07/UC09/UC10): mesmo pedido + mesmo
+  // nome de ambiente sempre cai na mesma linha, nunca duplica.
+  @@unique([pedidoId, nome])
   @@map("ambiente")
 }
 
