@@ -7,11 +7,14 @@ const MS_POR_MINUTO = 60_000;
  * Minutos de um turno. Zero enquanto faltar uma das pontas: turno aberto
  * (ou vencido, sem check-out) não tem duração para somar — o que ele tem é
  * um registro faltando.
+ *
+ * Segundos são descartados, não arredondados: 15:30:00 → 15:35:45 conta 5
+ * minutos, não 6. O minuto só fecha quando é cruzado por inteiro.
  */
 export function minutosDaJornada(jornada: JornadaDTO): number {
   if (!jornada.checkinAt || !jornada.checkoutAt) return 0;
   const bruto = new Date(jornada.checkoutAt).getTime() - new Date(jornada.checkinAt).getTime();
-  return Math.max(0, Math.round(bruto / MS_POR_MINUTO));
+  return Math.max(0, Math.floor(bruto / MS_POR_MINUTO));
 }
 
 function menor(a: string | null, b: string | null): string | null {

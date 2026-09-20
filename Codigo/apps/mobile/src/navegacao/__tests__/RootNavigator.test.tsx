@@ -1,22 +1,42 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { DatabaseProvider } from '@nozbe/watermelondb/react';
 import { ProvedorAuth } from '../../auth/AuthContext';
 import { RootNavigator } from '../RootNavigator';
 import * as armazenamento from '../../auth/armazenamentoSessao';
+import { criarBancoDeTeste } from '../../db/__tests__/apoio';
 import { gestor, montador, respostaJson, sessaoDe } from '../../auth/__tests__/apoio';
 
 jest.mock('../../auth/armazenamentoSessao');
+// `AuthContext#sair` chama `limparBancoLocal` no singleton real de
+// `db/database.ts` — que aqui não é o banco de teste usado no
+// `<DatabaseProvider>` da árvore (esse vem de `criarBancoDeTeste()`, via
+// `arvore()` abaixo). Sem mock, `unsafeResetDatabase()` bateria no stub de
+// `SQLiteAdapter` do `jest.setup.js` (que só existe para o import não
+// quebrar) e derrubaria o teste de logout.
+jest.mock('../../db/database', () => ({ limparBancoLocal: jest.fn().mockResolvedValue(undefined) }));
 
 const armazenamentoMock = jest.mocked(armazenamento);
 
 const PLACEHOLDER_EMAIL = 'nome@empresa.com.br';
 const PLACEHOLDER_SENHA = '••••••••';
 
-async function renderizarApp() {
-  await render(
-    <ProvedorAuth>
-      <RootNavigator />
-    </ProvedorAuth>,
+// A aba Jornada (destino padrão pós-login) lê o espelho local por baixo dos
+// panos — precisa de um `<DatabaseProvider>` mesmo aqui, que só testa
+// navegação/autenticação, não dado de jornada em si.
+let database = criarBancoDeTeste();
+
+function arvore() {
+  return (
+    <DatabaseProvider database={database}>
+      <ProvedorAuth>
+        <RootNavigator />
+      </ProvedorAuth>
+    </DatabaseProvider>
   );
+}
+
+async function renderizarApp() {
+  await render(arvore());
   // Espera o boot decidir; sem isso o teste afirmaria sobre a árvore ainda
   // em restauração.
   await waitFor(() => expect(screen.getByText('Entrar')).toBeTruthy());
@@ -41,6 +61,7 @@ beforeEach(() => {
   // invalid". `clearAllMocks` zera o historico de chamadas e preserva as
   // implementacoes, que e o que estes testes precisam.
   jest.clearAllMocks();
+  database = criarBancoDeTeste();
   armazenamentoMock.lerTokens.mockResolvedValue(null);
   armazenamentoMock.salvarTokens.mockResolvedValue(undefined);
   armazenamentoMock.limparTokens.mockResolvedValue(undefined);
@@ -65,7 +86,7 @@ test('N1T1/TI01 — MONTADOR válido vai para a aba Jornada e o token é guardad
   await renderizarApp();
   await preencherEEnviar(montador.email, 'senha-correta');
 
-  await waitFor(() => expect(screen.getByText(montador.nome)).toBeTruthy());
+  await waitFor(() => expect(screen.getByText('Jornada de Trabalho')).toBeTruthy());
   expect(screen.getByText('Jornada')).toBeTruthy();
   expect(armazenamentoMock.salvarTokens).toHaveBeenCalledWith({
     accessToken: 'access',
@@ -118,13 +139,9 @@ test('sessão restaurada do aparelho abre direto na Jornada, sem passar pelo Log
   armazenamentoMock.lerTokens.mockResolvedValue({ accessToken: 'access', refreshToken: 'refresh' });
   jest.mocked(globalThis.fetch).mockResolvedValueOnce(respostaJson(200, montador));
 
-  await render(
-    <ProvedorAuth>
-      <RootNavigator />
-    </ProvedorAuth>,
-  );
+  await render(arvore());
 
-  await waitFor(() => expect(screen.getByText(montador.nome)).toBeTruthy());
+  await waitFor(() => expect(screen.getByText('Jornada de Trabalho')).toBeTruthy());
   expect(screen.queryByText('Entrar')).toBeNull();
 });
 
@@ -135,12 +152,8 @@ test('sair volta ao Login e limpa os tokens do aparelho', async () => {
     .mockResolvedValueOnce(respostaJson(200, montador))
     .mockResolvedValueOnce(respostaJson(204, null));
 
-  await render(
-    <ProvedorAuth>
-      <RootNavigator />
-    </ProvedorAuth>,
-  );
-  await waitFor(() => expect(screen.getByText(montador.nome)).toBeTruthy());
+  await render(arvore());
+  await waitFor(() => expect(screen.getByText('Jornada de Trabalho')).toBeTruthy());
 
   await fireEvent.press(screen.getByText('Sair'));
 
@@ -148,15 +161,11 @@ test('sair volta ao Login e limpa os tokens do aparelho', async () => {
   expect(armazenamentoMock.limparTokens).toHaveBeenCalled();
 });
 
-test('a barra inferior traz as 5 abas com só a Jornada habilitada', async () => {
+test('a barra inferior traz as 5 abas, com Jornada e Atestados habilitadas', async () => {
   armazenamentoMock.lerTokens.mockResolvedValue({ accessToken: 'access', refreshToken: 'refresh' });
   jest.mocked(globalThis.fetch).mockResolvedValueOnce(respostaJson(200, montador));
 
-  await render(
-    <ProvedorAuth>
-      <RootNavigator />
-    </ProvedorAuth>,
-  );
+  await render(arvore());
   await waitFor(() => expect(screen.getByText('Jornada')).toBeTruthy());
 
   for (const rotulo of ['Jornada', 'Bipagem', 'Avarias', 'Atestados', 'Normas']) {
@@ -165,5 +174,5 @@ test('a barra inferior traz as 5 abas com só a Jornada habilitada', async () =>
 
   // Aba ainda não entregue não troca de tela.
   await fireEvent.press(screen.getByText('Bipagem'));
-  expect(screen.getByText(montador.nome)).toBeTruthy();
+  expect(screen.getByText('Jornada de Trabalho')).toBeTruthy();
 });

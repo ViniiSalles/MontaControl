@@ -1,0 +1,212 @@
+---
+config:
+layout: elk
+theme: neutral
+---
+erDiagram
+  direction TB
+  USUARIO {
+      int id PK
+      string nome
+      string email UK
+      string senha_hash
+      enum perfil "GESTOR<br>RH<br>MONTADOR<br>DEPOSITO"
+      boolean ativo
+      timestamp created_at
+      timestamp updated_at
+  }
+
+  CLIENTE {
+      int id PK
+      string nome
+      string endereco
+      string cidade
+      string estado
+      string cep
+      decimal latitude
+      decimal longitude
+      string telefone
+      timestamp created_at
+      timestamp updated_at
+  }
+
+  PEDIDO {
+      int id PK
+      int cliente_id FK
+      string numero_pedido UK
+      enum status "AGUARDANDO<br>EM_TRIAGEM<br>RECEBIDO<br>EM_ENTREGA<br>ENTREGUE"
+      timestamp created_at
+      timestamp updated_at
+  }
+
+  PEDIDO_MONTADOR {
+      int id PK
+      int pedido_id FK
+      int usuario_id FK
+  }
+
+  AMBIENTE {
+      int id PK
+      int pedido_id FK
+      string nome
+      enum status "PENDENTE<br>EM_PROGRESSO<br>COMPLETO"
+  }
+
+  PECA {
+      int id PK
+      int ambiente_id FK
+      string codigo_barras UK
+      string descricao
+      enum status "TRIADA<br>CARREGADA<br>ENTREGUE"
+      int triada_por FK
+      int conferida_por FK
+      timestamp conferida_at
+      timestamp created_at
+      timestamp updated_at
+  }
+
+  TIPO_AVARIA {
+      int id PK
+      string nome
+      text descricao
+  }
+
+  AVARIA {
+      int id PK
+      int peca_id FK
+      int tipo_avaria_id FK
+      int registrada_por FK
+      text descricao
+      enum status "REPORTADA<br>EM_ANALISE<br>REPOSICAO_SOLICITADA<br>RESOLVIDA"
+      timestamp created_at
+      timestamp updated_at
+  }
+
+  AVARIA_FOTO {
+      int id PK
+      int avaria_id FK
+      string storage_path
+      string mime_type
+      int tamanho_bytes
+      timestamp created_at
+  }
+
+  JORNADA {
+      int id PK
+      int usuario_id FK
+      int pedido_id FK
+      decimal checkin_latitude
+      decimal checkin_longitude
+      timestamp checkin_at
+      decimal checkout_latitude
+      decimal checkout_longitude
+      timestamp checkout_at
+      enum status "EM_ANDAMENTO<br>FINALIZADA"
+      timestamp created_at
+  }
+
+  BANCO_HORAS {
+      int id PK
+      int usuario_id FK
+      int mes
+      int ano
+      decimal horas_trabalhadas
+      decimal horas_previstas
+      decimal saldo
+      timestamp calculado_at
+  }
+
+  ATESTADO {
+      int id PK
+      int usuario_id FK
+      date data_inicio
+      date data_fim
+      enum status "PENDENTE<br>VALIDADO<br>REJEITADO"
+      text motivo_rejeicao
+      int validado_por FK
+      timestamp validado_at
+      timestamp created_at
+  }
+
+  ATESTADO_FOTO {
+      int id PK
+      int atestado_id FK
+      string storage_path
+      string mime_type
+      int tamanho_bytes
+      timestamp created_at
+  }
+
+  TIPO_FERRAMENTA {
+      int id PK
+      string nome
+      text descricao
+  }
+
+  FERRAMENTA {
+      int id PK
+      int tipo_ferramenta_id FK
+      string codigo_patrimonio UK
+      boolean disponivel
+      boolean ativo
+      timestamp created_at
+  }
+
+  CAUTELA {
+      int id PK
+      int ferramenta_id FK
+      int usuario_id FK
+      timestamp data_retirada
+      date data_devolucao_prevista
+      timestamp data_devolucao_real
+      boolean devolvida
+  }
+
+  TIPO_EPI {
+      int id PK
+      string nome
+      text descricao
+      int validade_meses
+  }
+
+  EPI {
+      int id PK
+      int tipo_epi_id FK
+      int usuario_id FK
+      date data_entrega
+      date data_validade
+      boolean ativo
+      timestamp created_at
+  }
+
+  NORMA {
+      int id PK
+      string titulo
+      text conteudo
+      boolean ativo
+      timestamp created_at
+      timestamp updated_at
+  }
+
+  CLIENTE ||--o{ PEDIDO : "possui"
+  PEDIDO ||--|{ AMBIENTE : "contem"
+  PEDIDO ||--o{ PEDIDO_MONTADOR : "atribuido a"
+  USUARIO ||--o{ PEDIDO_MONTADOR : "trabalha em"
+  AMBIENTE ||--|{ PECA : "agrupa"
+  USUARIO ||--o{ PECA : "tria (deposito)"
+  USUARIO ||--o{ PECA : "confere (montador)"
+  PECA ||--o{ AVARIA : "pode ter"
+  TIPO_AVARIA ||--o{ AVARIA : "classifica"
+  USUARIO ||--o{ AVARIA : "registra"
+  AVARIA ||--o{ AVARIA_FOTO : "pode ter"
+  USUARIO ||--o{ JORNADA : "registra"
+  PEDIDO ||--o{ JORNADA : "vincula"
+  USUARIO ||--o{ BANCO_HORAS : "acumula"
+  USUARIO ||--o{ ATESTADO : "envia"
+  USUARIO ||--o{ ATESTADO : "valida (RH)"
+  ATESTADO ||--|{ ATESTADO_FOTO : "possui"
+  TIPO_FERRAMENTA ||--o{ FERRAMENTA : "categoriza"
+  USUARIO ||--o{ CAUTELA : "retira"
+  FERRAMENTA ||--o{ CAUTELA : "emprestada via"
+  TIPO_EPI ||--o{ EPI : "categoriza"
+  USUARIO ||--o{ EPI : "possui"

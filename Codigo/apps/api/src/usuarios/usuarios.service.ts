@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { EmailJaCadastradoException } from '../common/exceptions/email-ja-cadastrado.exception';
 import { SupabaseAuthGateway } from '../supabase/supabase-auth.gateway';
 import { Perfil } from '../../generated/prisma';
+import { InativacaoDoProprioUsuarioException } from './exceptions/inativacao-do-proprio-usuario.exception';
+import { UsuarioNaoEncontradoException } from './exceptions/usuario-nao-encontrado.exception';
 import { UsuariosRepository } from './usuarios.repository';
 import { UsuarioListado } from './usuario-listado';
 
@@ -9,6 +11,7 @@ export interface DadosCadastroUsuario {
   nome: string;
   email: string;
   senha: string;
+  telefone?: string;
   perfil: Perfil;
 }
 
@@ -35,6 +38,7 @@ export class UsuariosService {
     const usuario = await this.usuarios.criar({
       nome: dados.nome,
       email: dados.email,
+      telefone: dados.telefone ?? null,
       perfil: dados.perfil,
       authUserId,
     });
@@ -42,6 +46,19 @@ export class UsuariosService {
       await this.supabase.excluirUsuario(authUserId);
       throw new EmailJaCadastradoException();
     }
+    return usuario;
+  }
+
+  /**
+   * Inativação é o "desligamento" do montador: a linha fica, o histórico de
+   * ponto fica, e o `SupabaseJwtGuard` passa a recusar o token na primeira
+   * requisição seguinte. Reativar é o mesmo caminho com `ativo: true`.
+   */
+  async alterarAtivo(id: number, ativo: boolean, solicitanteId: number): Promise<UsuarioListado> {
+    if (!ativo && id === solicitanteId) throw new InativacaoDoProprioUsuarioException();
+
+    const usuario = await this.usuarios.alterarAtivo(id, ativo);
+    if (!usuario) throw new UsuarioNaoEncontradoException();
     return usuario;
   }
 }

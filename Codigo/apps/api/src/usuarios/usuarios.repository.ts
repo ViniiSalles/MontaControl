@@ -5,10 +5,12 @@ import { UsuarioAutenticado } from '../auth/usuario-autenticado';
 import { UsuarioListado } from './usuario-listado';
 
 const CODIGO_PRISMA_VIOLACAO_UNICIDADE = 'P2002';
+const CODIGO_PRISMA_REGISTRO_NAO_ENCONTRADO = 'P2025';
 
 export interface DadosNovoUsuario {
   nome: string;
   email: string;
+  telefone: string | null;
   perfil: Perfil;
   authUserId: string;
 }
@@ -26,6 +28,15 @@ function ehViolacaoDeUnicidade(erro: unknown): boolean {
   );
 }
 
+function ehRegistroNaoEncontrado(erro: unknown): boolean {
+  return (
+    typeof erro === 'object' &&
+    erro !== null &&
+    'code' in erro &&
+    (erro as { code?: unknown }).code === CODIGO_PRISMA_REGISTRO_NAO_ENCONTRADO
+  );
+}
+
 const SELECAO_USUARIO_AUTENTICADO = {
   id: true,
   nome: true,
@@ -39,6 +50,7 @@ const SELECAO_USUARIO_LISTADO = {
   id: true,
   nome: true,
   email: true,
+  telefone: true,
   perfil: true,
   ativo: true,
 } as const;
@@ -51,6 +63,13 @@ export class UsuariosRepository {
     return this.prisma.usuario.findUnique({
       where: { authUserId },
       select: SELECAO_USUARIO_AUTENTICADO,
+    });
+  }
+
+  async buscarPorId(id: number): Promise<UsuarioListado | null> {
+    return this.prisma.usuario.findUnique({
+      where: { id },
+      select: SELECAO_USUARIO_LISTADO,
     });
   }
 
@@ -70,6 +89,20 @@ export class UsuariosRepository {
       });
     } catch (erro) {
       if (ehViolacaoDeUnicidade(erro)) return null;
+      throw erro;
+    }
+  }
+
+  /** Retorna `null` quando não existe usuário com esse id. */
+  async alterarAtivo(id: number, ativo: boolean): Promise<UsuarioListado | null> {
+    try {
+      return await this.prisma.usuario.update({
+        where: { id },
+        data: { ativo },
+        select: SELECAO_USUARIO_LISTADO,
+      });
+    } catch (erro) {
+      if (ehRegistroNaoEncontrado(erro)) return null;
       throw erro;
     }
   }

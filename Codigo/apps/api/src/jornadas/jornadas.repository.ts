@@ -12,6 +12,7 @@ export interface DadosCheckin {
   longitude: number;
   endereco: string | null;
   checkinAt: Date;
+  pedidoId: number | null;
 }
 
 export interface DadosCheckout {
@@ -20,6 +21,7 @@ export interface DadosCheckout {
   longitude: number;
   endereco: string | null;
   checkoutAt: Date;
+  pedidoId: number | null;
 }
 
 /** Status que caracterizam jornada aberta — a que impede um segundo check-in. */
@@ -58,6 +60,7 @@ export class JornadasRepository {
     const linha = await this.prisma.jornada.create({
       data: {
         usuarioId: dados.usuarioId,
+        pedidoId: dados.pedidoId,
         checkinIdCliente: dados.idCliente,
         checkinLatitude: dados.latitude,
         checkinLongitude: dados.longitude,
@@ -74,6 +77,10 @@ export class JornadasRepository {
     const linha = await this.prisma.jornada.update({
       where: { id: jornadaId },
       data: {
+        // `undefined` (não `null`) quando ausente: um `update` do Prisma
+        // apaga a coluna com `null`, e o pedido já gravado no check-in não
+        // pode ser perdido só porque o check-out não informou um.
+        pedidoId: dados.pedidoId ?? undefined,
         checkoutIdCliente: dados.idCliente,
         checkoutLatitude: dados.latitude,
         checkoutLongitude: dados.longitude,
@@ -93,6 +100,34 @@ export class JornadasRepository {
       select: SELECAO_JORNADA,
     });
     return linhas.map(paraJornadaDTO);
+  }
+
+  /**
+   * Justificativa da solicitação de ponto por trás de cada jornada lançada em
+   * atraso no período — o espelho mostra o mesmo texto da fila de
+   * compensações, em vez de um rótulo genérico.
+   */
+  async mapaJustificativasLancadasNoPeriodo(
+    usuarioId: number,
+    inicioIso: string,
+    fimIso: string,
+  ): Promise<Map<number, string>> {
+    const linhas = await this.prisma.jornada.findMany({
+      where: {
+        usuarioId,
+        checkinAt: { gte: new Date(inicioIso), lte: new Date(fimIso) },
+        solicitacaoPonto: { isNot: null },
+      },
+      select: { id: true, solicitacaoPonto: { select: { justificativa: true } } },
+    });
+    return new Map(
+      linhas
+        .filter(
+          (linha): linha is typeof linha & { solicitacaoPonto: { justificativa: string } } =>
+            linha.solicitacaoPonto !== null,
+        )
+        .map((linha) => [linha.id, linha.solicitacaoPonto.justificativa]),
+    );
   }
 
   /** Cursor do pull do WatermelonDB: tudo que mudou depois de `desdeMs`. */

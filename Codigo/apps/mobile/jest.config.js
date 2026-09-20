@@ -46,4 +46,8 @@ module.exports = {
   // app termina em `.test.ts(x)`.
   testMatch: ['**/*.test.ts?(x)'],
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
+  // LokiJSAdapter (WatermelonDB nos testes de tela) deixa handles abertos
+  // depois da suíte — o Jest fica esperando workers e o CI do PR timeouta
+  // mesmo com 100% dos testes verdes. ForceExit encerra após o relatório.
+  forceExit: true,
 };

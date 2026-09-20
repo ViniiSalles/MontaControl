@@ -1,6 +1,6 @@
 import { StatusJornada } from '@montacontrol/shared';
-import type { JornadaDTO } from '@montacontrol/shared';
-import { derivarUltimoPonto, proximaAcao } from '../ultimoPonto';
+import type { DiaJornadaDTO, JornadaDTO } from '@montacontrol/shared';
+import { derivarUltimoPonto, minutosTrabalhadosHoje, proximaAcao } from '../ultimoPonto';
 
 function jornada(parcial: Partial<JornadaDTO> = {}): JornadaDTO {
   return {
@@ -101,5 +101,71 @@ describe('proximaAcao', () => {
   // uma entrada nova.
   it('jornada aberta além das 24h vence e volta a pedir entrada', () => {
     expect(proximaAcao(jornada(), DEPOIS_DO_LIMITE)).toBe('entrada');
+  });
+});
+
+describe('minutosTrabalhadosHoje', () => {
+  // Turno 1: 08:00–12:00 locais (240min), já fechado.
+  const TURNO_1 = jornada({
+    id: 1,
+    status: StatusJornada.FINALIZADA,
+    checkinAt: '2026-08-29T11:00:00.000Z',
+    checkoutAt: '2026-08-29T15:00:00.000Z',
+  });
+  // Turno 2: abre 14:00 local, ainda sem check-out.
+  const TURNO_2_ABERTO = jornada({ id: 2, checkinAt: '2026-08-29T17:00:00.000Z' });
+  // "Agora" 15:30 local — 1h30 (90min) de turno 2 em curso.
+  const AGORA = '2026-08-29T18:30:00.000Z';
+
+  function diaComTurnos(...jornadas: JornadaDTO[]): DiaJornadaDTO {
+    return {
+      data: '2026-08-29',
+      inicio: jornadas[0]?.checkinAt ?? null,
+      fim: null,
+      minutosTrabalhados: 0, // não usado por `minutosTrabalhadosHoje` — recalcula de `.jornadas`
+      emAndamento: true,
+      jornadas,
+    };
+  }
+
+  it('sem nenhum turno hoje, não há o que somar', () => {
+    expect(minutosTrabalhadosHoje(null, null, 'finalizada', AGORA)).toBeNull();
+  });
+
+  it('jornada vencida não soma — duração bruta de +24h não é "hoje"', () => {
+    const dia = diaComTurnos(TURNO_1, TURNO_2_ABERTO);
+    expect(minutosTrabalhadosHoje(dia, TURNO_2_ABERTO, 'vencida', AGORA)).toBeNull();
+  });
+
+  it('histórico ainda não carregado, soma só o turno em curso', () => {
+    expect(minutosTrabalhadosHoje(null, TURNO_2_ABERTO, 'em_andamento', AGORA)).toBe(90);
+  });
+
+  // O caso do bug reportado: reabrir um turno no mesmo dia não pode "esquecer"
+  // o turno anterior já fechado.
+  it('soma o turno anterior fechado (do histórico) com o turno em curso', () => {
+    const dia = diaComTurnos(TURNO_1, TURNO_2_ABERTO);
+    expect(minutosTrabalhadosHoje(dia, TURNO_2_ABERTO, 'em_andamento', AGORA)).toBe(240 + 90);
+  });
+
+  // Mesmo resultado mesmo se o histórico ainda não sabe do turno 2 (não foi
+  // recarregado desde que ele abriu) — a tela usa a versão fresca que já tem
+  // em mãos (`jornadaExibida`) em vez de esperar o histórico se atualizar.
+  it('soma corretamente mesmo com histórico desatualizado sobre o turno atual', () => {
+    const diaDesatualizado = diaComTurnos(TURNO_1);
+    expect(minutosTrabalhadosHoje(diaDesatualizado, TURNO_2_ABERTO, 'em_andamento', AGORA)).toBe(
+      240 + 90,
+    );
+  });
+
+  it('turno atual encerrado soma pela duração real, não pelo relógio', () => {
+    const turno2Fechado = jornada({
+      id: 2,
+      status: StatusJornada.FINALIZADA,
+      checkinAt: '2026-08-29T17:00:00.000Z',
+      checkoutAt: '2026-08-29T18:00:00.000Z', // 1h
+    });
+    const dia = diaComTurnos(TURNO_1);
+    expect(minutosTrabalhadosHoje(dia, turno2Fechado, 'finalizada', AGORA)).toBe(240 + 60);
   });
 });

@@ -16,6 +16,8 @@ export interface PropsBotao {
   texto?: string;
   /** Obrigatório quando `variante: 'icone'`. */
   icone?: NomeIcone;
+  /** Nome acessível do botão. Obrigatório quando `variante: 'icone'` — sem texto visível, é a única forma de leitores de tela anunciarem a ação. */
+  rotuloAcessivel?: string;
   carregando?: boolean;
   larguraTotal?: boolean;
   desabilitado?: boolean;

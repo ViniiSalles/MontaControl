@@ -5,6 +5,7 @@ export interface UsuarioListado {
   id: number;
   nome: string;
   email: string;
+  telefone: string | null;
   perfil: Perfil;
   ativo: boolean;
 }

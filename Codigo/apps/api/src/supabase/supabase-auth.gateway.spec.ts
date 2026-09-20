@@ -35,7 +35,10 @@ describe('SupabaseAuthGateway', () => {
 
   beforeEach(() => {
     cliente = criarClienteFalso();
-    gateway = new SupabaseAuthGateway(cliente as unknown as SupabaseClient);
+    gateway = new SupabaseAuthGateway(
+      cliente as unknown as SupabaseClient,
+      cliente as unknown as SupabaseClient,
+    );
   });
 
   describe('entrarComSenha', () => {

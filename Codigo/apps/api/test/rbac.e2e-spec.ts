@@ -83,3 +83,65 @@ describe('GET /api/usuarios — RBAC (e2e)', () => {
       .expect(200);
   });
 });
+
+/** Issue #25: GET /api/espelho-ponto/:usuarioId é restrito a RH — usuarioId vem do path, não do token. */
+describe('GET /api/espelho-ponto — RBAC (e2e)', () => {
+  let app: INestApplication;
+  const fixturesCriadas: UsuarioFixture[] = [];
+
+  beforeAll(async () => {
+    app = await criarApp();
+  });
+
+  afterAll(async () => {
+    for (const fixture of fixturesCriadas.reverse()) {
+      await apagarUsuarioFixture(app, fixture);
+    }
+    await app.close();
+  });
+
+  async function criarFixture(perfil: Perfil): Promise<UsuarioFixture> {
+    const fixture = await criarUsuarioFixture(app, { perfil });
+    fixturesCriadas.push(fixture);
+    return fixture;
+  }
+
+  it('sem token → 401', async () => {
+    await request(app.getHttpServer()).get('/api/espelho-ponto/1?mes=8&ano=2026').expect(401);
+  });
+
+  it('MONTADOR autenticado → 403', async () => {
+    const usuario = await criarFixture(Perfil.MONTADOR);
+    const token = await login(app, usuario);
+
+    await request(app.getHttpServer())
+      .get('/api/espelho-ponto/1?mes=8&ano=2026')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(403);
+  });
+
+  it('RH autenticado → 200, consultando o espelho de um montador', async () => {
+    const montador = await criarFixture(Perfil.MONTADOR);
+    const rh = await criarFixture(Perfil.RH);
+    const token = await login(app, rh);
+
+    const resposta = await request(app.getHttpServer())
+      .get(`/api/espelho-ponto/${montador.usuarioId}?mes=8&ano=2026`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    expect(resposta.body.usuarioId).toBe(montador.usuarioId);
+    expect(resposta.body.usuarioNome).toBe(montador.nome);
+    expect(Array.isArray(resposta.body.dias)).toBe(true);
+  });
+
+  it('RH autenticado consultando usuarioId inexistente → 404', async () => {
+    const rh = await criarFixture(Perfil.RH);
+    const token = await login(app, rh);
+
+    await request(app.getHttpServer())
+      .get('/api/espelho-ponto/999999999?mes=8&ano=2026')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(404);
+  });
+});

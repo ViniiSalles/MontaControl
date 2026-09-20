@@ -57,10 +57,53 @@ describe('UsuariosRepository', () => {
     });
   });
 
+  describe('buscarPorId', () => {
+    it('retorna o usuário mapeado quando encontrado', async () => {
+      prisma.usuario.findUnique.mockResolvedValue({
+        id: 7,
+        nome: 'Maria Montadora',
+        email: 'maria@montacontrol.local',
+        telefone: '(11) 91234-5678',
+        perfil: Perfil.MONTADOR,
+        ativo: true,
+      });
+
+      const usuario = await repository.buscarPorId(7);
+
+      expect(usuario).toEqual({
+        id: 7,
+        nome: 'Maria Montadora',
+        email: 'maria@montacontrol.local',
+        telefone: '(11) 91234-5678',
+        perfil: Perfil.MONTADOR,
+        ativo: true,
+      });
+      expect(prisma.usuario.findUnique).toHaveBeenCalledWith({
+        where: { id: 7 },
+        select: { id: true, nome: true, email: true, telefone: true, perfil: true, ativo: true },
+      });
+    });
+
+    it('retorna null quando não há usuário com o id informado', async () => {
+      prisma.usuario.findUnique.mockResolvedValue(null);
+
+      const usuario = await repository.buscarPorId(999);
+
+      expect(usuario).toBeNull();
+    });
+  });
+
   describe('listar', () => {
     it('retorna os usuários ordenados por nome, sem o authUserId', async () => {
       const usuarios = [
-        { id: 1, nome: 'Ana RH', email: 'ana@montacontrol.local', perfil: Perfil.RH, ativo: true },
+        {
+          id: 1,
+          nome: 'Ana RH',
+          email: 'ana@montacontrol.local',
+          telefone: null,
+          perfil: Perfil.RH,
+          ativo: true,
+        },
       ];
       prisma.usuario.findMany.mockResolvedValue(usuarios);
 
@@ -68,7 +111,7 @@ describe('UsuariosRepository', () => {
 
       expect(resultado).toEqual(usuarios);
       expect(prisma.usuario.findMany).toHaveBeenCalledWith({
-        select: { id: true, nome: true, email: true, perfil: true, ativo: true },
+        select: { id: true, nome: true, email: true, telefone: true, perfil: true, ativo: true },
         orderBy: { nome: 'asc' },
       });
     });
@@ -78,6 +121,7 @@ describe('UsuariosRepository', () => {
     const dados = {
       nome: 'Nova Montadora',
       email: 'nova@montacontrol.local',
+      telefone: '(11) 91234-5678',
       perfil: Perfil.MONTADOR,
       authUserId: '22222222-2222-2222-2222-222222222222',
     };
@@ -87,6 +131,7 @@ describe('UsuariosRepository', () => {
         id: 9,
         nome: dados.nome,
         email: dados.email,
+        telefone: dados.telefone,
         perfil: dados.perfil,
         ativo: true,
       });
@@ -97,12 +142,13 @@ describe('UsuariosRepository', () => {
         id: 9,
         nome: dados.nome,
         email: dados.email,
+        telefone: dados.telefone,
         perfil: dados.perfil,
         ativo: true,
       });
       expect(prisma.usuario.create).toHaveBeenCalledWith({
         data: dados,
-        select: { id: true, nome: true, email: true, perfil: true, ativo: true },
+        select: { id: true, nome: true, email: true, telefone: true, perfil: true, ativo: true },
       });
     });
 

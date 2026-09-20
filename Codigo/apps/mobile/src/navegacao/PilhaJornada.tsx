@@ -1,19 +1,20 @@
 import { useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import { BancoHoras } from '../telas/BancoHoras';
 import { Historico } from '../telas/Historico';
 import { Jornada } from '../telas/Jornada';
 import { ModalPontoEmAtraso } from '../telas/jornada/ModalPontoEmAtraso';
 
-type Vista = 'jornada' | 'historico';
+type Vista = 'jornada' | 'historico' | 'bancoHoras';
 
 /**
- * Navegação interna da aba Jornada: a tela de bater ponto, o histórico e o
- * formulário de ponto em atraso por cima de qualquer uma das duas.
+ * Navegação interna da aba Jornada: a tela de bater ponto, o histórico, o
+ * banco de horas e o formulário de ponto em atraso por cima de qualquer uma
+ * das três.
  *
  * É um `useState` e não uma biblioteca de navegação de propósito — a aba tem
- * duas vistas e uma folha modal, e `BarraNavInferior` já resolve o nível de
- * cima. Se surgir uma terceira vista com histórico de voltar, aí sim vale a
- * troca.
+ * três vistas (jornada, histórico, banco de horas) e uma folha modal, e
+ * `BarraNavInferior` já resolve o nível de cima.
  */
 export function PilhaJornada() {
   const { sessao } = useAuth();
@@ -31,9 +32,12 @@ export function PilhaJornada() {
           aoVoltar={() => setVista('jornada')}
           aoLancarEmAtraso={(data) => setPontoEmAtraso({ data })}
         />
+      ) : vista === 'bancoHoras' ? (
+        <BancoHoras aoVoltar={() => setVista('jornada')} />
       ) : (
         <Jornada
           aoAbrirHistorico={() => setVista('historico')}
+          aoAbrirBancoHoras={() => setVista('bancoHoras')}
           aoLancarEmAtraso={() => setPontoEmAtraso({ data: null })}
         />
       )}

@@ -51,6 +51,8 @@ export interface UsuarioDTO {
   id: number;
   nome: string;
   email: string;
+  /** Ausente nas respostas de `/auth` (login/me) — só a listagem de usuários projeta telefone. */
+  telefone?: string | null;
   perfil: Perfil;
   ativo: boolean;
 }
@@ -59,6 +61,7 @@ export interface CadastrarUsuarioRequest {
   nome: string;
   email: string;
   senha: string;
+  telefone?: string;
   perfil: Perfil;
 }
 
@@ -75,6 +78,8 @@ export interface CheckinRequest {
   registradoEm: string;
   /** Endereço resolvido pelo Nominatim; ausente quando o check-in foi feito offline. */
   endereco?: string;
+  /** Pedido ao qual a marcação se refere. Quando ausente, a distância não é validada. */
+  pedidoId?: number;
 }
 
 export interface CheckoutRequest {
@@ -83,6 +88,8 @@ export interface CheckoutRequest {
   longitude: number;
   registradoEm: string;
   endereco?: string;
+  /** Pedido ao qual a marcação se refere. Quando ausente, a distância não é validada. */
+  pedidoId?: number;
 }
 
 export interface JornadaDTO {
@@ -198,13 +205,103 @@ export interface AvariaDTO {
   status: StatusAvaria;
 }
 
+export interface FotoBase64 {
+  /** Conteúdo do arquivo em base64, sem o prefixo `data:`. */
+  conteudoBase64: string;
+  mimeType: 'image/jpeg' | 'image/png';
+}
+
+export interface EnviarAtestadoRequest {
+  /** UUID do aparelho — idempotência da outbox, igual ao check-in. */
+  idCliente: string;
+  /** `YYYY-MM-DD` no fuso de operação. */
+  dataInicio: string;
+  /** `YYYY-MM-DD`, inclusivo. */
+  dataFim: string;
+  /** Ao menos uma foto; o atestado sem documento não é analisável. */
+  fotos: FotoBase64[];
+}
+
 export interface AtestadoDTO {
   id: number;
   usuarioId: number;
+  /** A fila do RH lista pessoas, não ids. */
+  usuarioNome: string;
   dataInicio: string;
   dataFim: string;
   status: StatusAtestado;
-  motivoRejeicao?: string | null;
+  motivoRejeicao: string | null;
+  validadoPor: number | null;
+  validadoEm: string | null;
+  criadoEm: string;
+}
+
+export interface AtestadoFotoDTO {
+  id: number;
+  /** URL assinada com expiração — o caminho cru do bucket nunca sai da API (LGPD). */
+  url: string;
+  /** Instante ISO em que a URL deixa de valer. */
+  expiraEm: string;
+}
+
+export interface AtestadoDetalhadoDTO extends AtestadoDTO {
+  fotos: AtestadoFotoDTO[];
+}
+
+export interface RejeitarAtestadoRequest {
+  motivo: string;
+}
+
+export interface AlterarAtivoRequest {
+  ativo: boolean;
+}
+
+/** Linha do painel de banco de horas do RH. Horas decimais, como a coluna `Decimal(7,2)`. */
+export interface SaldoMontadorDTO extends BancoHorasDTO {
+  usuarioNome: string;
+  /** Horas descontadas da previsão por atestado validado no mês. */
+  horasAbonadas: number;
+  /** Quantas solicitações de ponto em atraso do montador aguardam análise. */
+  compensacoesPendentes: number;
+}
+
+export interface TurnoEspelhoDTO {
+  inicio: string | null;
+  fim: string | null;
+  minutosTrabalhados: number;
+  lancadoEmAtraso: boolean;
+}
+
+export interface DiaEspelhoDTO {
+  /** `YYYY-MM-DD` no fuso de operação. */
+  data: string;
+  inicio: string | null;
+  fim: string | null;
+  minutosTrabalhados: number;
+  emAndamento: boolean;
+  /** Alguma jornada do dia nasceu de ponto em atraso aprovado. */
+  lancadoEmAtraso: boolean;
+  /** Justificativa da solicitação aprovada — mesmo texto da fila de compensações. `null` fora de `lancadoEmAtraso`. */
+  justificativaLancamento: string | null;
+  /** Coberto por atestado validado. */
+  abonado: boolean;
+  diaUtil: boolean;
+  /** Um turno por jornada do dia, em ordem cronológica. Vazio nos dias sem marcação. */
+  turnos: TurnoEspelhoDTO[];
+}
+
+export interface EspelhoPontoDTO {
+  usuarioId: number;
+  usuarioNome: string;
+  mes: number;
+  ano: number;
+  /** Todos os dias do mês, do 1º ao último — inclusive os sem marcação. */
+  dias: DiaEspelhoDTO[];
+  minutosTrabalhados: number;
+  minutosPrevistos: number;
+  minutosAbonados: number;
+  /** `minutosTrabalhados + minutosAbonados - minutosPrevistos`. Negativo = devendo. */
+  saldoMinutos: number;
 }
 
 export interface BancoHorasDTO {

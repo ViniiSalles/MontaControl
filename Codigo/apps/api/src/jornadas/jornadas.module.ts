@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
+import { PedidosModule } from '../pedidos/pedidos.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { JornadasController } from './jornadas.controller';
 import { JornadasRepository } from './jornadas.repository';
 import { JornadasService } from './jornadas.service';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, PedidosModule],
   controllers: [JornadasController],
   providers: [JornadasService, JornadasRepository],
   // O módulo de pontos em atraso materializa jornadas na aprovação e o de

@@ -3,6 +3,7 @@ import type { ComponentType } from 'react';
 import { View } from 'react-native';
 import { cores } from '@montacontrol/design-tokens/native';
 import { BarraNavInferior } from '../ui/BarraNavInferior';
+import { Atestados } from '../telas/Atestados';
 import { PilhaJornada } from './PilhaJornada';
 import { ABA_PADRAO, ABAS } from './abas';
 import type { IdAba } from './abas';
@@ -10,13 +11,12 @@ import type { IdAba } from './abas';
 /**
  * Casca do app autenticado: conteúdo da aba + barra inferior fixa.
  *
- * A Sprint 1 tem uma única aba disponível, então `telaPorAba` tem um só
- * registro. É deliberado que ele seja um mapa e não um `if`: cada sprint
- * seguinte acrescenta uma linha aqui e vira `disponivel: true` em
+ * Cada sprint acrescenta uma linha aqui e vira `disponivel: true` em
  * `abas.ts`, sem reescrever a navegação.
  */
 const telaPorAba: Partial<Record<IdAba, ComponentType>> = {
   jornada: PilhaJornada,
+  atestados: Atestados,
 };
 
 export function AppAutenticado() {

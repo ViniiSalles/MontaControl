@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { StatusJornada } from '@montacontrol/shared';
 import type { CheckinRequest, CheckoutRequest, JornadaDTO } from '@montacontrol/shared';
+import { CoordenadasCliente, PedidosRepository } from '../pedidos/pedidos.repository';
 import { JornadasRepository } from './jornadas.repository';
 import { JornadasService } from './jornadas.service';
 import { JornadaEmAndamentoException } from './exceptions/jornada-em-andamento.exception';
@@ -8,8 +9,21 @@ import { RegistroForaDaJanelaException } from './exceptions/registro-fora-da-jan
 import { SemJornadaAbertaException } from './exceptions/sem-jornada-aberta.exception';
 import { CheckoutAntesDoCheckinException } from './exceptions/checkout-antes-do-checkin.exception';
 import { JornadaVencidaException } from './exceptions/jornada-vencida.exception';
+import { PedidoInvalidoException } from './exceptions/pedido-invalido.exception';
+import { ForaDoRaioToleradoException } from './exceptions/fora-do-raio-tolerado.exception';
 
 const USUARIO_ID = 7;
+
+/** Cliente do pedido 10, usado nos testes de raio de tolerância. */
+const CLIENTE_DO_PEDIDO: CoordenadasCliente = { latitude: -19.9325, longitude: -43.9382 };
+
+function pedidosRepositorioDuplo(
+  coordenadas: CoordenadasCliente | null = null,
+): jest.Mocked<PedidosRepository> {
+  return {
+    buscarCoordenadasCliente: jest.fn().mockResolvedValue(coordenadas),
+  } as unknown as jest.Mocked<PedidosRepository>;
+}
 
 /** 26/08/2026 14:00 em America/Sao_Paulo (17:00Z) — "agora" congelado em todos os testes. */
 const AGORA = new Date('2026-08-26T17:00:00.000Z');
@@ -56,6 +70,7 @@ function pedidoSaida(parcial: Partial<CheckoutRequest> = {}): CheckoutRequest {
 describe('JornadasService — check-in', () => {
   let service: JornadasService;
   let repositorio: jest.Mocked<JornadasRepository>;
+  let pedidos: jest.Mocked<PedidosRepository>;
 
   beforeAll(() => {
     jest.useFakeTimers().setSystemTime(AGORA);
@@ -71,9 +86,14 @@ describe('JornadasService — check-in', () => {
       buscarAbertaDoUsuario: jest.fn().mockResolvedValue(null),
       criarCheckin: jest.fn().mockResolvedValue(jornadaFake()),
     };
+    pedidos = pedidosRepositorioDuplo();
 
     const modulo = await Test.createTestingModule({
-      providers: [JornadasService, { provide: JornadasRepository, useValue: duplo }],
+      providers: [
+        JornadasService,
+        { provide: JornadasRepository, useValue: duplo },
+        { provide: PedidosRepository, useValue: pedidos },
+      ],
     }).compile();
 
     service = modulo.get(JornadasService);
@@ -182,11 +202,56 @@ describe('JornadasService — check-in', () => {
       service.checkin(USUARIO_ID, pedido({ registradoEm: '2026-08-25T02:00:00.000Z' })),
     ).rejects.toBeInstanceOf(RegistroForaDaJanelaException);
   });
+
+  it('sem pedidoId, não consulta o PedidosRepository nem valida distância', async () => {
+    await service.checkin(USUARIO_ID, pedido());
+
+    expect(pedidos.buscarCoordenadasCliente).not.toHaveBeenCalled();
+    expect(repositorio.criarCheckin).toHaveBeenCalledTimes(1);
+  });
+
+  it('com pedidoId, aceita check-in dentro do raio de tolerância do cliente', async () => {
+    pedidos.buscarCoordenadasCliente.mockResolvedValue(CLIENTE_DO_PEDIDO);
+
+    await service.checkin(
+      USUARIO_ID,
+      pedido({ pedidoId: 10, latitude: CLIENTE_DO_PEDIDO.latitude, longitude: CLIENTE_DO_PEDIDO.longitude }),
+    );
+
+    expect(pedidos.buscarCoordenadasCliente).toHaveBeenCalledWith(10);
+    expect(repositorio.criarCheckin).toHaveBeenCalledTimes(1);
+  });
+
+  it('com pedidoId, recusa check-in fora do raio de tolerância do cliente', async () => {
+    pedidos.buscarCoordenadasCliente.mockResolvedValue(CLIENTE_DO_PEDIDO);
+
+    await expect(
+      service.checkin(
+        USUARIO_ID,
+        pedido({
+          pedidoId: 10,
+          latitude: CLIENTE_DO_PEDIDO.latitude + 0.01, // ~1.1km do cliente
+          longitude: CLIENTE_DO_PEDIDO.longitude,
+        }),
+      ),
+    ).rejects.toBeInstanceOf(ForaDoRaioToleradoException);
+    expect(repositorio.criarCheckin).not.toHaveBeenCalled();
+  });
+
+  it('recusa check-in quando o pedidoId informado não existe', async () => {
+    pedidos.buscarCoordenadasCliente.mockResolvedValue(null);
+
+    await expect(service.checkin(USUARIO_ID, pedido({ pedidoId: 999 }))).rejects.toBeInstanceOf(
+      PedidoInvalidoException,
+    );
+    expect(repositorio.criarCheckin).not.toHaveBeenCalled();
+  });
 });
 
 describe('JornadasService — check-out', () => {
   let service: JornadasService;
   let repositorio: jest.Mocked<JornadasRepository>;
+  let pedidos: jest.Mocked<PedidosRepository>;
 
   beforeAll(() => {
     jest.useFakeTimers().setSystemTime(AGORA);
@@ -204,9 +269,14 @@ describe('JornadasService — check-out', () => {
         jornadaFake({ status: StatusJornada.FINALIZADA, checkoutAt: '2026-08-26T16:30:00.000Z' }),
       ),
     };
+    pedidos = pedidosRepositorioDuplo();
 
     const modulo = await Test.createTestingModule({
-      providers: [JornadasService, { provide: JornadasRepository, useValue: duplo }],
+      providers: [
+        JornadasService,
+        { provide: JornadasRepository, useValue: duplo },
+        { provide: PedidosRepository, useValue: pedidos },
+      ],
     }).compile();
 
     service = modulo.get(JornadasService);
@@ -279,6 +349,54 @@ describe('JornadasService — check-out', () => {
     expect(resultado.id).toBe(99);
     expect(repositorio.registrarCheckout).not.toHaveBeenCalled();
   });
+
+  it('sem pedidoId, não consulta o PedidosRepository nem valida distância', async () => {
+    await service.checkout(USUARIO_ID, pedidoSaida());
+
+    expect(pedidos.buscarCoordenadasCliente).not.toHaveBeenCalled();
+    expect(repositorio.registrarCheckout).toHaveBeenCalledTimes(1);
+  });
+
+  it('com pedidoId, aceita check-out dentro do raio de tolerância do cliente', async () => {
+    pedidos.buscarCoordenadasCliente.mockResolvedValue(CLIENTE_DO_PEDIDO);
+
+    await service.checkout(
+      USUARIO_ID,
+      pedidoSaida({
+        pedidoId: 10,
+        latitude: CLIENTE_DO_PEDIDO.latitude,
+        longitude: CLIENTE_DO_PEDIDO.longitude,
+      }),
+    );
+
+    expect(pedidos.buscarCoordenadasCliente).toHaveBeenCalledWith(10);
+    expect(repositorio.registrarCheckout).toHaveBeenCalledTimes(1);
+  });
+
+  it('com pedidoId, recusa check-out fora do raio de tolerância do cliente', async () => {
+    pedidos.buscarCoordenadasCliente.mockResolvedValue(CLIENTE_DO_PEDIDO);
+
+    await expect(
+      service.checkout(
+        USUARIO_ID,
+        pedidoSaida({
+          pedidoId: 10,
+          latitude: CLIENTE_DO_PEDIDO.latitude + 0.01, // ~1.1km do cliente
+          longitude: CLIENTE_DO_PEDIDO.longitude,
+        }),
+      ),
+    ).rejects.toBeInstanceOf(ForaDoRaioToleradoException);
+    expect(repositorio.registrarCheckout).not.toHaveBeenCalled();
+  });
+
+  it('recusa check-out quando o pedidoId informado não existe', async () => {
+    pedidos.buscarCoordenadasCliente.mockResolvedValue(null);
+
+    await expect(
+      service.checkout(USUARIO_ID, pedidoSaida({ pedidoId: 999 })),
+    ).rejects.toBeInstanceOf(PedidoInvalidoException);
+    expect(repositorio.registrarCheckout).not.toHaveBeenCalled();
+  });
 });
 
 describe('JornadasService — histórico', () => {
@@ -299,7 +417,11 @@ describe('JornadasService — histórico', () => {
     };
 
     const modulo = await Test.createTestingModule({
-      providers: [JornadasService, { provide: JornadasRepository, useValue: duplo }],
+      providers: [
+        JornadasService,
+        { provide: JornadasRepository, useValue: duplo },
+        { provide: PedidosRepository, useValue: pedidosRepositorioDuplo() },
+      ],
     }).compile();
 
     service = modulo.get(JornadasService);

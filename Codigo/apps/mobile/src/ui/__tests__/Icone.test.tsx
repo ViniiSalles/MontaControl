@@ -17,3 +17,12 @@ test('preenchido troca de variante de arquivo', async () => {
   expect(arvoreSemPreenchimento).toContain('32');
   expect(arvorePreenchido).toContain('32');
 });
+
+test('ícones novos do banco de horas renderizam sem lançar', async () => {
+  const nomes = ['account_balance_wallet', 'chevron_left', 'chevron_right', 'trending_up'] as const;
+
+  for (const nome of nomes) {
+    const resultado = await render(<Icone nome={nome} tamanho={24} />);
+    expect(resultado.toJSON()).toBeTruthy();
+  }
+});

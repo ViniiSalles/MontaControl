@@ -7,7 +7,8 @@ import { Botao } from '../../ui/Botao';
 import { CampoTexto } from '../../ui/CampoTexto';
 import { Modal } from '../../ui/Modal';
 import { Texto } from '../../ui/Texto';
-import { ErroApi, enviarSolicitacaoPonto } from '../../jornada/clienteJornadas';
+import { useDatabaseOuFalha } from '../../db/useDatabase';
+import { executarAcaoPontoEmAtraso } from '../../sincronizacao/outbox';
 import { diaCivilDe } from '../../jornada/formatacao';
 import {
   mascararData,
@@ -38,6 +39,7 @@ function paraCampoData(data: string | null | undefined): string {
  * preciso um `useEffect` para ressincronizar a cada reabertura.
  */
 export function ModalPontoEmAtraso({ token, dataInicial, aoFechar }: PropsModalPontoEmAtraso) {
+  const database = useDatabaseOuFalha();
   const [campos, setCampos] = useState<CamposPontoEmAtraso>({
     data: paraCampoData(dataInicial),
     horaInicio: '',
@@ -67,14 +69,15 @@ export function ModalPontoEmAtraso({ token, dataInicial, aoFechar }: PropsModalP
     setEnviando(true);
     setFalha(null);
     try {
-      await enviarSolicitacaoPonto(token, { idCliente: randomUUID(), ...dados });
-      setEnviada(true);
-    } catch (erro) {
-      setFalha(
-        erro instanceof ErroApi
-          ? erro.message
-          : 'A solicitação não chegou ao servidor. Verifique a internet e tente de novo.',
-      );
+      const resultado = await executarAcaoPontoEmAtraso(database, token, {
+        idCliente: randomUUID(),
+        ...dados,
+      });
+      if (resultado.tipo === 'recusado') {
+        setFalha('O pedido foi recusado. Confira os dados e tente de novo.');
+      } else {
+        setEnviada(true);
+      }
     } finally {
       setEnviando(false);
     }

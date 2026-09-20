@@ -4,3 +4,5 @@ export * from './types';
 export * from './jornadas/fuso';
 export * from './jornadas/agruparPorDia';
 export * from './jornadas/limite';
+export * from './jornadas/distancia';
+export * from './rh/calendario';
