@@ -58,7 +58,7 @@ test('lista os atestados com o rótulo de situação de cada um', async () => {
     atestadoFake({ id: 3, status: StatusAtestado.REJEITADO, motivoRejeicao: 'Foto ilegível' }),
   ]);
 
-  render(<Atestados />);
+  await render(<Atestados />);
 
   await waitFor(() => expect(screen.getByText('EM ANÁLISE')).toBeTruthy());
   expect(screen.getByText('APROVADO')).toBeTruthy();
@@ -67,7 +67,7 @@ test('lista os atestados com o rótulo de situação de cada um', async () => {
 });
 
 test('sem atestados mostra o estado vazio', async () => {
-  render(<Atestados />);
+  await render(<Atestados />);
 
   await waitFor(() => expect(screen.getByText('Nenhum atestado enviado ainda.')).toBeTruthy());
 });
@@ -75,7 +75,7 @@ test('sem atestados mostra o estado vazio', async () => {
 test('falha ao carregar mostra erro e permite tentar de novo', async () => {
   listarMock.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce([atestadoFake()]);
 
-  render(<Atestados />);
+  await render(<Atestados />);
   await waitFor(() =>
     expect(screen.getByText('Não foi possível carregar seus atestados')).toBeTruthy(),
   );
@@ -89,7 +89,7 @@ test('novo atestado: enviar fecha o formulário, avisa e recarrega a lista', asy
   enviarMock.mockResolvedValue(atestadoFake());
   listarMock.mockResolvedValueOnce([]).mockResolvedValueOnce([atestadoFake()]);
 
-  render(<Atestados />);
+  await render(<Atestados />);
   await waitFor(() => expect(screen.getByText('Nenhum atestado enviado ainda.')).toBeTruthy());
 
   await fireEvent.press(screen.getByText('Novo atestado'));
