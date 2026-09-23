@@ -57,13 +57,12 @@ export default function EspelhoPonto() {
   }, [token, usuarioId, ano, mes])
 
   return (
-    <LayoutAutenticado aba="Banco de Horas">
+    <LayoutAutenticado itemAtivo="/espelho-ponto" titulo="Espelho de Ponto">
       <Cartao
         elevacao="elev1"
         tom="padrao"
         conteudo={
           <div className="space-y-16">
-            <h1 className="text-title-lg font-bold text-on-surface">Espelho de Ponto</h1>
             {erro && <Alerta variante="erro" mensagem={erro} />}
             {espelho && (
               <>

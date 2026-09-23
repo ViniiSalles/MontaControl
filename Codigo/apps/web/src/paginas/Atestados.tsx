@@ -126,14 +126,13 @@ export default function Atestados() {
       ]
 
   return (
-    <LayoutAutenticado aba="Atestados">
+    <LayoutAutenticado itemAtivo="/atestados" titulo="Atestados">
       <div className="space-y-24">
         <Cartao
           elevacao="elev1"
           tom="padrao"
           conteudo={
             <div className="space-y-16">
-              <h1 className="text-title-lg font-bold text-on-surface">Gestão de Atestados</h1>
               {erro && <Alerta variante="erro" mensagem={erro} />}
               {aviso && <Alerta variante="sucesso" mensagem={aviso} />}
               <CampoTexto

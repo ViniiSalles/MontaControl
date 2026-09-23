@@ -26,14 +26,14 @@ test.describe('N1T1 — login por perfil administrativo', () => {
     await login(page, USUARIOS.gestor, SENHA_SEED)
 
     await expect(page).toHaveURL(/\/dashboard$/)
-    await expect(page.getByRole('heading', { name: 'Dashboard Gerencial' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible()
   })
 
   test('RH → Gestão de Atestados', async ({ page }) => {
     await login(page, USUARIOS.rh, SENHA_SEED)
 
     await expect(page).toHaveURL(/\/atestados$/)
-    await expect(page.getByRole('heading', { name: 'Gestão de Atestados' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Atestados', exact: true })).toBeVisible()
   })
 
   test('DEPOSITO → Triagem de Peças', async ({ page }) => {

@@ -70,14 +70,14 @@ export default function Montadores() {
   }
 
   return (
-    <LayoutAutenticado aba="Montadores">
+    <LayoutAutenticado itemAtivo="/montadores" titulo="Montadores">
       <div className="space-y-24">
         <Cartao
           elevacao="elev1"
           tom="padrao"
           conteudo={
             <div className="space-y-16">
-              <h1 className="text-title-lg font-bold text-on-surface">Cadastro de Montadores</h1>
+              <h2 className="text-title-md font-bold text-on-surface">Novo montador</h2>
               {erro && <Alerta variante="erro" mensagem={erro} />}
               {aviso && <Alerta variante="sucesso" mensagem={aviso} />}
               <div className="grid grid-cols-4 gap-16">

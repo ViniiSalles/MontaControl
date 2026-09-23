@@ -90,14 +90,13 @@ export default function BancoHoras() {
   }
 
   return (
-    <LayoutAutenticado aba="Banco de Horas">
+    <LayoutAutenticado itemAtivo="/banco-horas" titulo="Banco de Horas">
       <div className="space-y-24">
         <Cartao
           elevacao="elev1"
           tom="padrao"
           conteudo={
             <div className="space-y-16">
-              <h1 className="text-title-lg font-bold text-on-surface">Banco de Horas</h1>
               {erro && <Alerta variante="erro" mensagem={erro} />}
               {aviso && <Alerta variante="sucesso" mensagem={aviso} />}
               <div className="flex items-center gap-16">

@@ -64,6 +64,14 @@ function App() {
             }
           />
           <Route
+            path="/espelho-ponto"
+            element={
+              <RotaProtegida perfilExigido={Perfil.RH}>
+                <EspelhoPonto />
+              </RotaProtegida>
+            }
+          />
+          <Route
             path="/espelho-ponto/:usuarioId"
             element={
               <RotaProtegida perfilExigido={Perfil.RH}>
