@@ -33,7 +33,6 @@ export function ModalNovoMontador({ visivel, erro, aoFechar, aoCadastrar }: Prop
     setSalvando(true)
     try {
       await aoCadastrar(dados)
-      setDados(VAZIO)
     } catch {
       // A página já guardou a mensagem em `erro`; aqui só mantemos os dados digitados.
     } finally {

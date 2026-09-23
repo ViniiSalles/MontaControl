@@ -172,15 +172,17 @@ export default function Montadores() {
         </div>
       </div>
 
-      <ModalNovoMontador
-        visivel={modalAberto}
-        erro={modalAberto ? erro : null}
-        aoFechar={() => {
-          setModalAberto(false)
-          setErro(null)
-        }}
-        aoCadastrar={aoCadastrar}
-      />
+      {modalAberto && (
+        <ModalNovoMontador
+          visivel={modalAberto}
+          erro={modalAberto ? erro : null}
+          aoFechar={() => {
+            setModalAberto(false)
+            setErro(null)
+          }}
+          aoCadastrar={aoCadastrar}
+        />
+      )}
     </LayoutAutenticado>
   )
 }

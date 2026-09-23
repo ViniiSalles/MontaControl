@@ -27,3 +27,20 @@ test('N3T1 — RH cadastra um montador e depois o inativa', async ({ page }) => 
   await linha.getByRole('button', { name: 'Inativar' }).click()
   await expect(linha).toContainText('Inativo')
 })
+
+// Regressão: cancelar o modal não pode deixar dados (inclusive senha) para a próxima abertura.
+test('N3T1 — modal "Novo Montador" abre sempre vazio, mesmo após cancelar com dados digitados', async ({ page }) => {
+  await entrarComoRh(page)
+  await page.getByRole('link', { name: 'Montadores' }).click()
+
+  await page.getByRole('button', { name: 'Novo Montador' }).click()
+  let modal = page.getByRole('dialog', { name: 'Novo Montador' })
+  await modal.getByRole('textbox', { name: 'Nome', exact: true }).fill('Rascunho Descartado')
+  await modal.getByRole('button', { name: 'Cancelar' }).click()
+  await expect(modal).toBeHidden()
+
+  await page.getByRole('button', { name: 'Novo Montador' }).click()
+  modal = page.getByRole('dialog', { name: 'Novo Montador' })
+  await expect(modal.getByRole('textbox', { name: 'Nome', exact: true })).toHaveValue('')
+  await modal.getByRole('button', { name: 'Cancelar' }).click()
+})
