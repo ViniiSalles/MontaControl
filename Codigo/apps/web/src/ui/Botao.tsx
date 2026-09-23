@@ -34,6 +34,7 @@ export function Botao({
   forma,
   texto,
   icone,
+  rotuloAcessivel,
   carregando = false,
   larguraTotal = false,
   desabilitado = false,
@@ -46,6 +47,7 @@ export function Botao({
       type="button"
       onClick={aoPressionar}
       disabled={desabilitado || carregando}
+      aria-label={ehIcone ? (rotuloAcessivel ?? texto) : undefined}
       className={[
         'inline-flex items-center justify-center gap-8 font-bold transition-all active:scale-[0.98]',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2',
