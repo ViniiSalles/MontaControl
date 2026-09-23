@@ -2,10 +2,9 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "jsx": "react-native",
-    "module": "esnext",
     "moduleResolution": "bundler",
-    "types": ["node", "react-native", "jest"]
+    "types": ["react-native", "jest"]
   },
   "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "scripts"]
 }
