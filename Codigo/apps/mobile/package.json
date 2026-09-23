@@ -36,6 +36,7 @@
     "@types/react": "~19.2.2",
     "jest": "~29.7.0",
     "jest-expo": "~57.0.5",
+    "tsx": "^4.19.2",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -44,7 +45,8 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "eslint \"src/**/*.{ts,tsx}\" \"App.tsx\"",
-    "test": "jest"
+    "test": "jest",
+    "gerar:icones": "tsx scripts/gerar-icones.ts"
   },
   "private": true
 }
