@@ -84,6 +84,14 @@ assert.equal(preset.colors['on-ancora-variant'], cores.onAncoraVariant);
 assert.equal(espacamentoNomeado.larguraBarraLateral, 256);
 assert.equal(espacamentoNomeado.larguraPainelLateral, 440);
 assert.equal(espacamentoNomeado.alturaGrafico, 160);
+// PainelLateral sticky (Task 6, fix round 1): altura da prévia do
+// documento e o topo do `sticky` = alturaBarraSuperior (64) + paddingTelaWeb (32).
+assert.equal(espacamentoNomeado.alturaPreviaDocumento, 320);
+assert.equal(espacamentoNomeado.topoPainelLateral, 96);
+assert.equal(
+  espacamentoNomeado.topoPainelLateral,
+  espacamentoNomeado.alturaBarraSuperior + espacamentoNomeado.paddingTelaWeb,
+);
 
 // Ícones: lista em runtime (gerador do mobile) sem duplicatas.
 assert.equal(new Set(NOMES_ICONE).size, NOMES_ICONE.length);

@@ -9,14 +9,20 @@ interface PropsPainelLateral {
   rodape?: ReactNode
 }
 
-/** Painel de detalhe à direita (master/detail) — `gest_o_de_atestados`, `banco_de_horas`. */
+/**
+ * Painel de detalhe à direita (master/detail) — `gest_o_de_atestados`,
+ * `banco_de_horas`. Em `lg`, fica `sticky` abaixo do cabeçalho e limitado à
+ * altura da viewport (`topoPainelLateral` = `alturaBarraSuperior` +
+ * `paddingTelaWeb`, ver `espacamento.ts`) — só o corpo rola
+ * (`min-h-0 flex-1 overflow-y-auto`), cabeçalho e rodapé sempre visíveis.
+ */
 export function PainelLateral({ titulo, subtitulo, aoFechar, children, rodape }: PropsPainelLateral) {
   return (
     <aside
       aria-label={titulo}
-      className="flex w-full shrink-0 flex-col overflow-hidden rounded-xl bg-surface-container-lowest shadow-elev3 lg:w-larguraPainelLateral"
+      className="flex w-full shrink-0 flex-col overflow-hidden rounded-xl bg-surface-container-lowest shadow-elev3 lg:sticky lg:top-topoPainelLateral lg:w-larguraPainelLateral lg:max-h-[calc(100dvh-theme(spacing.topoPainelLateral)-theme(spacing.32))]"
     >
-      <header className="flex items-start justify-between gap-16 px-24 pb-16 pt-24">
+      <header className="flex shrink-0 items-start justify-between gap-16 px-24 pb-16 pt-24">
         <div>
           <h2 className="text-headline-sm text-on-surface">{titulo}</h2>
           {subtitulo && <p className="text-body-sm text-on-surface-variant">{subtitulo}</p>}
@@ -27,8 +33,8 @@ export function PainelLateral({ titulo, subtitulo, aoFechar, children, rodape }:
           </button>
         )}
       </header>
-      <div className="flex-1 space-y-24 overflow-y-auto px-24 pb-24">{children}</div>
-      {rodape && <footer className="flex gap-12 bg-surface-container-low px-24 py-16">{rodape}</footer>}
+      <div className="min-h-0 flex-1 space-y-24 overflow-y-auto px-24 pb-24">{children}</div>
+      {rodape && <footer className="flex shrink-0 gap-12 bg-surface-container-low px-24 py-16">{rodape}</footer>}
     </aside>
   )
 }

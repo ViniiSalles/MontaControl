@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { StatusAtestado } from '@montacontrol/shared'
 import type { AtestadoDTO, AtestadoDetalhadoDTO } from '@montacontrol/shared'
 import { useAuth } from '../auth/AuthContext'
@@ -36,6 +36,8 @@ export default function Atestados() {
   const [erro, setErro] = useState<string | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
   const [recarregar, setRecarregar] = useState(0)
+  /** Guarda contra corrida: só a resposta da seleção mais recente pode atualizar `detalhe`/`erro`. */
+  const idRequisicaoRef = useRef(0)
 
   useEffect(() => {
     let ativo = true
@@ -57,14 +59,27 @@ export default function Atestados() {
   const linhas = [...pendentes, ...historico].filter((atestado) => atestado.usuarioNome.toLowerCase().includes(termo))
 
   async function aoSelecionar(atestado: AtestadoDTO) {
+    // Uma aprovação/recusa em andamento não pode ser interrompida por uma
+    // nova seleção — a tabela continua navegável, o clique só é ignorado.
+    if (enviando) return
+    const idRequisicao = ++idRequisicaoRef.current
     setErro(null)
+    setAviso(null)
     setMotivo('')
     setErroMotivo(undefined)
     try {
-      setDetalhe(await detalharAtestado(token, atestado.id))
+      const detalhado = await detalharAtestado(token, atestado.id)
+      // Só aplica se ainda for a seleção mais recente — evita que uma
+      // resposta antiga (A) sobrescreva uma seleção mais nova (B).
+      if (idRequisicaoRef.current === idRequisicao) setDetalhe(detalhado)
     } catch (causa: unknown) {
-      setErro(mensagemDe(causa, 'Falha ao abrir o atestado.'))
+      if (idRequisicaoRef.current === idRequisicao) setErro(mensagemDe(causa, 'Falha ao abrir o atestado.'))
     }
+  }
+
+  function aoFechar() {
+    if (enviando) return
+    setDetalhe(null)
   }
 
   function concluir(mensagem: string) {
@@ -176,7 +191,7 @@ export default function Atestados() {
           }}
           aoAprovar={() => void aoAprovar()}
           aoRecusar={() => void aoRecusar()}
-          aoFechar={() => setDetalhe(null)}
+          aoFechar={aoFechar}
           enviando={enviando}
         />
       </div>

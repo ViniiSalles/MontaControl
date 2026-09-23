@@ -82,7 +82,7 @@ export function PainelAtestado({
         <div className="grid gap-8">
           {atestado.fotos.map((foto) => (
             <a key={foto.id} href={foto.url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-xl bg-surface-container-low shadow-elev1">
-              <img src={foto.url} alt="Foto do atestado" className="w-full object-contain" />
+              <img src={foto.url} alt="Foto do atestado" className="max-h-alturaPreviaDocumento w-full object-contain" />
             </a>
           ))}
         </div>
