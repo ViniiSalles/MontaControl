@@ -68,7 +68,7 @@ export function TabelaDados<T>({
             return (
               <Fragment key={id}>
                 <tr
-                  aria-selected={aoSelecionar ? ativa : undefined}
+                  aria-current={aoSelecionar && ativa ? 'true' : undefined}
                   tabIndex={aoSelecionar ? 0 : undefined}
                   onClick={aoSelecionar ? () => aoSelecionar(linha) : undefined}
                   onKeyDown={
