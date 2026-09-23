@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Perfil } from '@montacontrol/shared'
 import type { NomeIcone } from '@montacontrol/design-tokens/icones'
@@ -49,6 +49,8 @@ export function LayoutAutenticado({ itemAtivo, titulo, complementoTitulo, childr
   const { sessao, sair } = useAuth()
   const navigate = useNavigate()
   const [menuAberto, setMenuAberto] = useState(false)
+  const refBotaoAbrir = useRef<HTMLButtonElement>(null)
+  const refBotaoFechar = useRef<HTMLButtonElement>(null)
   const perfil = sessao?.usuario.perfil as PerfilWeb | undefined
   const itens = perfil ? ITENS_POR_PERFIL[perfil] : []
 
@@ -57,26 +59,53 @@ export function LayoutAutenticado({ itemAtivo, titulo, complementoTitulo, childr
     navigate('/login', { replace: true })
   }
 
+  function abrirMenu() {
+    setMenuAberto(true)
+    // Foco só pode ir para o botão "Fechar menu" depois que a gaveta deixa de
+    // ser `invisible` (senão o navegador ignora `.focus()` num elemento fora
+    // da árvore de foco) — por isso o próximo frame, não um `useEffect`.
+    requestAnimationFrame(() => refBotaoFechar.current?.focus())
+  }
+
+  function fecharMenu() {
+    setMenuAberto(false)
+    refBotaoAbrir.current?.focus()
+  }
+
+  function aoTeclarNaGaveta(evento: KeyboardEvent<HTMLElement>) {
+    if (evento.key === 'Escape' && menuAberto) fecharMenu()
+  }
+
   return (
     <div className="min-h-screen bg-surface">
       {menuAberto && (
         <div aria-hidden="true" onClick={() => setMenuAberto(false)} className="fixed inset-0 z-40 bg-scrim/40 lg:hidden" />
       )}
       <aside
+        onKeyDown={aoTeclarNaGaveta}
         className={[
           'fixed inset-y-0 left-0 z-50 flex w-larguraBarraLateral flex-col bg-ancora px-16 py-24 transition-transform print:hidden',
-          menuAberto ? 'translate-x-0' : '-translate-x-full',
-          'lg:translate-x-0',
+          menuAberto ? 'visible translate-x-0' : 'invisible -translate-x-full',
+          'lg:visible lg:translate-x-0',
         ].join(' ')}
       >
         <div className="mb-40 flex items-center gap-12 px-8">
           <span className="flex h-40 w-40 items-center justify-center rounded-lg bg-primary-container">
             <SimboloMaterial nome="conveyor_belt" className="text-2xl text-on-ancora" />
           </span>
-          <div>
+          <div className="flex-1">
             <p className="text-headline-sm text-on-ancora">MontaControl</p>
             <p className="text-overline uppercase text-on-ancora-apagado">Operational Excellence</p>
           </div>
+          <button
+            ref={refBotaoFechar}
+            type="button"
+            aria-label="Fechar menu"
+            onClick={fecharMenu}
+            className="rounded-lg p-8 text-on-ancora-variant hover:text-on-ancora lg:hidden"
+          >
+            <SimboloMaterial nome="close" className="text-2xl" />
+          </button>
         </div>
         <nav aria-label="Seções" className="flex-1 space-y-4">
           {itens.map((item) => {
@@ -115,7 +144,13 @@ export function LayoutAutenticado({ itemAtivo, titulo, complementoTitulo, childr
       <div className="lg:pl-larguraBarraLateral print:pl-0">
         <header className="sticky top-0 z-30 flex h-alturaBarraSuperior items-center justify-between gap-16 bg-surface/80 px-32 shadow-elev4 backdrop-blur-md print:hidden">
           <div className="flex min-w-0 items-center gap-16">
-            <button type="button" aria-label="Abrir menu" onClick={() => setMenuAberto(true)} className="rounded-lg p-8 text-on-surface-variant lg:hidden">
+            <button
+              ref={refBotaoAbrir}
+              type="button"
+              aria-label="Abrir menu"
+              onClick={abrirMenu}
+              className="rounded-lg p-8 text-on-surface-variant lg:hidden"
+            >
               <SimboloMaterial nome="menu" className="text-2xl" />
             </button>
             <h1 className="truncate text-headline-sm text-primary">{titulo}</h1>
