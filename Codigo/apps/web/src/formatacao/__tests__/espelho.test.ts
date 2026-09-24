@@ -7,6 +7,7 @@ import {
   hojeCivil,
   ocorrenciaDoDia,
   resumoDoMes,
+  saldoDoDia,
   ultimosDiasComMarcacao,
 } from '../espelho.ts'
 
@@ -90,4 +91,20 @@ test('faltas, resumo e últimos dias', () => {
 
 test('hoje civil no fuso do navegador', () => {
   assert.equal(hojeCivil(new Date('2026-09-24T02:00:00.000Z')), '2026-09-23')
+})
+
+test('saldoDoDia: abonado útil sem trabalho não desconta a jornada', () => {
+  assert.equal(saldoDoDia(dia({ data: '2026-05-05', diaUtil: true, abonado: true, minutosTrabalhados: 0 })), 0)
+})
+
+test('saldoDoDia: dia útil desconta a jornada padrão', () => {
+  assert.equal(saldoDoDia(dia({ data: '2026-05-05', diaUtil: true, minutosTrabalhados: 300 })), -180)
+})
+
+test('saldoDoDia: dia não útil conta tudo como extra', () => {
+  assert.equal(saldoDoDia(dia({ data: '2026-05-09', diaUtil: false, minutosTrabalhados: 120 })), 120)
+})
+
+test('saldoDoDia: abonado com trabalho soma o trabalhado', () => {
+  assert.equal(saldoDoDia(dia({ data: '2026-05-05', diaUtil: true, abonado: true, minutosTrabalhados: 300 })), 300)
 })

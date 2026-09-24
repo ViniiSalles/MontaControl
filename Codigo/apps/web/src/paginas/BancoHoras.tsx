@@ -37,6 +37,7 @@ export default function BancoHoras() {
   const [busca, setBusca] = useState('')
   const [selecionadoId, setSelecionadoId] = useState<number | null>(null)
   const [espelho, setEspelho] = useState<EspelhoPontoDTO | null>(null)
+  const [falhaEspelho, setFalhaEspelho] = useState<{ id: number; ano: number; mes: number } | null>(null)
   const [emRejeicao, setEmRejeicao] = useState<SolicitacaoPontoDTO | null>(null)
   const [motivo, setMotivo] = useState('')
   const [erro, setErro] = useState<string | null>(null)
@@ -69,11 +70,15 @@ export default function BancoHoras() {
     let ativo = true
     buscarEspelhoPonto(token, idDoDetalhe, ano, mes)
       .then((dados) => {
-        if (ativo) setEspelho(dados)
+        if (!ativo) return
+        setEspelho(dados)
+        setFalhaEspelho(null)
       })
       .catch(() => {
         // O detalhe é complementar à tabela: falha aqui não bloqueia o painel.
-        if (ativo) setEspelho(null)
+        if (!ativo) return
+        setEspelho(null)
+        setFalhaEspelho({ id: idDoDetalhe, ano, mes })
       })
     return () => {
       ativo = false
@@ -81,6 +86,7 @@ export default function BancoHoras() {
   }, [token, idDoDetalhe, ano, mes, recarregar])
 
   const espelhoDoSelecionado = espelho && espelho.usuarioId === idDoDetalhe && espelho.ano === ano && espelho.mes === mes ? espelho : null
+  const espelhoFalhou = falhaEspelho !== null && falhaEspelho.id === idDoDetalhe && falhaEspelho.ano === ano && falhaEspelho.mes === mes
   const pendenteDoSelecionado =
     compensacoes.filter((item) => item.usuarioId === idDoDetalhe).sort((a, b) => a.data.localeCompare(b.data))[0] ?? null
 
@@ -217,6 +223,7 @@ export default function BancoHoras() {
                 <DetalheMontador
                   saldo={selecionado}
                   espelho={espelhoDoSelecionado}
+                  falhaEspelho={espelhoFalhou && !espelhoDoSelecionado}
                   compensacaoPendente={pendenteDoSelecionado}
                   ano={ano}
                   mes={mes}
@@ -240,7 +247,10 @@ export default function BancoHoras() {
         visivel={emRejeicao !== null}
         apresentacao="centro"
         titulo="Rejeitar compensação"
-        aoFechar={() => setEmRejeicao(null)}
+        aoFechar={() => {
+          setEmRejeicao(null)
+          setMotivo('')
+        }}
         acoes={[{ texto: 'Confirmar rejeição', aoPressionar: () => void aoConfirmarRejeicao() }]}
         conteudo={<CampoTexto rotulo="Motivo da rejeição" valor={motivo} aoAlterar={setMotivo} />}
       />

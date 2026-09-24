@@ -66,3 +66,8 @@ export function hojeCivil(agora: Date = new Date()): string {
   const doisDigitos = (valor: number) => String(valor).padStart(2, '0')
   return `${agora.getFullYear()}-${doisDigitos(agora.getMonth() + 1)}-${doisDigitos(agora.getDate())}`
 }
+
+/** Saldo do dia contra a jornada padrão (dia não útil conta tudo como extra; abonado não desconta, o abono é somado no backend). */
+export function saldoDoDia(dia: DiaEspelhoDTO): number {
+  return dia.minutosTrabalhados - (dia.diaUtil && !dia.abonado ? MINUTOS_JORNADA_PADRAO : 0)
+}

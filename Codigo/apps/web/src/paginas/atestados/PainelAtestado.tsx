@@ -106,7 +106,7 @@ export function PainelAtestado({
       {pendente ? (
         <CampoAreaTexto
           rotulo="Feedback de RH (motivo da recusa)"
-          placeholder="Obrigatório para recusar; opcional para aprovar."
+          placeholder="Obrigatório para recusar."
           valor={motivo}
           aoAlterar={aoAlterarMotivo}
           erro={erroMotivo}

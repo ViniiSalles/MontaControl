@@ -39,7 +39,7 @@ export function TabelaDados<T>({
   linhasExtras,
 }: PropsTabelaDados<T>) {
   return (
-    <div className="overflow-x-auto rounded-xl bg-surface-container-lowest shadow-elev1">
+    <div className="overflow-x-auto print:overflow-visible rounded-xl bg-surface-container-lowest shadow-elev1">
       <table aria-label={rotulo} className="w-full text-body-md text-on-surface">
         <thead className="bg-surface-container-low text-label-md uppercase text-on-surface-variant">
           <tr>

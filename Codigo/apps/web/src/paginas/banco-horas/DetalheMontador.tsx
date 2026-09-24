@@ -1,8 +1,7 @@
 import { Link } from 'react-router-dom'
-import { MINUTOS_JORNADA_PADRAO } from '@montacontrol/shared'
 import type { DiaEspelhoDTO, EspelhoPontoDTO, SaldoMontadorDTO, SolicitacaoPontoDTO } from '@montacontrol/shared'
 import { formatarDiaMes, nomeDoMes } from '../../formatacao/datas'
-import { resumoDoMes, ultimosDiasComMarcacao } from '../../formatacao/espelho'
+import { resumoDoMes, saldoDoDia, ultimosDiasComMarcacao } from '../../formatacao/espelho'
 import { formatarMinutos } from '../../formatacao/horas'
 import { Botao } from '../../ui/Botao'
 import { PainelLateral } from '../../ui/PainelLateral'
@@ -16,14 +15,10 @@ function rotuloDoDia(dia: DiaEspelhoDTO): string {
   return 'Jornada regular'
 }
 
-/** Saldo do dia contra a jornada padrão (dia não útil conta tudo como extra). */
-function saldoDoDia(dia: DiaEspelhoDTO): number {
-  return dia.minutosTrabalhados - (dia.diaUtil ? MINUTOS_JORNADA_PADRAO : 0)
-}
-
 interface PropsDetalheMontador {
   saldo: SaldoMontadorDTO
   espelho: EspelhoPontoDTO | null
+  falhaEspelho: boolean
   compensacaoPendente: SolicitacaoPontoDTO | null
   ano: number
   mes: number
@@ -31,7 +26,7 @@ interface PropsDetalheMontador {
   aoRejeitar: (compensacao: SolicitacaoPontoDTO) => void
 }
 
-export function DetalheMontador({ saldo, espelho, compensacaoPendente, ano, mes, aoAprovar, aoRejeitar }: PropsDetalheMontador) {
+export function DetalheMontador({ saldo, espelho, falhaEspelho, compensacaoPendente, ano, mes, aoAprovar, aoRejeitar }: PropsDetalheMontador) {
   const resumo = espelho ? resumoDoMes(espelho.dias) : null
   const ultimos = espelho ? ultimosDiasComMarcacao(espelho.dias, 3) : []
 
@@ -59,7 +54,9 @@ export function DetalheMontador({ saldo, espelho, compensacaoPendente, ano, mes,
         }
       >
         {!resumo ? (
-          <p className="py-24 text-center text-body-md text-on-surface-variant">Carregando marcações…</p>
+          <p className="py-24 text-center text-body-md text-on-surface-variant">
+            {falhaEspelho ? 'Não foi possível carregar as marcações.' : 'Carregando marcações…'}
+          </p>
         ) : (
           <>
             <div className="flex items-start justify-between">
@@ -89,12 +86,12 @@ export function DetalheMontador({ saldo, espelho, compensacaoPendente, ano, mes,
                 )
               })}
             </section>
-            <Link to={`/espelho-ponto/${saldo.usuarioId}?ano=${ano}&mes=${mes}`} className="inline-flex items-center gap-4 text-title-sm text-primary hover:underline">
-              Ver espelho de ponto
-              <SimboloMaterial nome="chevron_right" className="text-xl" />
-            </Link>
           </>
         )}
+        <Link to={`/espelho-ponto/${saldo.usuarioId}?ano=${ano}&mes=${mes}`} className="inline-flex items-center gap-4 text-title-sm text-primary hover:underline">
+          Ver espelho de ponto
+          <SimboloMaterial nome="chevron_right" className="text-xl" />
+        </Link>
       </PainelLateral>
 
       {compensacaoPendente && (

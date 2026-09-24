@@ -143,7 +143,11 @@ export default function Montadores() {
               aoAlterar={aoBuscar}
             />
           </div>
-          <Botao variante="primario" tamanho={48} forma="pilula" icone="add" texto="Novo Montador" aoPressionar={() => setModalAberto(true)} />
+          <Botao variante="primario" tamanho={48} forma="pilula" icone="add" texto="Novo Montador" aoPressionar={() => {
+            setErro(null)
+            setAviso(null)
+            setModalAberto(true)
+          }} />
         </div>
 
         {erro && <Alerta variante="erro" mensagem={erro} />}
@@ -175,7 +179,7 @@ export default function Montadores() {
       {modalAberto && (
         <ModalNovoMontador
           visivel={modalAberto}
-          erro={modalAberto ? erro : null}
+          erro={erro}
           aoFechar={() => {
             setModalAberto(false)
             setErro(null)

@@ -79,7 +79,7 @@ export function LayoutAutenticado({ itemAtivo, titulo, complementoTitulo, childr
   return (
     <div className="min-h-screen bg-surface">
       {menuAberto && (
-        <div aria-hidden="true" onClick={() => setMenuAberto(false)} className="fixed inset-0 z-40 bg-scrim/40 lg:hidden" />
+        <div aria-hidden="true" onClick={fecharMenu} className="fixed inset-0 z-40 bg-scrim/40 lg:hidden" />
       )}
       <aside
         onKeyDown={aoTeclarNaGaveta}

@@ -79,6 +79,7 @@ export default function Atestados() {
 
   function aoFechar() {
     if (enviando) return
+    idRequisicaoRef.current++
     setDetalhe(null)
   }
 
