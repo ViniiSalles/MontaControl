@@ -22,6 +22,7 @@ export async function criarAtestadoPendente(
   request: APIRequestContext,
   token: string,
   dia: string,
+  observacao?: string,
 ): Promise<number> {
   const resposta = await request.post('/api/atestados', {
     headers: { Authorization: `Bearer ${token}` },
@@ -30,6 +31,7 @@ export async function criarAtestadoPendente(
       dataInicio: dia,
       dataFim: dia,
       fotos: [{ conteudoBase64: UM_PIXEL_PNG_BASE64, mimeType: 'image/png' }],
+      ...(observacao && { observacao }),
     },
   })
   const corpo = (await resposta.json()) as { id: number }
