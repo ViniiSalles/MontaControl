@@ -218,6 +218,8 @@ export interface EnviarAtestadoRequest {
   dataInicio: string;
   /** `YYYY-MM-DD`, inclusivo. */
   dataFim: string;
+  /** Texto livre do montador (até 500 caracteres); opcional. */
+  observacao?: string;
   /** Ao menos uma foto; o atestado sem documento não é analisável. */
   fotos: FotoBase64[];
 }
@@ -229,6 +231,7 @@ export interface AtestadoDTO {
   usuarioNome: string;
   dataInicio: string;
   dataFim: string;
+  observacao: string | null;
   status: StatusAtestado;
   motivoRejeicao: string | null;
   validadoPor: number | null;

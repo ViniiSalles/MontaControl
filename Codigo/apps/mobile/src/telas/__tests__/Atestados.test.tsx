@@ -31,6 +31,7 @@ function atestadoFake(parcial: Partial<AtestadoDTO> = {}): AtestadoDTO {
     usuarioNome: montador.nome,
     dataInicio: '2026-09-01',
     dataFim: '2026-09-03',
+    observacao: null,
     status: StatusAtestado.PENDENTE,
     motivoRejeicao: null,
     validadoPor: null,

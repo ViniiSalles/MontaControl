@@ -52,6 +52,7 @@ export class AtestadosService {
       idCliente: dados.idCliente,
       dataInicio: dados.dataInicio,
       dataFim: dados.dataFim,
+      observacao: dados.observacao?.trim() || null,
       fotos: enviadas,
     });
   }

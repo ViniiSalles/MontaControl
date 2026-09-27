@@ -6,7 +6,10 @@ import {
   IsBase64,
   IsIn,
   IsISO8601,
+  IsOptional,
+  IsString,
   IsUUID,
+  MaxLength,
   ValidateNested,
 } from 'class-validator';
 import type { EnviarAtestadoRequest, FotoBase64 } from '@montacontrol/shared';
@@ -28,6 +31,11 @@ export class EnviarAtestadoDto implements EnviarAtestadoRequest {
 
   @IsISO8601({ strict: true })
   dataFim!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  observacao?: string;
 
   @IsArray()
   @ArrayNotEmpty()

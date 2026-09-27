@@ -314,6 +314,7 @@ model Atestado {
   idCliente      String         @unique @map("id_cliente") @db.Uuid
   dataInicio     DateTime       @map("data_inicio") @db.Date
   dataFim        DateTime       @map("data_fim") @db.Date
+  observacao     String?
   status         StatusAtestado @default(PENDENTE)
   motivoRejeicao String?        @map("motivo_rejeicao")
   validadoPor    Int?           @map("validado_por")
