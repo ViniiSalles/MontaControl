@@ -11,6 +11,7 @@ export interface DadosNovoUsuario {
   nome: string;
   email: string;
   telefone: string | null;
+  cpf: string | null;
   perfil: Perfil;
   authUserId: string;
 }
@@ -26,6 +27,11 @@ function ehViolacaoDeUnicidade(erro: unknown): boolean {
     'code' in erro &&
     (erro as { code?: unknown }).code === CODIGO_PRISMA_VIOLACAO_UNICIDADE
   );
+}
+
+function alvoDaViolacao(erro: unknown): string {
+  const meta = (erro as { meta?: { target?: unknown } }).meta;
+  return Array.isArray(meta?.target) ? meta.target.join(',') : String(meta?.target ?? '');
 }
 
 function ehRegistroNaoEncontrado(erro: unknown): boolean {
@@ -53,6 +59,8 @@ const SELECAO_USUARIO_LISTADO = {
   telefone: true,
   perfil: true,
   ativo: true,
+  cpf: true,
+  createdAt: true,
 } as const;
 
 @Injectable()
@@ -80,15 +88,26 @@ export class UsuariosRepository {
     });
   }
 
-  /** Retorna `null` em violação de unicidade (e-mail ou authUserId já existentes). */
-  async criar(dados: DadosNovoUsuario): Promise<UsuarioListado | null> {
+  /** `null` = e-mail ou authUserId já existentes; `'CPF_DUPLICADO'` = CPF já usado por outro usuário. */
+  async criar(dados: DadosNovoUsuario): Promise<UsuarioListado | 'CPF_DUPLICADO' | null> {
     try {
       return await this.prisma.usuario.create({
         data: dados,
         select: SELECAO_USUARIO_LISTADO,
       });
     } catch (erro) {
-      if (ehViolacaoDeUnicidade(erro)) return null;
+      if (ehViolacaoDeUnicidade(erro)) return alvoDaViolacao(erro).includes('cpf') ? 'CPF_DUPLICADO' : null;
+      throw erro;
+    }
+  }
+
+  /** `null` = usuário inexistente; `'CPF_DUPLICADO'` = outro usuário já tem esse CPF. */
+  async definirCpf(id: number, cpf: string): Promise<UsuarioListado | 'CPF_DUPLICADO' | null> {
+    try {
+      return await this.prisma.usuario.update({ where: { id }, data: { cpf }, select: SELECAO_USUARIO_LISTADO });
+    } catch (erro) {
+      if (ehRegistroNaoEncontrado(erro)) return null;
+      if (ehViolacaoDeUnicidade(erro)) return 'CPF_DUPLICADO';
       throw erro;
     }
   }

@@ -1,4 +1,5 @@
 import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsCpf } from '../../common/validators/is-cpf.validator';
 import { Perfil } from '../../../generated/prisma';
 
 export class CadastrarUsuarioDto {
@@ -20,4 +21,8 @@ export class CadastrarUsuarioDto {
 
   @IsEnum(Perfil)
   perfil!: Perfil;
+
+  @IsOptional()
+  @IsCpf()
+  cpf?: string;
 }

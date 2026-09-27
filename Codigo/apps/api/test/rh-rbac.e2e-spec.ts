@@ -68,6 +68,22 @@ describe('Rotas de RH — autorização (e2e)', () => {
       .expect(403);
   });
 
+  it('MONTADOR leva 403 ao informar CPF', async () => {
+    await request(app.getHttpServer())
+      .patch(`/api/usuarios/${montador.usuarioId}/cpf`)
+      .set('Authorization', `Bearer ${tokenMontador}`)
+      .send({ cpf: '52998224725' })
+      .expect(403);
+  });
+
+  it('RH com CPF inválido leva 400', async () => {
+    await request(app.getHttpServer())
+      .patch(`/api/usuarios/${montador.usuarioId}/cpf`)
+      .set('Authorization', `Bearer ${tokenRh}`)
+      .send({ cpf: '11111111111' })
+      .expect(400);
+  });
+
   it('sem token, todas respondem 401', async () => {
     await request(app.getHttpServer()).get('/api/banco-horas').query(COMPETENCIA).expect(401);
     await request(app.getHttpServer()).get('/api/pontos-em-atraso/pendentes').expect(401);

@@ -78,6 +78,7 @@ model Usuario {
   nome       String
   email      String   @unique
   telefone   String?
+  cpf        String?  @unique @db.VarChar(11)
   authUserId String   @unique @map("auth_user_id") @db.Uuid
   perfil     Perfil
   ativo      Boolean  @default(true)

@@ -1,6 +1,8 @@
 import { ConflictException } from '@nestjs/common';
 import { Perfil } from '../../generated/prisma';
 import { SupabaseAuthGateway } from '../supabase/supabase-auth.gateway';
+import { CpfJaCadastradoException } from './exceptions/cpf-ja-cadastrado.exception';
+import { CpfObrigatorioException } from './exceptions/cpf-obrigatorio.exception';
 import { InativacaoDoProprioUsuarioException } from './exceptions/inativacao-do-proprio-usuario.exception';
 import { UsuarioNaoEncontradoException } from './exceptions/usuario-nao-encontrado.exception';
 import { UsuariosRepository } from './usuarios.repository';
@@ -11,17 +13,18 @@ const dadosCadastro = {
   email: 'nova@montacontrol.local',
   senha: 'senha-longa-123',
   perfil: Perfil.MONTADOR,
+  cpf: '52998224725',
 };
 
 const authUserId = '22222222-2222-2222-2222-222222222222';
 
 describe('UsuariosService', () => {
-  let repository: { listar: jest.Mock; criar: jest.Mock; alterarAtivo: jest.Mock };
+  let repository: { listar: jest.Mock; criar: jest.Mock; alterarAtivo: jest.Mock; definirCpf: jest.Mock };
   let supabase: { criarUsuario: jest.Mock; excluirUsuario: jest.Mock };
   let service: UsuariosService;
 
   beforeEach(() => {
-    repository = { listar: jest.fn(), criar: jest.fn(), alterarAtivo: jest.fn() };
+    repository = { listar: jest.fn(), criar: jest.fn(), alterarAtivo: jest.fn(), definirCpf: jest.fn() };
     supabase = { criarUsuario: jest.fn(), excluirUsuario: jest.fn() };
     service = new UsuariosService(
       repository as unknown as UsuariosRepository,
@@ -71,6 +74,7 @@ describe('UsuariosService', () => {
         email: dadosCadastro.email,
         telefone: null,
         perfil: dadosCadastro.perfil,
+        cpf: '52998224725',
         authUserId,
       });
       expect(supabase.excluirUsuario).not.toHaveBeenCalled();
@@ -107,6 +111,66 @@ describe('UsuariosService', () => {
 
       await expect(service.cadastrar(dadosCadastro)).rejects.toThrow(ConflictException);
       expect(supabase.excluirUsuario).toHaveBeenCalledWith(authUserId);
+    });
+  });
+
+  describe('cadastrar com CPF', () => {
+    const cpfValidoTeste = '52998224725';
+
+    it('exige CPF para MONTADOR', async () => {
+      const { cpf: _cpf, ...semCpf } = dadosCadastro;
+      await expect(service.cadastrar({ ...semCpf, perfil: Perfil.MONTADOR })).rejects.toBeInstanceOf(
+        CpfObrigatorioException,
+      );
+      expect(supabase.criarUsuario).not.toHaveBeenCalled();
+    });
+
+    it('não exige CPF para os demais perfis', async () => {
+      supabase.criarUsuario.mockResolvedValue(authUserId);
+      repository.criar.mockResolvedValue({ id: 3 });
+
+      const { cpf: _cpf, ...semCpf } = dadosCadastro;
+      await service.cadastrar({ ...semCpf, perfil: Perfil.RH });
+
+      expect(repository.criar).toHaveBeenCalledWith(expect.objectContaining({ cpf: null }));
+    });
+
+    it('grava só os dígitos do CPF', async () => {
+      supabase.criarUsuario.mockResolvedValue(authUserId);
+      repository.criar.mockResolvedValue({ id: 9 });
+
+      await service.cadastrar({ ...dadosCadastro, cpf: '529.982.247-25' });
+
+      expect(repository.criar).toHaveBeenCalledWith(expect.objectContaining({ cpf: cpfValidoTeste }));
+    });
+
+    it('CPF duplicado → 409 genérico e desfaz o Supabase', async () => {
+      supabase.criarUsuario.mockResolvedValue(authUserId);
+      repository.criar.mockResolvedValue('CPF_DUPLICADO');
+
+      await expect(service.cadastrar({ ...dadosCadastro, cpf: cpfValidoTeste })).rejects.toBeInstanceOf(
+        CpfJaCadastradoException,
+      );
+      expect(supabase.excluirUsuario).toHaveBeenCalledWith(authUserId);
+    });
+  });
+
+  describe('informarCpf', () => {
+    it('grava os dígitos e devolve o usuário', async () => {
+      repository.definirCpf.mockResolvedValue({ id: 4, cpf: '52998224725' });
+      const usuario = await service.informarCpf(4, '529.982.247-25');
+      expect(repository.definirCpf).toHaveBeenCalledWith(4, '52998224725');
+      expect(usuario).toEqual({ id: 4, cpf: '52998224725' });
+    });
+
+    it('usuário inexistente → UsuarioNaoEncontradoException', async () => {
+      repository.definirCpf.mockResolvedValue(null);
+      await expect(service.informarCpf(99, '52998224725')).rejects.toBeInstanceOf(UsuarioNaoEncontradoException);
+    });
+
+    it('CPF já usado por outro → CpfJaCadastradoException', async () => {
+      repository.definirCpf.mockResolvedValue('CPF_DUPLICADO');
+      await expect(service.informarCpf(4, '52998224725')).rejects.toBeInstanceOf(CpfJaCadastradoException);
     });
   });
 

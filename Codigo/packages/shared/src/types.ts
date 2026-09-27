@@ -55,6 +55,10 @@ export interface UsuarioDTO {
   telefone?: string | null;
   perfil: Perfil;
   ativo: boolean;
+  /** 11 dígitos. Só a listagem de usuários (RH/Gestor) projeta; ausente nas respostas de `/auth`. */
+  cpf?: string | null;
+  /** Instante ISO do cadastro. Só a listagem projeta. */
+  criadoEm?: string;
 }
 
 export interface CadastrarUsuarioRequest {
@@ -63,6 +67,11 @@ export interface CadastrarUsuarioRequest {
   senha: string;
   telefone?: string;
   perfil: Perfil;
+  cpf?: string;
+}
+
+export interface InformarCpfRequest {
+  cpf: string;
 }
 
 export interface CheckinRequest {

@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
+import { somenteDigitos } from '@montacontrol/shared';
 import { EmailJaCadastradoException } from '../common/exceptions/email-ja-cadastrado.exception';
 import { SupabaseAuthGateway } from '../supabase/supabase-auth.gateway';
 import { Perfil } from '../../generated/prisma';
+import { CpfJaCadastradoException } from './exceptions/cpf-ja-cadastrado.exception';
+import { CpfObrigatorioException } from './exceptions/cpf-obrigatorio.exception';
 import { InativacaoDoProprioUsuarioException } from './exceptions/inativacao-do-proprio-usuario.exception';
 import { UsuarioNaoEncontradoException } from './exceptions/usuario-nao-encontrado.exception';
 import { UsuariosRepository } from './usuarios.repository';
@@ -13,6 +16,7 @@ export interface DadosCadastroUsuario {
   senha: string;
   telefone?: string;
   perfil: Perfil;
+  cpf?: string;
 }
 
 @Injectable()
@@ -32,6 +36,9 @@ export class UsuariosService {
    * GoTrue já ter criado a conta, desfaz o GoTrue para não deixar órfão.
    */
   async cadastrar(dados: DadosCadastroUsuario): Promise<UsuarioListado> {
+    const cpf = dados.cpf ? somenteDigitos(dados.cpf) : null;
+    if (dados.perfil === Perfil.MONTADOR && !cpf) throw new CpfObrigatorioException();
+
     const authUserId = await this.supabase.criarUsuario(dados.email, dados.senha);
     if (!authUserId) throw new EmailJaCadastradoException();
 
@@ -40,12 +47,24 @@ export class UsuariosService {
       email: dados.email,
       telefone: dados.telefone ?? null,
       perfil: dados.perfil,
+      cpf,
       authUserId,
     });
+    if (usuario === 'CPF_DUPLICADO') {
+      await this.supabase.excluirUsuario(authUserId);
+      throw new CpfJaCadastradoException();
+    }
     if (!usuario) {
       await this.supabase.excluirUsuario(authUserId);
       throw new EmailJaCadastradoException();
     }
+    return usuario;
+  }
+
+  async informarCpf(id: number, cpf: string): Promise<UsuarioListado> {
+    const usuario = await this.usuarios.definirCpf(id, somenteDigitos(cpf));
+    if (usuario === 'CPF_DUPLICADO') throw new CpfJaCadastradoException();
+    if (!usuario) throw new UsuarioNaoEncontradoException();
     return usuario;
   }
 
