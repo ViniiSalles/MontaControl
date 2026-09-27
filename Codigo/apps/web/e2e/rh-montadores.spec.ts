@@ -25,7 +25,7 @@ test('N3T1 — RH cadastra um montador e depois o inativa', async ({ page }) => 
   const linha = page.getByRole('row', { name: new RegExp(email) })
   await expect(linha).toBeVisible()
   await expect(linha).toContainText('Ativo')
-  await expect(linha).toContainText('***')
+  await expect(linha).toContainText(/\d{3}\.\*{3}\.\*{3}-\d{2}/)
   await expect(linha).not.toContainText(cpf)
 
   await linha.getByRole('button', { name: 'Inativar' }).click()

@@ -18,6 +18,7 @@ export function ModalInformarCpf({ nome, erro, aoFechar, aoConfirmar }: PropsMod
   const [salvando, setSalvando] = useState(false)
 
   async function confirmar() {
+    if (salvando) return
     if (!cpfValido(cpf)) {
       setErroLocal('CPF inválido')
       return

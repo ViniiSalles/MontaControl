@@ -33,3 +33,9 @@ test('data de cadastro', () => {
   assert.equal(formatarDataCadastro(new Date(2026, 9, 12, 10).toISOString()), '12 Out 2026')
   assert.equal(formatarDataCadastro(undefined), '—')
 })
+
+test('termo com letras e dígitos não vira busca por CPF', () => {
+  const lista = [montador({ id: 1, email: 'ana@x.com', cpf: '17889343057' })]
+  assert.deepEqual(filtrarMontadores(lista, 'montador-1788934').map((m) => m.id), [])
+  assert.deepEqual(filtrarMontadores(lista, '178.893').map((m) => m.id), [1])
+})

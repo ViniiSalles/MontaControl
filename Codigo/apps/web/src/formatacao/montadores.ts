@@ -7,7 +7,8 @@ const MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'S
 export function filtrarMontadores(montadores: UsuarioDTO[], termo: string): UsuarioDTO[] {
   const texto = termo.trim().toLowerCase()
   if (!texto) return montadores
-  const digitos = somenteDigitos(texto)
+  const ehTermoDeCpf = /^[\d.\-\s]+$/.test(texto)
+  const digitos = ehTermoDeCpf ? somenteDigitos(texto) : ''
   return montadores.filter(
     (montador) =>
       montador.nome.toLowerCase().includes(texto) ||

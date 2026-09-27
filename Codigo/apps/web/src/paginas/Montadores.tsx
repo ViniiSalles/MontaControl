@@ -112,7 +112,7 @@ export default function Montadores() {
           <Avatar nome={montador.nome} />
           <div>
             <p className="text-title-sm text-on-surface">{montador.nome}</p>
-            <p className="text-body-sm text-on-surface-variant">{montador.email}</p>
+            <p className="break-all text-body-sm text-on-surface-variant">{montador.email}</p>
           </div>
         </div>
       ),
@@ -124,12 +124,15 @@ export default function Montadores() {
       render: (montador) =>
         montador.ativo ? <BadgeStatus variante="sucesso" texto="Ativo" /> : <BadgeStatus variante="neutro" texto="Inativo" />,
     },
-    { titulo: 'Data cadastro', render: (montador) => formatarDataCadastro(montador.criadoEm) },
+    {
+      titulo: 'Data cadastro',
+      render: (montador) => <span className="whitespace-nowrap">{formatarDataCadastro(montador.criadoEm)}</span>,
+    },
     {
       titulo: 'Ações',
       alinhamento: 'direita',
       render: (montador) => (
-        <div className="flex items-center justify-end gap-8">
+        <div className="flex items-center justify-end gap-8 whitespace-nowrap">
           {!montador.cpf && (
             <Botao
               variante="fantasma"
