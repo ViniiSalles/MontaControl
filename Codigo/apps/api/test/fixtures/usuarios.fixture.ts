@@ -52,7 +52,9 @@ export async function criarUsuarioFixture(
     email_confirm: true,
   });
   if (error || !data.user) {
-    throw new Error(`Falha ao criar usuário fixture no GoTrue: ${error?.message ?? 'sem dados de usuário'}`);
+    throw new Error(
+      `Falha ao criar usuário fixture no GoTrue: ${error?.message ?? 'sem dados de usuário'}`,
+    );
   }
 
   let usuarioId = 0;
@@ -82,7 +84,10 @@ export async function criarUsuarioFixture(
  * e relançadas ao final — uma limpeza engolida seria lixo permanente no banco
  * compartilhado, então o `afterAll` deve falhar alto em vez de só avisar.
  */
-export async function apagarUsuarioFixture(app: INestApplication, fixture: UsuarioFixture): Promise<void> {
+export async function apagarUsuarioFixture(
+  app: INestApplication,
+  fixture: UsuarioFixture,
+): Promise<void> {
   const supabase = app.get<SupabaseClient>(SUPABASE_CLIENT);
   const prisma = app.get(PrismaService);
   const falhas: string[] = [];
@@ -97,37 +102,61 @@ export async function apagarUsuarioFixture(app: INestApplication, fixture: Usuar
   if (fixture.usuarioId) {
     const id = fixture.usuarioId;
     const porUsuario = { usuarioId: id };
-    await tentar('arquivos do bucket de atestados', async () => {
+    // 1) Coleta os caminhos ANTES da transação (depois dela as linhas somem).
+    const coletado: { caminhos?: string[] } = {};
+    await tentar('leitura dos caminhos das fotos', async () => {
       const fotos = await prisma.atestadoFoto.findMany({
         where: { atestado: porUsuario },
         select: { storagePath: true },
       });
-      const bucket = process.env.SUPABASE_BUCKET_ATESTADOS;
-      if (fotos.length === 0) return;
-      if (!bucket) throw new Error('SUPABASE_BUCKET_ATESTADOS ausente');
-      const { error } = await supabase.storage.from(bucket).remove(fotos.map((f) => f.storagePath));
-      if (error) throw new Error(error.message);
+      coletado.caminhos = fotos.map((f) => f.storagePath);
     });
-    await tentar(`dependentes e linha de usuario id=${id}`, () =>
-      prisma.$transaction([
-        // Referências de outros usuários (fixtures de RH/analista) a este id: só desvincula.
-        prisma.atestado.updateMany({ where: { validadoPor: id }, data: { validadoPor: null, validadoAt: null } }),
-        prisma.solicitacaoPonto.updateMany({ where: { analisadoPor: id }, data: { analisadoPor: null } }),
-        prisma.peca.updateMany({ where: { triadaPor: id }, data: { triadaPor: null } }),
-        prisma.peca.updateMany({ where: { conferidaPor: id }, data: { conferidaPor: null } }),
-        prisma.atestadoFoto.deleteMany({ where: { atestado: porUsuario } }),
-        prisma.atestado.deleteMany({ where: porUsuario }),
-        prisma.solicitacaoPonto.deleteMany({ where: porUsuario }),
-        prisma.jornada.deleteMany({ where: porUsuario }),
-        prisma.bancoHoras.deleteMany({ where: porUsuario }),
-        prisma.avariaFoto.deleteMany({ where: { avaria: { registradaPor: id } } }),
-        prisma.avaria.deleteMany({ where: { registradaPor: id } }),
-        prisma.pedidoMontador.deleteMany({ where: porUsuario }),
-        prisma.cautela.deleteMany({ where: porUsuario }),
-        prisma.epi.deleteMany({ where: porUsuario }),
-        prisma.usuario.delete({ where: { id } }),
-      ]),
-    );
+    let bancoLimpo = false;
+    const caminhos = coletado.caminhos;
+    if (caminhos) {
+      await tentar(`dependentes e linha de usuario id=${id}`, async () => {
+        await prisma.$transaction([
+          // Referências de outros usuários (fixtures de RH/analista) a este id: só desvincula.
+          prisma.atestado.updateMany({
+            where: { validadoPor: id },
+            data: { validadoPor: null, validadoAt: null },
+          }),
+          prisma.solicitacaoPonto.updateMany({
+            where: { analisadoPor: id },
+            data: { analisadoPor: null },
+          }),
+          prisma.peca.updateMany({ where: { triadaPor: id }, data: { triadaPor: null } }),
+          prisma.peca.updateMany({ where: { conferidaPor: id }, data: { conferidaPor: null } }),
+          prisma.atestadoFoto.deleteMany({ where: { atestado: porUsuario } }),
+          prisma.atestado.deleteMany({ where: porUsuario }),
+          prisma.solicitacaoPonto.deleteMany({ where: porUsuario }),
+          prisma.jornada.deleteMany({ where: porUsuario }),
+          prisma.bancoHoras.deleteMany({ where: porUsuario }),
+          prisma.avariaFoto.deleteMany({ where: { avaria: { registradaPor: id } } }),
+          prisma.avaria.deleteMany({ where: { registradaPor: id } }),
+          prisma.pedidoMontador.deleteMany({ where: porUsuario }),
+          prisma.cautela.deleteMany({ where: porUsuario }),
+          prisma.epi.deleteMany({ where: porUsuario }),
+          prisma.usuario.delete({ where: { id } }),
+        ]);
+        bancoLimpo = true;
+      });
+    }
+    // 2) Só depois do commit remove os arquivos; se falhar, informa os caminhos para limpeza manual.
+    if (bancoLimpo && caminhos && caminhos.length > 0) {
+      await tentar('arquivos do bucket de atestados', async () => {
+        const bucket = process.env.SUPABASE_BUCKET_ATESTADOS;
+        if (!bucket)
+          throw new Error(
+            `SUPABASE_BUCKET_ATESTADOS ausente; arquivos órfãos: ${caminhos?.join(', ')}`,
+          );
+        const { error } = await supabase.storage.from(bucket).remove(caminhos ?? []);
+        if (error)
+          throw new Error(
+            `${error.message}; arquivos órfãos no bucket ${bucket}: ${caminhos?.join(', ')}`,
+          );
+      });
+    }
   }
   await tentar(`auth user id=${fixture.authUserId}`, async () => {
     const { error } = await supabase.auth.admin.deleteUser(fixture.authUserId);
@@ -143,7 +172,10 @@ export async function apagarUsuarioFixture(app: INestApplication, fixture: Usuar
  * Apaga várias fixtures (da última para a primeira). Uma falha não interrompe
  * as demais — todas são tentadas e as falhas relançadas juntas ao final.
  */
-export async function apagarUsuariosFixture(app: INestApplication, fixtures: UsuarioFixture[]): Promise<void> {
+export async function apagarUsuariosFixture(
+  app: INestApplication,
+  fixtures: UsuarioFixture[],
+): Promise<void> {
   const falhas: string[] = [];
   for (const fixture of [...fixtures].reverse()) {
     try {
