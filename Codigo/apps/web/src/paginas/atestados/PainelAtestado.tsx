@@ -106,7 +106,7 @@ export function PainelAtestado({
       <section className="space-y-8 rounded-xl bg-surface-container-low p-16">
         <h3 className="text-label-md uppercase text-on-surface-variant">Observações do colaborador</h3>
         {atestado.observacao ? (
-          <p className="text-body-md italic text-on-surface">"{atestado.observacao}"</p>
+          <p className="text-body-md italic text-on-surface">“{atestado.observacao}”</p>
         ) : (
           <p className="text-body-md text-on-surface-variant">Sem observação</p>
         )}
