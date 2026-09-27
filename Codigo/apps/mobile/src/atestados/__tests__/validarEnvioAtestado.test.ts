@@ -4,7 +4,7 @@ import type { CamposNovoAtestado } from '../validarEnvioAtestado';
 const UMA_FOTO = [{ conteudoBase64: 'abc123', mimeType: 'image/jpeg' as const }];
 
 function campos(parcial: Partial<CamposNovoAtestado> = {}): CamposNovoAtestado {
-  return { dataInicio: '01/09/2026', dataFim: '03/09/2026', ...parcial };
+  return { dataInicio: '01/09/2026', dataFim: '03/09/2026', observacao: '', ...parcial };
 }
 
 describe('validarEnvioAtestado', () => {
@@ -57,6 +57,31 @@ describe('validarEnvioAtestado', () => {
     const { erros, dados } = validarEnvioAtestado(campos(), []);
 
     expect(erros.fotos).toMatch(/foto/i);
+    expect(dados).toBeNull();
+  });
+
+  it('observação preenchida vai no corpo, aparada', () => {
+    const { dados } = validarEnvioAtestado(
+      campos({ observacao: '  Dor lombar ' }),
+      UMA_FOTO,
+    );
+    expect(dados?.observacao).toBe('Dor lombar');
+  });
+
+  it('observação vazia não entra no corpo', () => {
+    const { dados } = validarEnvioAtestado(
+      campos({ observacao: '   ' }),
+      UMA_FOTO,
+    );
+    expect(dados).not.toHaveProperty('observacao');
+  });
+
+  it('observação acima de 500 caracteres é recusada', () => {
+    const { erros, dados } = validarEnvioAtestado(
+      campos({ observacao: 'a'.repeat(501) }),
+      UMA_FOTO,
+    );
+    expect(erros.observacao).toBe('A observação pode ter no máximo 500 caracteres.');
     expect(dados).toBeNull();
   });
 });

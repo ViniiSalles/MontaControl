@@ -23,7 +23,7 @@ interface PropsNovoAtestado {
   aoEnviado: () => void;
 }
 
-const CAMPOS_VAZIOS: CamposNovoAtestado = { dataInicio: '', dataFim: '' };
+const CAMPOS_VAZIOS: CamposNovoAtestado = { dataInicio: '', dataFim: '', observacao: '' };
 const TAMANHO_MINIATURA = espacamento[80];
 
 /** `quality` reduz o peso do upload; o limite de 5 MB/foto é do backend. */

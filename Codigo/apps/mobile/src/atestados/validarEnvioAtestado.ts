@@ -2,15 +2,19 @@ import type { EnviarAtestadoRequest, FotoBase64 } from '@montacontrol/shared';
 
 export { mascararData } from '../jornada/pontoEmAtraso';
 
+export const LIMITE_OBSERVACAO = 500;
+
 /** Formulário cru, do jeito que o montador digita. */
 export interface CamposNovoAtestado {
   /** `DD/MM/AAAA`. */
   dataInicio: string;
   /** `DD/MM/AAAA`. */
   dataFim: string;
+  /** Texto livre, opcional. */
+  observacao: string;
 }
 
-export type ErrosNovoAtestado = Partial<Record<'dataInicio' | 'dataFim' | 'fotos', string>>;
+export type ErrosNovoAtestado = Partial<Record<'dataInicio' | 'dataFim' | 'fotos' | 'observacao', string>>;
 
 export interface ResultadoValidacaoAtestado {
   erros: ErrosNovoAtestado;
@@ -54,7 +58,15 @@ export function validarEnvioAtestado(
 
   if (fotos.length === 0) erros.fotos = 'Anexe ao menos uma foto do atestado.';
 
+  const observacao = campos.observacao.trim();
+  if (observacao.length > LIMITE_OBSERVACAO) {
+    erros.observacao = `A observação pode ter no máximo ${LIMITE_OBSERVACAO} caracteres.`;
+  }
+
   if (Object.keys(erros).length > 0 || !dataInicio || !dataFim) return { erros, dados: null };
 
-  return { erros, dados: { dataInicio, dataFim, fotos: [...fotos] } };
+  return {
+    erros,
+    dados: { dataInicio, dataFim, fotos: [...fotos], ...(observacao ? { observacao } : {}) },
+  };
 }
