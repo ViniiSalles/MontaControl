@@ -15,6 +15,8 @@ const reutilizarServidor = !process.env.CI
  */
 export default defineConfig({
   testDir: './e2e',
+  globalSetup: './e2e/apoio/global-setup.ts',
+  globalTeardown: './e2e/apoio/global-teardown.ts',
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
