@@ -1,10 +1,11 @@
 import { expect, test } from '@playwright/test'
-import { entrarComoRh } from './apoio/api'
+import { entrarComoRh, gerarCpfValido } from './apoio/api'
 
 // N3T1 — cadastro de novo montador no sistema (US12, UC17).
 test('N3T1 — RH cadastra um montador e depois o inativa', async ({ page }) => {
   const email = `e2e-montador-${Date.now()}@teste.montacontrol.local`
   const nome = `Montador E2E ${Date.now()}`
+  const cpf = gerarCpfValido()
 
   await entrarComoRh(page)
   await page.getByRole('link', { name: 'Montadores' }).click()
@@ -14,6 +15,7 @@ test('N3T1 — RH cadastra um montador e depois o inativa', async ({ page }) => 
   const modal = page.getByRole('dialog', { name: 'Novo Montador' })
   await modal.getByRole('textbox', { name: 'Nome', exact: true }).fill(nome)
   await modal.getByRole('textbox', { name: 'E-mail', exact: true }).fill(email)
+  await modal.getByRole('textbox', { name: 'CPF', exact: true }).fill(cpf)
   await modal.getByRole('textbox', { name: 'Senha', exact: true }).fill('MontaControl@E2E1')
   await modal.getByRole('button', { name: 'Cadastrar' }).click()
   await expect(modal).toBeHidden()
@@ -23,6 +25,8 @@ test('N3T1 — RH cadastra um montador e depois o inativa', async ({ page }) => 
   const linha = page.getByRole('row', { name: new RegExp(email) })
   await expect(linha).toBeVisible()
   await expect(linha).toContainText('Ativo')
+  await expect(linha).toContainText('***')
+  await expect(linha).not.toContainText(cpf)
 
   await linha.getByRole('button', { name: 'Inativar' }).click()
   await expect(linha).toContainText('Inativo')

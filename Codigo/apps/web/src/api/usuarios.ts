@@ -23,3 +23,7 @@ export function alterarAtivoUsuario(
     corpo: { ativo },
   })
 }
+
+export function informarCpfUsuario(token: string, id: number, cpf: string): Promise<UsuarioDTO> {
+  return requisitar<UsuarioDTO>(`/api/usuarios/${id}/cpf`, { token, metodo: 'PATCH', corpo: { cpf } })
+}

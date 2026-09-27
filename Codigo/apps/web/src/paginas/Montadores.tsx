@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Perfil } from '@montacontrol/shared'
+import { Perfil, mascararCpf } from '@montacontrol/shared'
 import type { UsuarioDTO } from '@montacontrol/shared'
 import { useAuth } from '../auth/AuthContext'
-import { alterarAtivoUsuario, cadastrarUsuario, listarUsuarios } from '../api/usuarios'
+import { alterarAtivoUsuario, cadastrarUsuario, informarCpfUsuario, listarUsuarios } from '../api/usuarios'
+import { contarNovosNoMes, filtrarMontadores, formatarDataCadastro } from '../formatacao/montadores'
 import { ErroApi } from '../api/clienteHttp'
 import { Alerta } from '../ui/Alerta'
 import { Avatar } from '../ui/Avatar'
@@ -13,6 +14,7 @@ import { CartaoIndicador } from '../ui/CartaoIndicador'
 import { Paginacao } from '../ui/Paginacao'
 import { TabelaDados, type ColunaTabela } from '../ui/TabelaDados'
 import { LayoutAutenticado } from './LayoutAutenticado'
+import { ModalInformarCpf } from './montadores/ModalInformarCpf'
 import { ModalNovoMontador, type DadosNovoMontador } from './montadores/ModalNovoMontador'
 
 const POR_PAGINA = 10
@@ -29,6 +31,8 @@ export default function Montadores() {
   const [modalAberto, setModalAberto] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
+  const [emCpf, setEmCpf] = useState<UsuarioDTO | null>(null)
+  const [erroCpf, setErroCpf] = useState<string | null>(null)
 
   useEffect(() => {
     let ativo = true
@@ -44,10 +48,7 @@ export default function Montadores() {
     }
   }, [token])
 
-  const termo = busca.trim().toLowerCase()
-  const filtrados = montadores.filter(
-    (montador) => montador.nome.toLowerCase().includes(termo) || montador.email.toLowerCase().includes(termo),
-  )
+  const filtrados = filtrarMontadores(montadores, busca)
   const totalPaginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA))
   const paginaAtual = Math.min(pagina, totalPaginas)
   const visiveis = filtrados.slice((paginaAtual - 1) * POR_PAGINA, paginaAtual * POR_PAGINA)
@@ -65,6 +66,7 @@ export default function Montadores() {
       const criado = await cadastrarUsuario(token, {
         nome: dados.nome,
         email: dados.email,
+        cpf: dados.cpf,
         senha: dados.senha,
         telefone: dados.telefone.trim() || undefined,
         perfil: Perfil.MONTADOR,
@@ -88,6 +90,20 @@ export default function Montadores() {
     }
   }
 
+  async function aoInformarCpf(cpf: string) {
+    if (!emCpf) return
+    setErroCpf(null)
+    try {
+      const atualizado = await informarCpfUsuario(token, emCpf.id, cpf)
+      setMontadores((atuais) => atuais.map((item) => (item.id === atualizado.id ? atualizado : item)))
+      setEmCpf(null)
+      setAviso(`CPF de ${atualizado.nome} registrado.`)
+    } catch (causa: unknown) {
+      setErroCpf(mensagemDe(causa, 'Falha ao registrar o CPF.'))
+      throw causa
+    }
+  }
+
   const colunas: ColunaTabela<UsuarioDTO>[] = [
     {
       titulo: 'Montador',
@@ -101,23 +117,40 @@ export default function Montadores() {
         </div>
       ),
     },
+    { titulo: 'Documento (CPF)', render: (montador) => mascararCpf(montador.cpf) },
     { titulo: 'Telefone', render: (montador) => montador.telefone ?? '—' },
     {
       titulo: 'Status',
       render: (montador) =>
         montador.ativo ? <BadgeStatus variante="sucesso" texto="Ativo" /> : <BadgeStatus variante="neutro" texto="Inativo" />,
     },
+    { titulo: 'Data cadastro', render: (montador) => formatarDataCadastro(montador.criadoEm) },
     {
       titulo: 'Ações',
       alinhamento: 'direita',
       render: (montador) => (
-        <Botao
-          variante="fantasma"
-          tamanho={40}
-          forma="retangular"
-          texto={montador.ativo ? 'Inativar' : 'Reativar'}
-          aoPressionar={() => void aoAlternarSituacao(montador)}
-        />
+        <div className="flex items-center justify-end gap-8">
+          {!montador.cpf && (
+            <Botao
+              variante="fantasma"
+              tamanho={40}
+              forma="retangular"
+              texto="Informar CPF"
+              aoPressionar={() => {
+                setErroCpf(null)
+                setAviso(null)
+                setEmCpf(montador)
+              }}
+            />
+          )}
+          <Botao
+            variante="fantasma"
+            tamanho={40}
+            forma="retangular"
+            texto={montador.ativo ? 'Inativar' : 'Reativar'}
+            aoPressionar={() => void aoAlternarSituacao(montador)}
+          />
+        </div>
       ),
     },
   ]
@@ -138,7 +171,7 @@ export default function Montadores() {
             <CampoTexto
               rotulo="Buscar montador"
               iconeEsquerda="search"
-              placeholder="Buscar por nome ou e-mail…"
+              placeholder="Buscar por nome, e-mail ou CPF…"
               valor={busca}
               aoAlterar={aoBuscar}
             />
@@ -156,7 +189,12 @@ export default function Montadores() {
         <div className="grid gap-24 md:grid-cols-3">
           <CartaoIndicador icone="groups" rotulo="Total ativos" valor={String(ativos)} />
           <CartaoIndicador icone="person_off" tom="alerta" rotulo="Inativos" valor={String(montadores.length - ativos)} />
-          <CartaoIndicador tom="destaque" rotulo="Total cadastrados" valor={String(montadores.length)} complemento="montadores" />
+          <CartaoIndicador
+            tom="destaque"
+            rotulo="Novos no mês"
+            valor={String(contarNovosNoMes(montadores, new Date()))}
+            complemento="cadastros"
+          />
         </div>
 
         <div>
@@ -185,6 +223,17 @@ export default function Montadores() {
             setErro(null)
           }}
           aoCadastrar={aoCadastrar}
+        />
+      )}
+      {emCpf && (
+        <ModalInformarCpf
+          nome={emCpf.nome}
+          erro={erroCpf}
+          aoFechar={() => {
+            setErroCpf(null)
+            setEmCpf(null)
+          }}
+          aoConfirmar={aoInformarCpf}
         />
       )}
     </LayoutAutenticado>

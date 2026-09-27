@@ -77,3 +77,16 @@ export async function entrarComoRh(page: import('@playwright/test').Page): Promi
   await page.getByRole('button', { name: 'Entrar' }).click()
   await page.waitForURL(/\/atestados$/)
 }
+
+/** CPF válido e aleatório (único por execução, na prática). */
+export function gerarCpfValido(): string {
+  const digitos = Array.from({ length: 9 }, () => Math.floor(Math.random() * 10))
+  const verificador = (base: number[]) => {
+    const soma = base.reduce((acc, d, i) => acc + d * (base.length + 1 - i), 0)
+    const resto = (soma * 10) % 11
+    return resto === 10 ? 0 : resto
+  }
+  digitos.push(verificador(digitos))
+  digitos.push(verificador(digitos))
+  return digitos.join('')
+}
