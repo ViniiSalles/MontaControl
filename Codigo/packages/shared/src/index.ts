@@ -6,3 +6,4 @@ export * from './jornadas/agruparPorDia';
 export * from './jornadas/limite';
 export * from './jornadas/distancia';
 export * from './rh/calendario';
+export * from './rh/cpf';
