@@ -138,3 +138,73 @@ test('enviar com observação chama a API, avisa, zera o formulário e recarrega
   expect(screen.queryByLabelText('Foto 1 do atestado')).toBeNull();
   await waitFor(() => expect(screen.getByText('EM ANÁLISE')).toBeTruthy());
 });
+
+function atestadosFake(quantidade: number): AtestadoDTO[] {
+  return Array.from({ length: quantidade }, (_, i) =>
+    atestadoFake({ id: i + 1, criadoEm: `2026-09-${String(i + 1).padStart(2, '0')}T12:00:00.000Z` }),
+  );
+}
+
+test('com mais de 5 atestados mostra só 5 cartões e o botão "Ver todos (N)"', async () => {
+  listarMock.mockResolvedValue(atestadosFake(7));
+
+  await render(<Atestados />);
+
+  await waitFor(() => expect(screen.getByText('Ver todos (7)')).toBeTruthy());
+  expect(screen.getAllByText('EM ANÁLISE')).toHaveLength(5);
+});
+
+test('tocar em "Ver todos" mostra a lista inteira e o botão vira "Ver menos"', async () => {
+  listarMock.mockResolvedValue(atestadosFake(7));
+
+  await render(<Atestados />);
+  await fireEvent.press(await screen.findByText('Ver todos (7)'));
+
+  expect(screen.getAllByText('EM ANÁLISE')).toHaveLength(7);
+  expect(screen.getByText('Ver menos')).toBeTruthy();
+
+  await fireEvent.press(screen.getByText('Ver menos'));
+
+  expect(screen.getAllByText('EM ANÁLISE')).toHaveLength(5);
+  expect(screen.getByText('Ver todos (7)')).toBeTruthy();
+});
+
+test('com 5 atestados ou menos não mostra o botão de expandir', async () => {
+  listarMock.mockResolvedValue(atestadosFake(5));
+
+  await render(<Atestados />);
+
+  await waitFor(() => expect(screen.getAllByText('EM ANÁLISE')).toHaveLength(5));
+  expect(screen.queryByText(/Ver todos/)).toBeNull();
+  expect(screen.queryByText('Ver menos')).toBeNull();
+});
+
+test('o aviso de sucesso some quando um novo envio começa', async () => {
+  enviarMock.mockResolvedValueOnce(atestadoFake()).mockRejectedValueOnce(new Error('offline'));
+  jest.mocked(ImagePicker.requestMediaLibraryPermissionsAsync).mockResolvedValue({ granted: true } as never);
+  jest.mocked(ImagePicker.launchImageLibraryAsync).mockResolvedValue({
+    canceled: false,
+    assets: [{ uri: 'file://foto.jpg', base64: 'abc123', mimeType: 'image/jpeg' } as never],
+  });
+
+  await render(<Atestados />);
+  await waitFor(() => expect(screen.getByText('Nenhum atestado enviado ainda.')).toBeTruthy());
+
+  async function preencherEEnviar() {
+    await fireEvent.changeText(screen.getAllByPlaceholderText('DD/MM/AAAA')[0], '01092026');
+    await fireEvent.changeText(screen.getAllByPlaceholderText('DD/MM/AAAA')[1], '03092026');
+    const espiaAlerta = jest.spyOn(Alert, 'alert');
+    await fireEvent.press(screen.getByLabelText('Fotografar Atestado'));
+    const botoes = espiaAlerta.mock.calls[espiaAlerta.mock.calls.length - 1][2] ?? [];
+    await botoes.find((botao) => botao.text === 'Escolher da galeria')?.onPress?.(undefined as never);
+    await waitFor(() => expect(screen.getByLabelText('Foto 1 do atestado')).toBeTruthy());
+    await fireEvent.press(screen.getByText('Enviar Atestado'));
+  }
+
+  await preencherEEnviar();
+  await waitFor(() => expect(screen.getByText('Atestado enviado. O RH vai analisar.')).toBeTruthy());
+
+  await preencherEEnviar();
+  await waitFor(() => expect(screen.getByText('Não foi possível enviar. Tente de novo.')).toBeTruthy());
+  expect(screen.queryByText('Atestado enviado. O RH vai analisar.')).toBeNull();
+});

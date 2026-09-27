@@ -15,6 +15,7 @@ import { Tela } from '../ui/Tela';
 import { Texto } from '../ui/Texto';
 import { useAuth } from '../auth/AuthContext';
 import { textoPeriodo } from '../atestados/formatarPeriodo';
+import { atestadosRecentes } from '../atestados/recentes';
 import { useMeusAtestados } from '../atestados/useMeusAtestados';
 import { NovoAtestado } from './atestados/NovoAtestado';
 
@@ -41,6 +42,8 @@ const COR_ICONE_POR_STATUS: Record<StatusAtestado, string> = {
   [StatusAtestado.VALIDADO]: cores.primary,
   [StatusAtestado.REJEITADO]: cores.error,
 };
+
+const LIMITE_HISTORICO = 5;
 
 function ItemHistorico({ atestado }: { atestado: AtestadoDTO }) {
   return (
@@ -70,6 +73,8 @@ export function Atestados() {
   const token = sessao?.accessToken ?? '';
   const { atestados, carregando, erro, recarregar } = useMeusAtestados(token);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [mostrarTodos, setMostrarTodos] = useState<boolean>(false);
+  const { visiveis, ocultos } = atestadosRecentes(atestados, LIMITE_HISTORICO, mostrarTodos);
 
   function aoEnviado() {
     setAviso('Atestado enviado. O RH vai analisar.');
@@ -83,7 +88,7 @@ export function Atestados() {
 
         {aviso && <Alerta variante="sucesso" mensagem={aviso} />}
 
-        <NovoAtestado token={token} aoEnviado={aoEnviado} />
+        <NovoAtestado token={token} aoEnviado={aoEnviado} aoIniciarEnvio={() => setAviso(null)} />
 
         <Texto variante="labelMd" cor={cores.onSurfaceVariant}>
           HISTÓRICO RECENTE
@@ -115,7 +120,7 @@ export function Atestados() {
           </Texto>
         ) : (
           <View style={{ gap: espacamento[12] }}>
-            {atestados.map((atestado) => (
+            {visiveis.map((atestado) => (
               <Cartao
                 key={atestado.id}
                 elevacao="elev1"
@@ -123,6 +128,16 @@ export function Atestados() {
                 conteudo={<ItemHistorico atestado={atestado} />}
               />
             ))}
+            {(ocultos > 0 || mostrarTodos) && (
+              <Botao
+                variante="fantasma"
+                tamanho={40}
+                forma="pilula"
+                texto={mostrarTodos ? 'Ver menos' : `Ver todos (${atestados.length})`}
+                larguraTotal
+                aoPressionar={() => setMostrarTodos((atual) => !atual)}
+              />
+            )}
           </View>
         )}
 
