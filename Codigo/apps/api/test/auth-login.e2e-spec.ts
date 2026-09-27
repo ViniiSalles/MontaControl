@@ -2,7 +2,7 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { Perfil } from '../generated/prisma';
 import { criarApp } from './setup/criar-app';
-import { apagarUsuarioFixture, criarUsuarioFixture, UsuarioFixture } from './fixtures/usuarios.fixture';
+import { apagarUsuariosFixture, criarUsuarioFixture, UsuarioFixture } from './fixtures/usuarios.fixture';
 
 const MENSAGEM_CREDENCIAIS_INVALIDAS = 'Credenciais inválidas';
 
@@ -15,10 +15,11 @@ describe('POST /api/auth/login (e2e)', () => {
   });
 
   afterAll(async () => {
-    for (const fixture of fixturesCriadas.reverse()) {
-      await apagarUsuarioFixture(app, fixture);
+    try {
+      await apagarUsuariosFixture(app, fixturesCriadas);
+    } finally {
+      await app.close();
     }
-    await app.close();
   });
 
   async function criarFixture(opcoes: Parameters<typeof criarUsuarioFixture>[1] = {}): Promise<UsuarioFixture> {

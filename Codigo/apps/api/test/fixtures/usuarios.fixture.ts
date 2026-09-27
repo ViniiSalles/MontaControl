@@ -57,30 +57,100 @@ export async function criarUsuarioFixture(
 
   let usuarioId = 0;
   if (!opcoes.semLinhaUsuario) {
-    const usuario = await prisma.usuario.create({
-      data: { nome, email, authUserId: data.user.id, perfil, ativo },
-    });
-    usuarioId = usuario.id;
+    try {
+      const usuario = await prisma.usuario.create({
+        data: { nome, email, authUserId: data.user.id, perfil, ativo },
+      });
+      usuarioId = usuario.id;
+    } catch (erro) {
+      // Não deixa o usuário do GoTrue órfão se a linha em `usuario` falhar.
+      await supabase.auth.admin.deleteUser(data.user.id).catch(() => undefined);
+      throw erro;
+    }
   }
 
   return { authUserId: data.user.id, usuarioId, nome, email, senha, perfil, ativo };
 }
 
 /**
- * Desfaz exatamente o que `criarUsuarioFixture` criou, na ordem inversa:
- * linha em `usuario` primeiro, depois o usuário no GoTrue. Falha de limpeza
- * não derruba a suíte — só avisa, para não mascarar o resultado dos testes.
+ * Desfaz tudo que o usuário fixture criou, de dentro para fora (FK-safe):
+ * fotos do bucket de atestados, dependentes em `usuario` (atestados, jornadas,
+ * solicitações de ponto, banco de horas, avarias, cautelas, EPIs, pedidos),
+ * a linha em `usuario` e por fim o usuário no GoTrue.
+ *
+ * Todas as etapas são tentadas mesmo se uma falhar; as falhas são acumuladas
+ * e relançadas ao final — uma limpeza engolida seria lixo permanente no banco
+ * compartilhado, então o `afterAll` deve falhar alto em vez de só avisar.
  */
 export async function apagarUsuarioFixture(app: INestApplication, fixture: UsuarioFixture): Promise<void> {
   const supabase = app.get<SupabaseClient>(SUPABASE_CLIENT);
   const prisma = app.get(PrismaService);
+  const falhas: string[] = [];
+  const tentar = async (etapa: string, acao: () => Promise<unknown>): Promise<void> => {
+    try {
+      await acao();
+    } catch (erro) {
+      falhas.push(`${etapa}: ${erro instanceof Error ? erro.message : String(erro)}`);
+    }
+  };
 
   if (fixture.usuarioId) {
-    await prisma.usuario.delete({ where: { id: fixture.usuarioId } }).catch((erro: unknown) => {
-      console.warn(`[fixture] falha ao apagar usuario id=${fixture.usuarioId}:`, erro);
+    const id = fixture.usuarioId;
+    const porUsuario = { usuarioId: id };
+    await tentar('arquivos do bucket de atestados', async () => {
+      const fotos = await prisma.atestadoFoto.findMany({
+        where: { atestado: porUsuario },
+        select: { storagePath: true },
+      });
+      const bucket = process.env.SUPABASE_BUCKET_ATESTADOS;
+      if (fotos.length === 0) return;
+      if (!bucket) throw new Error('SUPABASE_BUCKET_ATESTADOS ausente');
+      const { error } = await supabase.storage.from(bucket).remove(fotos.map((f) => f.storagePath));
+      if (error) throw new Error(error.message);
     });
+    await tentar(`dependentes e linha de usuario id=${id}`, () =>
+      prisma.$transaction([
+        // Referências de outros usuários (fixtures de RH/analista) a este id: só desvincula.
+        prisma.atestado.updateMany({ where: { validadoPor: id }, data: { validadoPor: null, validadoAt: null } }),
+        prisma.solicitacaoPonto.updateMany({ where: { analisadoPor: id }, data: { analisadoPor: null } }),
+        prisma.peca.updateMany({ where: { triadaPor: id }, data: { triadaPor: null } }),
+        prisma.peca.updateMany({ where: { conferidaPor: id }, data: { conferidaPor: null } }),
+        prisma.atestadoFoto.deleteMany({ where: { atestado: porUsuario } }),
+        prisma.atestado.deleteMany({ where: porUsuario }),
+        prisma.solicitacaoPonto.deleteMany({ where: porUsuario }),
+        prisma.jornada.deleteMany({ where: porUsuario }),
+        prisma.bancoHoras.deleteMany({ where: porUsuario }),
+        prisma.avariaFoto.deleteMany({ where: { avaria: { registradaPor: id } } }),
+        prisma.avaria.deleteMany({ where: { registradaPor: id } }),
+        prisma.pedidoMontador.deleteMany({ where: porUsuario }),
+        prisma.cautela.deleteMany({ where: porUsuario }),
+        prisma.epi.deleteMany({ where: porUsuario }),
+        prisma.usuario.delete({ where: { id } }),
+      ]),
+    );
   }
-  await supabase.auth.admin.deleteUser(fixture.authUserId).catch((erro: unknown) => {
-    console.warn(`[fixture] falha ao apagar auth user id=${fixture.authUserId}:`, erro);
+  await tentar(`auth user id=${fixture.authUserId}`, async () => {
+    const { error } = await supabase.auth.admin.deleteUser(fixture.authUserId);
+    if (error) throw new Error(error.message);
   });
+
+  if (falhas.length > 0) {
+    throw new Error(`[fixture] limpeza incompleta (${fixture.email}): ${falhas.join(' | ')}`);
+  }
+}
+
+/**
+ * Apaga várias fixtures (da última para a primeira). Uma falha não interrompe
+ * as demais — todas são tentadas e as falhas relançadas juntas ao final.
+ */
+export async function apagarUsuariosFixture(app: INestApplication, fixtures: UsuarioFixture[]): Promise<void> {
+  const falhas: string[] = [];
+  for (const fixture of [...fixtures].reverse()) {
+    try {
+      await apagarUsuarioFixture(app, fixture);
+    } catch (erro) {
+      falhas.push(erro instanceof Error ? erro.message : String(erro));
+    }
+  }
+  if (falhas.length > 0) throw new Error(falhas.join('\n'));
 }

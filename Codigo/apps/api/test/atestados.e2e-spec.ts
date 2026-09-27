@@ -4,9 +4,8 @@ import request from 'supertest';
 import { diaNoFuso, somarDias } from '@montacontrol/shared';
 import { Perfil, StatusAtestado } from '../generated/prisma';
 import { FUSO_OPERACAO } from '../src/common/fuso';
-import { PrismaService } from '../src/prisma/prisma.service';
 import { criarApp } from './setup/criar-app';
-import { apagarUsuarioFixture, criarUsuarioFixture, UsuarioFixture } from './fixtures/usuarios.fixture';
+import { apagarUsuariosFixture, criarUsuarioFixture, UsuarioFixture } from './fixtures/usuarios.fixture';
 
 const UM_PIXEL_PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
@@ -49,19 +48,11 @@ describe('Atestados (e2e)', () => {
   });
 
   afterAll(async () => {
-    // FK atestado_foto → atestado → usuario: limpar de dentro para fora, senão
-    // a fixture deixa lixo permanente no MontaControlDev.
-    const prisma = app.get(PrismaService);
-    for (const fixture of fixturesCriadas.reverse()) {
-      if (fixture.usuarioId) {
-        await prisma.atestadoFoto.deleteMany({
-          where: { atestado: { usuarioId: fixture.usuarioId } },
-        });
-        await prisma.atestado.deleteMany({ where: { usuarioId: fixture.usuarioId } });
-      }
-      await apagarUsuarioFixture(app, fixture);
+    try {
+      await apagarUsuariosFixture(app, fixturesCriadas);
+    } finally {
+      await app.close();
     }
-    await app.close();
   });
 
   async function criarFixture(perfil: Perfil): Promise<UsuarioFixture> {
