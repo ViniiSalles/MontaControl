@@ -29,9 +29,25 @@ function ehViolacaoDeUnicidade(erro: unknown): boolean {
   );
 }
 
-function alvoDaViolacao(erro: unknown): string {
-  const meta = (erro as { meta?: { target?: unknown } }).meta;
-  return Array.isArray(meta?.target) ? meta.target.join(',') : String(meta?.target ?? '');
+/**
+ * Identifica se a violação de unicidade (P2002) é do CPF. O formato de `meta`
+ * depende do runtime: engine clássico traz `meta.target`; com driver adapter
+ * (`@prisma/adapter-pg`) vem `meta.driverAdapterError.cause.constraint` como
+ * `{ index }` ou `{ fields }`. Casa nome exato — nunca substring.
+ */
+export function violacaoDeCpf(erro: unknown): boolean {
+  const meta = (erro as { meta?: Record<string, any> }).meta ?? {};
+  const alvos: string[] = [];
+  const empilhar = (valor: unknown): void => {
+    if (Array.isArray(valor)) alvos.push(...valor.map(String));
+    else if (typeof valor === 'string') alvos.push(valor);
+  };
+  empilhar(meta.target);
+  const constraint = meta.driverAdapterError?.cause?.constraint;
+  empilhar(constraint?.index);
+  empilhar(constraint?.fields);
+  if (alvos.length === 0) return /"usuario_cpf_key"|"cpf"/.test(JSON.stringify(meta));
+  return alvos.some((alvo) => alvo === 'cpf' || alvo === 'usuario_cpf_key');
 }
 
 function ehRegistroNaoEncontrado(erro: unknown): boolean {
@@ -96,7 +112,7 @@ export class UsuariosRepository {
         select: SELECAO_USUARIO_LISTADO,
       });
     } catch (erro) {
-      if (ehViolacaoDeUnicidade(erro)) return alvoDaViolacao(erro).includes('cpf') ? 'CPF_DUPLICADO' : null;
+      if (ehViolacaoDeUnicidade(erro)) return violacaoDeCpf(erro) ? 'CPF_DUPLICADO' : null;
       throw erro;
     }
   }
