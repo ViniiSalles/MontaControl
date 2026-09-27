@@ -118,8 +118,7 @@ describe('UsuariosService', () => {
     const cpfValidoTeste = '52998224725';
 
     it('exige CPF para MONTADOR', async () => {
-      const { cpf: _cpf, ...semCpf } = dadosCadastro;
-      await expect(service.cadastrar({ ...semCpf, perfil: Perfil.MONTADOR })).rejects.toBeInstanceOf(
+      await expect(service.cadastrar({ ...dadosCadastro, cpf: undefined, perfil: Perfil.MONTADOR })).rejects.toBeInstanceOf(
         CpfObrigatorioException,
       );
       expect(supabase.criarUsuario).not.toHaveBeenCalled();
@@ -129,8 +128,7 @@ describe('UsuariosService', () => {
       supabase.criarUsuario.mockResolvedValue(authUserId);
       repository.criar.mockResolvedValue({ id: 3 });
 
-      const { cpf: _cpf, ...semCpf } = dadosCadastro;
-      await service.cadastrar({ ...semCpf, perfil: Perfil.RH });
+      await service.cadastrar({ ...dadosCadastro, cpf: undefined, perfil: Perfil.RH });
 
       expect(repository.criar).toHaveBeenCalledWith(expect.objectContaining({ cpf: null }));
     });

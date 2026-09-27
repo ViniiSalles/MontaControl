@@ -36,7 +36,15 @@ function ehViolacaoDeUnicidade(erro: unknown): boolean {
  * `{ index }` ou `{ fields }`. Casa nome exato — nunca substring.
  */
 export function violacaoDeCpf(erro: unknown): boolean {
-  const meta = (erro as { meta?: Record<string, any> }).meta ?? {};
+  const meta =
+    (
+      erro as {
+        meta?: {
+          target?: unknown;
+          driverAdapterError?: { cause?: { constraint?: { index?: unknown; fields?: unknown } } };
+        };
+      }
+    ).meta ?? {};
   const alvos: string[] = [];
   const empilhar = (valor: unknown): void => {
     if (Array.isArray(valor)) alvos.push(...valor.map(String));
