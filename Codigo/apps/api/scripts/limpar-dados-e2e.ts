@@ -14,67 +14,13 @@ import dotenv from 'dotenv';
 
 dotenv.config({ path: process.env.NODE_ENV === 'production' ? '.env.production' : '.env' });
 
-export const EMAIL_MONTADOR_SEED = 'montador@montacontrol.local';
-export const PREFIXO_EMAIL_E2E = 'e2e-montador-';
-export const SUFIXO_EMAIL_E2E = '@teste.montacontrol.local';
-export const ESCOPOS = ['atestados', 'jornadas', 'usuarios-e2e'] as const;
-export type Escopo = (typeof ESCOPOS)[number];
-
-export interface Opcoes {
-  desde: Date;
-  escopos: Escopo[];
-  dryRun: boolean;
-}
-
-/** Interpreta os argumentos de linha de comando. Lança Error se inválidos. */
-export function lerArgumentos(argv: string[]): Opcoes {
-  let desdeBruto: string | undefined;
-  let escoposBrutos: string | undefined;
-  let dryRun = false;
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i];
-    if (arg === '--dry-run') dryRun = true;
-    else if (arg === '--desde') desdeBruto = argv[++i];
-    else if (arg === '--escopos') escoposBrutos = argv[++i];
-    else if (arg.startsWith('--desde=')) desdeBruto = arg.slice('--desde='.length);
-    else if (arg.startsWith('--escopos=')) escoposBrutos = arg.slice('--escopos='.length);
-    else throw new Error(`Argumento desconhecido: ${arg}`);
-  }
-  if (!desdeBruto) throw new Error('--desde <ISO datetime> é obrigatório');
-  const desde = new Date(desdeBruto);
-  if (Number.isNaN(desde.getTime())) throw new Error(`--desde inválido: ${desdeBruto}`);
-
-  const escopos = escoposBrutos
-    ? escoposBrutos
-        .split(',')
-        .map((e) => e.trim())
-        .filter(Boolean)
-    : [...ESCOPOS];
-  for (const e of escopos) {
-    if (!(ESCOPOS as readonly string[]).includes(e)) {
-      throw new Error(`Escopo inválido: ${e} (válidos: ${ESCOPOS.join(', ')})`);
-    }
-  }
-  return { desde, escopos: escopos as Escopo[], dryRun };
-}
-
-/** Filtro dos usuários e2e: prefixo + sufixo do e-mail e criados a partir de `desde`. */
-export function filtroUsuariosE2e(desde: Date) {
-  return {
-    email: { startsWith: PREFIXO_EMAIL_E2E, endsWith: SUFIXO_EMAIL_E2E },
-    createdAt: { gte: desde },
-  };
-}
-
-/** Filtro de atestados do montador seed criados a partir de `desde`. */
-export function filtroAtestadosSeed(desde: Date) {
-  return { usuario: { email: EMAIL_MONTADOR_SEED }, createdAt: { gte: desde } };
-}
-
-/** Filtro de jornadas do montador seed criadas a partir de `desde` (sem solicitação de ponto ligada). */
-export function filtroJornadasSeed(desde: Date) {
-  return { usuario: { email: EMAIL_MONTADOR_SEED }, createdAt: { gte: desde }, solicitacaoPonto: null };
-}
+import {
+  filtroAtestadosSeed,
+  filtroJornadasSeed,
+  filtroUsuariosE2e,
+  lerArgumentos,
+  type Opcoes,
+} from '../src/common/e2e-limpeza';
 
 const ids = (linhas: Array<{ id: number }>): string => linhas.map((l) => l.id).join(',') || '-';
 
@@ -83,18 +29,24 @@ async function limparAtestados(
   supabase: SupabaseClient,
   { desde, dryRun }: Opcoes,
 ): Promise<string> {
-  const where = filtroAtestadosSeed(desde);
-  const atestados = await prisma.atestado.findMany({ where, select: { id: true } });
+  const atestados = await prisma.atestado.findMany({
+    where: filtroAtestadosSeed(desde),
+    select: { id: true },
+  });
+  const idsAtestados = atestados.map((a) => a.id);
   const fotos = await prisma.atestadoFoto.findMany({
-    where: { atestado: where },
-    select: { id: true, storagePath: true },
+    where: { atestadoId: { in: idsAtestados } },
+    select: { storagePath: true },
   });
   const caminhos = fotos.map((f) => f.storagePath);
   if (dryRun) {
     return `atestados: ${atestados.length} (ids ${ids(atestados)}); fotos: ${fotos.length}; arquivos a remover: ${caminhos.length}`;
   }
-  await prisma.atestadoFoto.deleteMany({ where: { atestado: where } });
-  const { count } = await prisma.atestado.deleteMany({ where });
+  console.log(`Removendo ${atestados.length} atestados (ids ${ids(atestados)}), ${fotos.length} fotos.`);
+  const [, { count }] = await prisma.$transaction([
+    prisma.atestadoFoto.deleteMany({ where: { atestadoId: { in: idsAtestados } } }),
+    prisma.atestado.deleteMany({ where: { id: { in: idsAtestados } } }),
+  ]);
   const removidos = await removerArquivos(supabase, caminhos);
   return `atestados removidos: ${count}; fotos removidas: ${fotos.length}; arquivos removidos do bucket: ${removidos}/${caminhos.length}`;
 }
@@ -120,6 +72,7 @@ async function limparJornadas(prisma: PrismaClient, { desde, dryRun }: Opcoes): 
   const where = filtroJornadasSeed(desde);
   const jornadas = await prisma.jornada.findMany({ where, select: { id: true } });
   if (dryRun) return `jornadas: ${jornadas.length} (ids ${ids(jornadas)})`;
+  console.log(`Removendo ${jornadas.length} jornadas (ids ${ids(jornadas)}).`);
   const { count } = await prisma.jornada.deleteMany({ where });
   return `jornadas removidas: ${count}`;
 }
@@ -135,6 +88,7 @@ async function limparUsuariosE2e(
   });
   if (dryRun) return `usuários e2e: ${usuarios.length} (ids ${ids(usuarios)})`;
 
+  console.log(`Removendo ${usuarios.length} usuários e2e (ids ${ids(usuarios)}).`);
   let removidos = 0;
   let authRemovidos = 0;
   for (const u of usuarios) {
@@ -172,8 +126,22 @@ async function limparUsuariosE2e(
   return `usuários e2e removidos: ${removidos}/${usuarios.length}; usuários Auth removidos: ${authRemovidos}`;
 }
 
+function host(url: string | undefined): string {
+  try {
+    return new URL(url ?? '').host;
+  } catch {
+    return '(indisponível)';
+  }
+}
+
 async function main(): Promise<void> {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('recusado: NODE_ENV=production. Este script só roda contra o banco de dev.');
+  }
   const opcoes = lerArgumentos(process.argv.slice(2));
+  console.log(
+    `[limpar-dados-e2e] alvo: banco=${host(process.env.DATABASE_URL)} supabase=${host(process.env.SUPABASE_URL)}`,
+  );
   console.log(
     `[limpar-dados-e2e] desde=${opcoes.desde.toISOString()} escopos=${opcoes.escopos.join(',')}${opcoes.dryRun ? ' (dry-run)' : ''}`,
   );

@@ -18,7 +18,6 @@ export default function globalTeardown(): void {
       return
     }
     const inicio = new Date(readFileSync(ARQUIVO_INICIO, 'utf8').trim())
-    rmSync(ARQUIVO_INICIO, { force: true })
     if (Number.isNaN(inicio.getTime())) {
       console.warn('[e2e] limpeza ignorada: início da execução inválido.')
       return
@@ -28,14 +27,17 @@ export default function globalTeardown(): void {
     const resultado = spawnSync(
       'pnpm',
       ['--filter', '@montacontrol/api', 'e2e:limpar', '--desde', desde],
-      { cwd: raizCodigo, encoding: 'utf8' },
+      { cwd: raizCodigo, encoding: 'utf8', timeout: 120_000 },
     )
     if (resultado.stdout) console.log(resultado.stdout.trim())
     if (resultado.error || resultado.status !== 0) {
+      const motivo = resultado.error?.message ?? `status ${resultado.status}`
       console.warn(
-        `[e2e] AVISO: limpeza falhou (${resultado.error?.message ?? `status ${resultado.status}`}). ${resultado.stderr ?? ''}`,
+        `[e2e] AVISO: limpeza falhou (${motivo}). Para repetir: pnpm --filter @montacontrol/api e2e:limpar --desde ${desde}\n${resultado.stderr ?? ''}`,
       )
+      return
     }
+    rmSync(ARQUIVO_INICIO, { force: true })
   } catch (erro) {
     console.warn(`[e2e] AVISO: limpeza falhou: ${(erro as Error).message}`)
   }
