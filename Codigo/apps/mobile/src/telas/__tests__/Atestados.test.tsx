@@ -12,6 +12,8 @@ jest.mock('expo-image-picker', () => ({
   UIImagePickerPreferredAssetRepresentationMode: { Compatible: 'compatible' },
 }));
 
+import { Alert } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { StatusAtestado } from '@montacontrol/shared';
 import type { AtestadoDTO } from '@montacontrol/shared';
@@ -63,7 +65,7 @@ test('lista os atestados com o rótulo de situação de cada um', async () => {
 
   await waitFor(() => expect(screen.getByText('EM ANÁLISE')).toBeTruthy());
   expect(screen.getByText('APROVADO')).toBeTruthy();
-  expect(screen.getByText('REJEITADO')).toBeTruthy();
+  expect(screen.getByText('RECUSADO')).toBeTruthy();
   expect(screen.getByText('Foto ilegível')).toBeTruthy();
 });
 
@@ -86,18 +88,53 @@ test('falha ao carregar mostra erro e permite tentar de novo', async () => {
   await waitFor(() => expect(screen.getByText('EM ANÁLISE')).toBeTruthy());
 });
 
-test('novo atestado: enviar fecha o formulário, avisa e recarrega a lista', async () => {
+test('mostra o período no formato curto e o aviso LGPD', async () => {
+  listarMock.mockResolvedValue([atestadoFake({ dataInicio: '2026-10-15', dataFim: '2026-10-17' })]);
+
+  await render(<Atestados />);
+
+  await waitFor(() => expect(screen.getByText('15/10 a 17/10 (3 dias)')).toBeTruthy());
+  expect(screen.getByText('HISTÓRICO RECENTE')).toBeTruthy();
+  expect(screen.getByText(/Aviso LGPD/)).toBeTruthy();
+});
+
+test('o formulário aparece direto, sem tocar em "Novo atestado"', async () => {
+  await render(<Atestados />);
+
+  expect(screen.getByText('Enviar Atestado')).toBeTruthy();
+  expect(screen.queryByText('Novo atestado')).toBeNull();
+});
+
+test('enviar com observação chama a API, avisa, zera o formulário e recarrega a lista', async () => {
   enviarMock.mockResolvedValue(atestadoFake());
   listarMock.mockResolvedValueOnce([]).mockResolvedValueOnce([atestadoFake()]);
+  jest.mocked(ImagePicker.requestMediaLibraryPermissionsAsync).mockResolvedValue({ granted: true } as never);
+  jest.mocked(ImagePicker.launchImageLibraryAsync).mockResolvedValue({
+    canceled: false,
+    assets: [{ uri: 'file://foto.jpg', base64: 'abc123', mimeType: 'image/jpeg' } as never],
+  });
 
   await render(<Atestados />);
   await waitFor(() => expect(screen.getByText('Nenhum atestado enviado ainda.')).toBeTruthy());
 
-  await fireEvent.press(screen.getByText('Novo atestado'));
-  expect(screen.getByText('Enviar atestado')).toBeTruthy();
+  await fireEvent.changeText(screen.getAllByPlaceholderText('DD/MM/AAAA')[0], '01092026');
+  await fireEvent.changeText(screen.getAllByPlaceholderText('DD/MM/AAAA')[1], '03092026');
+  const espiaAlerta = jest.spyOn(Alert, 'alert');
+  await fireEvent.press(screen.getByLabelText('Fotografar Atestado'));
+  const botoes = espiaAlerta.mock.calls[espiaAlerta.mock.calls.length - 1][2] ?? [];
+  await botoes.find((botao) => botao.text === 'Escolher da galeria')?.onPress?.(undefined as never);
+  await waitFor(() => expect(screen.getByLabelText('Foto 1 do atestado')).toBeTruthy());
+  await fireEvent.changeText(screen.getByPlaceholderText(/Descreva brevemente/), 'Dor lombar');
 
-  await fireEvent.press(screen.getByText('Cancelar'));
+  await fireEvent.press(screen.getByText('Enviar Atestado'));
 
-  expect(screen.queryByText('Enviar atestado')).toBeNull();
-  expect(enviarMock).not.toHaveBeenCalled();
+  await waitFor(() =>
+    expect(enviarMock).toHaveBeenCalledWith(
+      'access',
+      expect.objectContaining({ observacao: 'Dor lombar', dataInicio: '2026-09-01' }),
+    ),
+  );
+  await waitFor(() => expect(screen.getByText('Atestado enviado. O RH vai analisar.')).toBeTruthy());
+  expect(screen.queryByLabelText('Foto 1 do atestado')).toBeNull();
+  await waitFor(() => expect(screen.getByText('EM ANÁLISE')).toBeTruthy());
 });

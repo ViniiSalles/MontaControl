@@ -84,4 +84,32 @@ describe('validarEnvioAtestado', () => {
     expect(erros.observacao).toBe('A observação pode ter no máximo 500 caracteres.');
     expect(dados).toBeNull();
   });
+
+  it('observação com exatamente 500 caracteres é aceita', () => {
+    const { erros, dados } = validarEnvioAtestado(campos({ observacao: 'a'.repeat(500) }), UMA_FOTO);
+
+    expect(erros).toEqual({});
+    expect(dados).not.toBeNull();
+  });
+
+  it('mede o tamanho da observação já sem espaços nas pontas', () => {
+    const { erros, dados } = validarEnvioAtestado(
+      campos({ observacao: ' '.repeat(10) + 'a'.repeat(500) }),
+      UMA_FOTO,
+    );
+
+    expect(erros).toEqual({});
+    expect(dados).not.toBeNull();
+  });
+
+  it('observação acima do limite e data inválida reportam os dois erros', () => {
+    const { erros, dados } = validarEnvioAtestado(
+      campos({ dataInicio: '31/02/2026', observacao: 'a'.repeat(501) }),
+      UMA_FOTO,
+    );
+
+    expect(erros.dataInicio).toMatch(/DD\/MM\/AAAA/);
+    expect(erros.observacao).toBeTruthy();
+    expect(dados).toBeNull();
+  });
 });

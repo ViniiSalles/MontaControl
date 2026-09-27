@@ -6,9 +6,9 @@ import type { FotoBase64 } from '@montacontrol/shared';
 import { cores, espacamento, raio } from '@montacontrol/design-tokens/native';
 import { Alerta } from '../../ui/Alerta';
 import { Botao } from '../../ui/Botao';
+import { Cartao } from '../../ui/Cartao';
 import { CampoTexto } from '../../ui/CampoTexto';
 import { Icone } from '../../ui/Icone';
-import { Modal } from '../../ui/Modal';
 import { Texto } from '../../ui/Texto';
 import { ErroApi } from '../../jornada/clienteJornadas';
 import { enviarAtestado } from '../../atestados/clienteAtestados';
@@ -18,8 +18,7 @@ import type { CamposNovoAtestado, ErrosNovoAtestado } from '../../atestados/vali
 
 interface PropsNovoAtestado {
   token: string;
-  aoFechar: () => void;
-  /** Atestado criado com sucesso — o pai fecha o formulário e recarrega a lista. */
+  /** Atestado criado com sucesso — o pai avisa e recarrega a lista. */
   aoEnviado: () => void;
 }
 
@@ -30,7 +29,7 @@ const TAMANHO_MINIATURA = espacamento[80];
 const OPCOES_PICKER = { base64: true, quality: 0.7, allowsMultipleSelection: false } as const;
 
 /** Formulário de envio de atestado (`POST /api/atestados`) — foto por câmera ou galeria. */
-export function NovoAtestado({ token, aoFechar, aoEnviado }: PropsNovoAtestado) {
+export function NovoAtestado({ token, aoEnviado }: PropsNovoAtestado) {
   const [campos, setCampos] = useState<CamposNovoAtestado>(CAMPOS_VAZIOS);
   const [fotos, setFotos] = useState<FotoBase64[]>([]);
   const [previas, setPrevias] = useState<string[]>([]);
@@ -97,6 +96,9 @@ export function NovoAtestado({ token, aoFechar, aoEnviado }: PropsNovoAtestado) 
     setFalha(null);
     try {
       await enviarAtestado(token, { idCliente: randomUUID(), ...dados });
+      setCampos(CAMPOS_VAZIOS);
+      setFotos([]);
+      setPrevias([]);
       aoEnviado();
     } catch (causa: unknown) {
       setFalha(causa instanceof ErroApi ? causa.message : 'Não foi possível enviar. Tente de novo.');
@@ -106,36 +108,59 @@ export function NovoAtestado({ token, aoFechar, aoEnviado }: PropsNovoAtestado) 
   }
 
   return (
-    <Modal
-      visivel
-      apresentacao="folha"
-      titulo="Novo atestado"
-      aoFechar={aoFechar}
+    <Cartao
+      elevacao="elev1"
+      tom="padrao"
       conteudo={
-        <View style={{ gap: espacamento[16], paddingBottom: espacamento[24] }}>
-          <CampoTexto
-            rotulo="Data de início"
-            valor={campos.dataInicio}
-            aoAlterar={(valor) => alterar('dataInicio', mascararData(valor))}
-            tipo="numero"
-            placeholder="DD/MM/AAAA"
-            erro={erros.dataInicio}
-            obrigatorio
-          />
-          <CampoTexto
-            rotulo="Data de fim"
-            valor={campos.dataFim}
-            aoAlterar={(valor) => alterar('dataFim', mascararData(valor))}
-            tipo="numero"
-            placeholder="DD/MM/AAAA"
-            erro={erros.dataFim}
-            obrigatorio
-          />
+        <View style={{ gap: espacamento[16] }}>
+          <View style={{ flexDirection: 'row', gap: espacamento[12] }}>
+            <View style={{ flex: 1 }}>
+              <CampoTexto
+                rotulo="Data início"
+                valor={campos.dataInicio}
+                aoAlterar={(valor) => alterar('dataInicio', mascararData(valor))}
+                tipo="numero"
+                placeholder="DD/MM/AAAA"
+                erro={erros.dataInicio}
+                obrigatorio
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <CampoTexto
+                rotulo="Data fim"
+                valor={campos.dataFim}
+                aoAlterar={(valor) => alterar('dataFim', mascararData(valor))}
+                tipo="numero"
+                placeholder="DD/MM/AAAA"
+                erro={erros.dataFim}
+                obrigatorio
+              />
+            </View>
+          </View>
 
-          <View style={{ gap: espacamento[8] }}>
-            <Texto variante="labelLg" cor={cores.onSurfaceVariant}>
-              Fotos do atestado *
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Fotografar Atestado"
+            onPress={aoTocarAdicionarFoto}
+            style={{
+              alignItems: 'center',
+              gap: espacamento[8],
+              padding: espacamento[24],
+              borderRadius: raio.lg,
+              borderWidth: 2,
+              borderStyle: 'dashed',
+              borderColor: cores.outlineVariant,
+              backgroundColor: cores.primaryFixed,
+            }}
+          >
+            <Icone nome="add_a_photo" cor={cores.primary} />
+            <Texto variante="titleMd">Fotografar Atestado</Texto>
+            <Texto variante="bodySm" cor={cores.onSurfaceVariant}>
+              JPG ou PNG
             </Texto>
+          </Pressable>
+
+          {previas.length > 0 && (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: espacamento[8] }}>
               {previas.map((uri, indice) => (
                 <View key={uri} style={{ width: TAMANHO_MINIATURA, height: TAMANHO_MINIATURA }}>
@@ -159,28 +184,22 @@ export function NovoAtestado({ token, aoFechar, aoEnviado }: PropsNovoAtestado) 
                   </Pressable>
                 </View>
               ))}
-              <Pressable
-                accessibilityLabel="Adicionar foto"
-                onPress={aoTocarAdicionarFoto}
-                style={{
-                  width: TAMANHO_MINIATURA,
-                  height: TAMANHO_MINIATURA,
-                  borderRadius: raio.md,
-                  borderWidth: 1,
-                  borderColor: cores.outlineVariant,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Icone nome="add_a_photo" cor={cores.onSurfaceVariant} />
-              </Pressable>
             </View>
-            {erros.fotos && (
-              <Texto variante="labelMd" cor={cores.error}>
-                {erros.fotos}
-              </Texto>
-            )}
-          </View>
+          )}
+          {erros.fotos && (
+            <Texto variante="labelMd" cor={cores.error}>
+              {erros.fotos}
+            </Texto>
+          )}
+
+          <CampoTexto
+            rotulo="Observação"
+            valor={campos.observacao}
+            aoAlterar={(valor) => alterar('observacao', valor)}
+            placeholder="Descreva brevemente o motivo…"
+            erro={erros.observacao}
+            multilinha
+          />
 
           {falha && <Alerta variante="erro" titulo="Não foi possível enviar" mensagem={falha} />}
 
@@ -188,19 +207,10 @@ export function NovoAtestado({ token, aoFechar, aoEnviado }: PropsNovoAtestado) 
             variante="primario"
             tamanho={48}
             forma="pilula"
-            texto="Enviar atestado"
+            texto="Enviar Atestado"
             larguraTotal
             carregando={enviando}
             aoPressionar={() => void enviar()}
-          />
-          <Botao
-            variante="fantasma"
-            tamanho={40}
-            forma="pilula"
-            texto="Cancelar"
-            larguraTotal
-            desabilitado={enviando}
-            aoPressionar={aoFechar}
           />
         </View>
       }

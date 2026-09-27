@@ -47,3 +47,13 @@ test('erro substitui ajuda e usa a cor de erro', async () => {
   expect(screen.getByText('E-mail inválido')).toBeTruthy();
   expect(screen.queryByText('Usaremos para contato')).toBeNull();
 });
+
+test('multilinha liga multiline no TextInput', async () => {
+  await render(<CampoTexto rotulo="Observação" valor="" aoAlterar={() => {}} multilinha />);
+  expect(screen.getByTestId('campo-texto-input').props.multiline).toBe(true);
+});
+
+test('sem multilinha o TextInput é de uma linha', async () => {
+  await render(<CampoTexto rotulo="Nome" valor="" aoAlterar={() => {}} />);
+  expect(screen.getByTestId('campo-texto-input').props.multiline).toBeFalsy();
+});
