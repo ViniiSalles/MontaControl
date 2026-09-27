@@ -1,6 +1,16 @@
 import { expect, test } from '@playwright/test'
 import { autenticar, criarAtestadoPendente, entrarComoRh, hojeISO, USUARIOS_SEED } from './apoio/api'
 
+/**
+ * Abre o atestado pendente mais recente do Montador Seed.
+ * A lista está ordenada por createdAt ascending; como o Playwright roda com 1 worker (serial),
+ * o `.last()` sempre pega o atestado que acaba de ser criado no teste.
+ */
+async function abrirAtestadoMaisRecente(page: import('@playwright/test').Page): Promise<void> {
+  const tabela = page.getByRole('table', { name: 'Atestados' })
+  await tabela.getByRole('row', { name: /Montador Seed.*Pendente/i }).last().click()
+}
+
 // N3T2 — aprovação de atestado médico submetido pelo montador (US13, UC18).
 test('N3T2 — RH visualiza a foto por Signed URL e aprova o atestado', async ({ page, request }) => {
   const token = await autenticar(request, USUARIOS_SEED.montador)
@@ -10,9 +20,7 @@ test('N3T2 — RH visualiza a foto por Signed URL e aprova o atestado', async ({
   await expect(page.getByRole('heading', { name: 'Atestados', exact: true })).toBeVisible()
   await expect(page.getByText(/\d+ pendentes?/i)).toBeVisible()
 
-  const tabela = page.getByRole('table', { name: 'Atestados' })
-  // Seleciona o atestado mais recente (último na lista, que é o que acabamos de criar)
-  await tabela.getByRole('row', { name: /Montador Seed.*Pendente/i }).last().click()
+  await abrirAtestadoMaisRecente(page)
 
   const painel = page.getByRole('complementary', { name: 'Detalhes do Atestado' })
   const foto = painel.getByRole('img', { name: 'Foto do atestado' }).first()
@@ -33,8 +41,7 @@ test('N8T3 — RH recusa informando o motivo', async ({ page, request }) => {
   await criarAtestadoPendente(request, token, hojeISO())
 
   await entrarComoRh(page)
-  const tabela = page.getByRole('table', { name: 'Atestados' })
-  await tabela.getByRole('row', { name: /Montador Seed.*Pendente/i }).first().click()
+  await abrirAtestadoMaisRecente(page)
 
   const painel = page.getByRole('complementary', { name: 'Detalhes do Atestado' })
   await painel.getByRole('button', { name: 'Recusar' }).click()
@@ -51,8 +58,7 @@ test('Atestado sem observação exibe texto padrão', async ({ page, request }) 
   await criarAtestadoPendente(request, token, hojeISO())
 
   await entrarComoRh(page)
-  const tabela = page.getByRole('table', { name: 'Atestados' })
-  await tabela.getByRole('row', { name: /Montador Seed.*Pendente/i }).first().click()
+  await abrirAtestadoMaisRecente(page)
 
   const painel = page.getByRole('complementary', { name: 'Detalhes do Atestado' })
   await expect(painel.getByText('Sem observação')).toBeVisible()
