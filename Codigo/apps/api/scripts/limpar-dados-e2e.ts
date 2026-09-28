@@ -71,9 +71,13 @@ async function removerArquivos(supabase: SupabaseClient, caminhos: string[]): Pr
 async function limparJornadas(prisma: PrismaClient, { desde, dryRun }: Opcoes): Promise<string> {
   const where = filtroJornadasSeed(desde);
   const jornadas = await prisma.jornada.findMany({ where, select: { id: true } });
+  const idsJornadas = jornadas.map((j) => j.id);
   if (dryRun) return `jornadas: ${jornadas.length} (ids ${ids(jornadas)})`;
   console.log(`Removendo ${jornadas.length} jornadas (ids ${ids(jornadas)}).`);
-  const { count } = await prisma.jornada.deleteMany({ where });
+  const [, { count }] = await prisma.$transaction([
+    prisma.marcacaoPonto.deleteMany({ where: { jornadaId: { in: idsJornadas } } }),
+    prisma.jornada.deleteMany({ where: { id: { in: idsJornadas } } }),
+  ]);
   return `jornadas removidas: ${count}`;
 }
 
@@ -103,6 +107,7 @@ async function limparUsuariosE2e(
         prisma.atestadoFoto.deleteMany({ where: { atestado: porUsuario } }),
         prisma.atestado.deleteMany({ where: { id: { in: atestados.map((a) => a.id) } } }),
         prisma.solicitacaoPonto.deleteMany({ where: porUsuario }),
+        prisma.marcacaoPonto.deleteMany({ where: porUsuario }),
         prisma.jornada.deleteMany({ where: porUsuario }),
         prisma.bancoHoras.deleteMany({ where: porUsuario }),
         prisma.pedidoMontador.deleteMany({ where: porUsuario }),

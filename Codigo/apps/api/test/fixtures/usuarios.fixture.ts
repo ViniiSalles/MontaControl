@@ -130,6 +130,7 @@ export async function apagarUsuarioFixture(
           prisma.atestadoFoto.deleteMany({ where: { atestado: porUsuario } }),
           prisma.atestado.deleteMany({ where: porUsuario }),
           prisma.solicitacaoPonto.deleteMany({ where: porUsuario }),
+          prisma.marcacaoPonto.deleteMany({ where: porUsuario }),
           prisma.jornada.deleteMany({ where: porUsuario }),
           prisma.bancoHoras.deleteMany({ where: porUsuario }),
           prisma.avariaFoto.deleteMany({ where: { avaria: { registradaPor: id } } }),

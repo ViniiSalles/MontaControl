@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { StatusJornada } from '../../generated/prisma';
+import { Prisma, StatusJornada, TipoMarcacao } from '../../generated/prisma';
 import { LIMITE_JORNADA_MS } from '@montacontrol/shared';
 import type { JornadaDTO } from '@montacontrol/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { CHAVE_LOCK_NSR } from '../common/marcacao-ponto-lock';
 import { SELECAO_JORNADA, paraJornadaDTO } from './jornada-mapper';
 
 export interface DadosCheckin {
@@ -26,6 +27,10 @@ export interface DadosCheckout {
 
 /** Status que caracterizam jornada aberta — a que impede um segundo check-in. */
 const STATUS_ABERTOS = [StatusJornada.EM_ANDAMENTO, StatusJornada.PAUSADA];
+
+/** Marcação é "offline" quando a gravação chegou mais de 2 min depois de acontecer no aparelho. */
+const LIMITE_OFFLINE_MS = 2 * 60_000;
+const COLETOR_APLICATIVO_MOBILE = '01';
 
 @Injectable()
 export class JornadasRepository {
@@ -57,40 +62,88 @@ export class JornadasRepository {
   }
 
   async criarCheckin(dados: DadosCheckin): Promise<JornadaDTO> {
-    const linha = await this.prisma.jornada.create({
-      data: {
+    return this.prisma.$transaction(async (tx) => {
+      const linha = await tx.jornada.create({
+        data: {
+          usuarioId: dados.usuarioId,
+          pedidoId: dados.pedidoId,
+          checkinIdCliente: dados.idCliente,
+          checkinLatitude: dados.latitude,
+          checkinLongitude: dados.longitude,
+          checkinEndereco: dados.endereco,
+          checkinAt: dados.checkinAt,
+          status: StatusJornada.EM_ANDAMENTO,
+        },
+        select: SELECAO_JORNADA,
+      });
+      await this.registrarMarcacao(tx, {
         usuarioId: dados.usuarioId,
-        pedidoId: dados.pedidoId,
-        checkinIdCliente: dados.idCliente,
-        checkinLatitude: dados.latitude,
-        checkinLongitude: dados.longitude,
-        checkinEndereco: dados.endereco,
-        checkinAt: dados.checkinAt,
-        status: StatusJornada.EM_ANDAMENTO,
-      },
-      select: SELECAO_JORNADA,
+        jornadaId: linha.id,
+        tipo: TipoMarcacao.ENTRADA,
+        marcadoEm: dados.checkinAt,
+      });
+      return paraJornadaDTO(linha);
     });
-    return paraJornadaDTO(linha);
   }
 
   async registrarCheckout(jornadaId: number, dados: DadosCheckout): Promise<JornadaDTO> {
-    const linha = await this.prisma.jornada.update({
-      where: { id: jornadaId },
-      data: {
-        // `undefined` (não `null`) quando ausente: um `update` do Prisma
-        // apaga a coluna com `null`, e o pedido já gravado no check-in não
-        // pode ser perdido só porque o check-out não informou um.
-        pedidoId: dados.pedidoId ?? undefined,
-        checkoutIdCliente: dados.idCliente,
-        checkoutLatitude: dados.latitude,
-        checkoutLongitude: dados.longitude,
-        checkoutEndereco: dados.endereco,
-        checkoutAt: dados.checkoutAt,
-        status: StatusJornada.FINALIZADA,
-      },
-      select: SELECAO_JORNADA,
+    return this.prisma.$transaction(async (tx) => {
+      const linha = await tx.jornada.update({
+        where: { id: jornadaId },
+        data: {
+          // `undefined` (não `null`) quando ausente: um `update` do Prisma
+          // apaga a coluna com `null`, e o pedido já gravado no check-in não
+          // pode ser perdido só porque o check-out não informou um.
+          pedidoId: dados.pedidoId ?? undefined,
+          checkoutIdCliente: dados.idCliente,
+          checkoutLatitude: dados.latitude,
+          checkoutLongitude: dados.longitude,
+          checkoutEndereco: dados.endereco,
+          checkoutAt: dados.checkoutAt,
+          status: StatusJornada.FINALIZADA,
+        },
+        select: SELECAO_JORNADA,
+      });
+      await this.registrarMarcacao(tx, {
+        usuarioId: linha.usuarioId,
+        jornadaId,
+        tipo: TipoMarcacao.SAIDA,
+        marcadoEm: dados.checkoutAt,
+      });
+      return paraJornadaDTO(linha);
     });
-    return paraJornadaDTO(linha);
+  }
+
+  /**
+   * Grava a marcação de ponto (NSR) na mesma transação do check-in/check-out.
+   * NSR sem buracos: `pg_advisory_xact_lock` + `MAX(nsr)+1` dentro da
+   * transação — nunca uma sequence, que deixaria buracos em rollback.
+   *
+   * `pg_advisory_xact_lock` retorna `void`, e o driver adapter `@prisma/adapter-pg`
+   * não sabe deserializar essa coluna (`UnsupportedNativeDataType`) — por isso o
+   * `IS NULL` no final, só para dar ao resultado um tipo (`boolean`) que o
+   * adapter consegue ler; o valor em si é descartado.
+   */
+  private async registrarMarcacao(
+    tx: Prisma.TransactionClient,
+    dados: { usuarioId: number; jornadaId: number; tipo: TipoMarcacao; marcadoEm: Date },
+  ): Promise<void> {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(${CHAVE_LOCK_NSR}::bigint) IS NULL`;
+    const agregado = await tx.marcacaoPonto.aggregate({ _max: { nsr: true } });
+    const proximoNsr = (agregado._max.nsr ?? 0) + 1;
+    const gravadoEm = new Date();
+    await tx.marcacaoPonto.create({
+      data: {
+        nsr: proximoNsr,
+        usuarioId: dados.usuarioId,
+        jornadaId: dados.jornadaId,
+        tipo: dados.tipo,
+        marcadoEm: dados.marcadoEm,
+        gravadoEm,
+        coletor: COLETOR_APLICATIVO_MOBILE,
+        offline: gravadoEm.getTime() - dados.marcadoEm.getTime() > LIMITE_OFFLINE_MS,
+      },
+    });
   }
 
   async listarNoPeriodo(usuarioId: number, inicioIso: string, fimIso: string): Promise<JornadaDTO[]> {

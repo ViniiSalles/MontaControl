@@ -71,6 +71,14 @@ enum StatusSolicitacaoPonto {
   REJEITADA
 }
 
+/// Tipo de marcação de ponto original (check-in/check-out) — usado pela
+/// tabela `marcacao_ponto` (AFD, Portaria 671/2021). Pontos em atraso
+/// aprovados não entram aqui (são tratamento, não marcação original).
+enum TipoMarcacao {
+  ENTRADA
+  SAIDA
+}
+
 // ─── Usuário e Autenticação ──────────────────────────────────────────────────
 
 model Usuario {
@@ -97,6 +105,7 @@ model Usuario {
   avariasRegistradas Avaria[]
   cautelas           Cautela[]
   epis               Epi[]
+  marcacoesPonto     MarcacaoPonto[]
 
   @@map("usuario")
 }
@@ -252,6 +261,7 @@ model Jornada {
   /// Preenchida quando a jornada nasceu da aprovação de um ponto em atraso.
   /// É o que responde `JornadaDTO.lancadoEmAtraso` sem coluna redundante.
   solicitacaoPonto SolicitacaoPonto?
+  marcacoes MarcacaoPonto[]
 
   @@index([usuarioId, checkinAt])
   @@map("jornada")
@@ -288,6 +298,35 @@ model SolicitacaoPonto {
   @@index([status, data])
   @@index([usuarioId, data])
   @@map("solicitacao_ponto")
+}
+
+/// Uma marcação por check-in/check-out original — insumo do AFD (Portaria
+/// 671/2021, Anexo V). NSR e hash formam duas cadeias globais e contínuas,
+/// nunca reiniciadas por período exportado; ver `JornadasRepository` (NSR)
+/// e `afd/marcacoes.repository.ts` (selagem do hash).
+model MarcacaoPonto {
+  id        Int          @id @default(autoincrement())
+  nsr       Int          @unique
+  usuarioId Int          @map("usuario_id")
+  jornadaId Int          @map("jornada_id")
+  tipo      TipoMarcacao
+  /// Hora da marcação no aparelho.
+  marcadoEm DateTime     @map("marcado_em")
+  /// Hora em que o servidor gravou — usada para decidir `offline`.
+  gravadoEm DateTime     @map("gravado_em")
+  /// `"01"` = aplicativo mobile — único coletor existente hoje.
+  coletor   String       @db.Char(2)
+  offline   Boolean
+  /// SHA-256 do registro tipo 7 (Anexo V); `null` até a selagem, feita sob
+  /// demanda pelo `AfdService` antes de cada exportação.
+  hash      String?      @db.Char(64)
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+  jornada Jornada @relation(fields: [jornadaId], references: [id])
+
+  @@unique([jornadaId, tipo])
+  @@index([marcadoEm])
+  @@map("marcacao_ponto")
 }
 
 model BancoHoras {

@@ -4,6 +4,7 @@ import request from 'supertest';
 import { Perfil } from '../generated/prisma';
 import { criarApp } from './setup/criar-app';
 import { apagarUsuariosFixture, criarUsuarioFixture, UsuarioFixture } from './fixtures/usuarios.fixture';
+import { PrismaService } from '../src/prisma/prisma.service';
 
 async function login(app: INestApplication, usuario: UsuarioFixture): Promise<string> {
   const resposta = await request(app.getHttpServer())
@@ -131,5 +132,37 @@ describe('Jornadas (e2e)', () => {
       .get('/api/jornadas/historico?dias=7')
       .set('Authorization', `Bearer ${token}`)
       .expect(400);
+  });
+
+  it('N check-ins paralelos de montadores diferentes geram NSR consecutivo, sem buracos', async () => {
+    const prisma = app.get(PrismaService);
+    const N = 5;
+    const fixturesConcorrentes = await Promise.all(
+      Array.from({ length: N }, () => criarFixture(Perfil.MONTADOR)),
+    );
+    const tokens = await Promise.all(fixturesConcorrentes.map((fixture) => login(app, fixture)));
+
+    const respostas = await Promise.all(
+      tokens.map((token) =>
+        request(app.getHttpServer())
+          .post('/api/jornadas/checkin')
+          .set('Authorization', `Bearer ${token}`)
+          .send(corpoCheckin())
+          .expect(201),
+      ),
+    );
+
+    const jornadaIds = respostas.map((resposta) => resposta.body.id as number);
+    const marcacoes = await prisma.marcacaoPonto.findMany({
+      where: { jornadaId: { in: jornadaIds } },
+      orderBy: { nsr: 'asc' },
+      select: { nsr: true },
+    });
+
+    expect(marcacoes).toHaveLength(N);
+    const nsrs = marcacoes.map((marcacao) => marcacao.nsr);
+    for (let indice = 1; indice < nsrs.length; indice += 1) {
+      expect(nsrs[indice]).toBe(nsrs[indice - 1] + 1); // consecutivo — não checa o valor absoluto, só a ausência de buraco
+    }
   });
 });
