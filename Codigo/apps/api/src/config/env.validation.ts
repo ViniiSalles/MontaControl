@@ -1,5 +1,5 @@
 import { plainToInstance } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsString, IsUrl, Max, Min, validateSync } from 'class-validator';
+import { IsEnum, IsInt, IsOptional, IsString, IsUrl, Matches, Max, MaxLength, Min, validateSync } from 'class-validator';
 
 enum Ambiente {
   Development = 'development',
@@ -50,6 +50,22 @@ class EnvironmentVariables {
   /** Bucket privado das fotos de atestado. Nunca público: o acesso é só por URL assinada. */
   @IsString()
   SUPABASE_BUCKET_ATESTADOS!: string;
+
+  /** Dados do empregador no AFD (Portaria 671/2021, Anexo V, registro tipo 1). */
+  @Matches(/^\d{14}$/, { message: 'EMPRESA_CNPJ deve ter 14 dígitos numéricos' })
+  EMPRESA_CNPJ!: string;
+
+  @IsString()
+  @MaxLength(150)
+  EMPRESA_RAZAO_SOCIAL!: string;
+
+  /** Número de registro no INPI do REP-P — até 17 dígitos. */
+  @Matches(/^\d{1,17}$/, { message: 'REP_P_REGISTRO_INPI deve ter só dígitos, até 17' })
+  REP_P_REGISTRO_INPI!: string;
+
+  /** CNPJ do fabricante/desenvolvedor do REP-P (o próprio MontaControl). */
+  @Matches(/^\d{14}$/, { message: 'DESENVOLVEDOR_CNPJ deve ter 14 dígitos numéricos' })
+  DESENVOLVEDOR_CNPJ!: string;
 }
 
 export function validate(config: Record<string, unknown>): EnvironmentVariables {
