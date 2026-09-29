@@ -23,8 +23,14 @@ export const SELECAO_JORNADA = {
 
 type LinhaJornada = Prisma.JornadaGetPayload<{ select: typeof SELECAO_JORNADA }>;
 
-function numero(valor: Prisma.Decimal | null): number | null {
-  return valor === null ? null : valor.toNumber();
+/**
+ * `== null` cobre tanto `null` (coluna nullable ausente, o que o Prisma
+ * sempre devolve em produção) quanto `undefined` (objeto parcial de teste
+ * ou seleção incompleta) — sem isso, `undefined` faria `.toNumber()` lançar
+ * `TypeError` em vez de virar `null` como o resto da função já assume.
+ */
+function numero(valor: Prisma.Decimal | null | undefined): number | null {
+  return valor == null ? null : valor.toNumber();
 }
 
 /**
