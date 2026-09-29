@@ -12,6 +12,7 @@ import { HealthController } from './common/health.controller';
 import { validate } from './config/env.validation';
 import { EspelhoPontoModule } from './espelho-ponto/espelho-ponto.module';
 import { JornadasModule } from './jornadas/jornadas.module';
+import { PedidosModule } from './pedidos/pedidos.module';
 import { PontosEmAtrasoModule } from './pontos-em-atraso/pontos-em-atraso.module';
 import { PrismaModule } from './prisma/prisma.module';
 
@@ -31,6 +32,7 @@ import { PrismaModule } from './prisma/prisma.module';
     EspelhoPontoModule,
     AfdModule,
     ClientesModule,
+    PedidosModule,
   ],
   controllers: [HealthController],
   providers: [
