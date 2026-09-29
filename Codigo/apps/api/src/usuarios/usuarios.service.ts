@@ -4,6 +4,7 @@ import { EmailJaCadastradoException } from '../common/exceptions/email-ja-cadast
 import { SupabaseAuthGateway } from '../supabase/supabase-auth.gateway';
 import { Perfil } from '../../generated/prisma';
 import { CpfJaCadastradoException } from './exceptions/cpf-ja-cadastrado.exception';
+import { CpfJaInformadoException } from './exceptions/cpf-ja-informado.exception';
 import { CpfObrigatorioException } from './exceptions/cpf-obrigatorio.exception';
 import { InativacaoDoProprioUsuarioException } from './exceptions/inativacao-do-proprio-usuario.exception';
 import { UsuarioNaoEncontradoException } from './exceptions/usuario-nao-encontrado.exception';
@@ -61,7 +62,19 @@ export class UsuariosService {
     return usuario;
   }
 
+  /**
+   * "Definir uma vez": se o usuário já tem CPF, a rota recusa com 409 antes
+   * de tocar no repositório — sobrescrever um CPF já usado para selar
+   * marcações de ponto deixaria o hash daquelas marcações (calculado com o
+   * CPF antigo) inconsistente com o que a exportação do AFD emitiria dali
+   * em diante. Casa com a UI, que só mostra "Informar CPF" quando o
+   * montador ainda não tem um.
+   */
   async informarCpf(id: number, cpf: string): Promise<UsuarioListado> {
+    const usuarioAtual = await this.usuarios.buscarPorId(id);
+    if (!usuarioAtual) throw new UsuarioNaoEncontradoException();
+    if (usuarioAtual.cpf) throw new CpfJaInformadoException();
+
     const usuario = await this.usuarios.definirCpf(id, somenteDigitos(cpf));
     if (usuario === 'CPF_DUPLICADO') throw new CpfJaCadastradoException();
     if (!usuario) throw new UsuarioNaoEncontradoException();

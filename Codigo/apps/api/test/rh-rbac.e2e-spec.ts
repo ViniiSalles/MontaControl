@@ -80,6 +80,24 @@ describe('Rotas de RH — autorização (e2e)', () => {
       .expect(400);
   });
 
+  it('RH não consegue sobrescrever CPF já informado — segunda PATCH leva 409', async () => {
+    // Fixture própria (não a `montador` compartilhada): o CPF gravado aqui
+    // fica definitivo para o usuário, e não pode colidir com outro teste.
+    const semCpfAinda = await criarFixture(Perfil.MONTADOR);
+
+    await request(app.getHttpServer())
+      .patch(`/api/usuarios/${semCpfAinda.usuarioId}/cpf`)
+      .set('Authorization', `Bearer ${tokenRh}`)
+      .send({ cpf: '11122233396' })
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .patch(`/api/usuarios/${semCpfAinda.usuarioId}/cpf`)
+      .set('Authorization', `Bearer ${tokenRh}`)
+      .send({ cpf: '98765432100' })
+      .expect(409);
+  });
+
   it('sem token, todas respondem 401', async () => {
     await request(app.getHttpServer()).get('/api/banco-horas').query(COMPETENCIA).expect(401);
     await request(app.getHttpServer()).get('/api/pontos-em-atraso/pendentes').expect(401);

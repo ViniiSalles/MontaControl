@@ -2,6 +2,7 @@ import { ConflictException } from '@nestjs/common';
 import { Perfil } from '../../generated/prisma';
 import { SupabaseAuthGateway } from '../supabase/supabase-auth.gateway';
 import { CpfJaCadastradoException } from './exceptions/cpf-ja-cadastrado.exception';
+import { CpfJaInformadoException } from './exceptions/cpf-ja-informado.exception';
 import { CpfObrigatorioException } from './exceptions/cpf-obrigatorio.exception';
 import { InativacaoDoProprioUsuarioException } from './exceptions/inativacao-do-proprio-usuario.exception';
 import { UsuarioNaoEncontradoException } from './exceptions/usuario-nao-encontrado.exception';
@@ -19,12 +20,24 @@ const dadosCadastro = {
 const authUserId = '22222222-2222-2222-2222-222222222222';
 
 describe('UsuariosService', () => {
-  let repository: { listar: jest.Mock; criar: jest.Mock; alterarAtivo: jest.Mock; definirCpf: jest.Mock };
+  let repository: {
+    listar: jest.Mock;
+    criar: jest.Mock;
+    alterarAtivo: jest.Mock;
+    definirCpf: jest.Mock;
+    buscarPorId: jest.Mock;
+  };
   let supabase: { criarUsuario: jest.Mock; excluirUsuario: jest.Mock };
   let service: UsuariosService;
 
   beforeEach(() => {
-    repository = { listar: jest.fn(), criar: jest.fn(), alterarAtivo: jest.fn(), definirCpf: jest.fn() };
+    repository = {
+      listar: jest.fn(),
+      criar: jest.fn(),
+      alterarAtivo: jest.fn(),
+      definirCpf: jest.fn(),
+      buscarPorId: jest.fn(),
+    };
     supabase = { criarUsuario: jest.fn(), excluirUsuario: jest.fn() };
     service = new UsuariosService(
       repository as unknown as UsuariosRepository,
@@ -155,6 +168,7 @@ describe('UsuariosService', () => {
 
   describe('informarCpf', () => {
     it('grava os dígitos e devolve o usuário', async () => {
+      repository.buscarPorId.mockResolvedValue({ id: 4, cpf: null });
       repository.definirCpf.mockResolvedValue({ id: 4, cpf: '52998224725' });
       const usuario = await service.informarCpf(4, '529.982.247-25');
       expect(repository.definirCpf).toHaveBeenCalledWith(4, '52998224725');
@@ -162,13 +176,21 @@ describe('UsuariosService', () => {
     });
 
     it('usuário inexistente → UsuarioNaoEncontradoException', async () => {
-      repository.definirCpf.mockResolvedValue(null);
+      repository.buscarPorId.mockResolvedValue(null);
       await expect(service.informarCpf(99, '52998224725')).rejects.toBeInstanceOf(UsuarioNaoEncontradoException);
+      expect(repository.definirCpf).not.toHaveBeenCalled();
     });
 
     it('CPF já usado por outro → CpfJaCadastradoException', async () => {
+      repository.buscarPorId.mockResolvedValue({ id: 4, cpf: null });
       repository.definirCpf.mockResolvedValue('CPF_DUPLICADO');
       await expect(service.informarCpf(4, '52998224725')).rejects.toBeInstanceOf(CpfJaCadastradoException);
+    });
+
+    it('usuário já tem CPF → CpfJaInformadoException, sem sobrescrever (rota é "definir uma vez")', async () => {
+      repository.buscarPorId.mockResolvedValue({ id: 4, cpf: '52998224725' });
+      await expect(service.informarCpf(4, '11122233396')).rejects.toBeInstanceOf(CpfJaInformadoException);
+      expect(repository.definirCpf).not.toHaveBeenCalled();
     });
   });
 
