@@ -1,22 +1,49 @@
 import { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 import { Perfil } from '../../generated/prisma';
-import { UsuariosRepository } from './usuarios.repository';
+import { UsuariosRepository, violacaoDeCpf } from './usuarios.repository';
 
-function erroConflito(): Prisma.PrismaClientKnownRequestError {
+function erroConflito(meta?: Record<string, unknown>): Prisma.PrismaClientKnownRequestError {
   return new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
     code: 'P2002',
+    clientVersion: '0.0.0',
+    meta,
+  });
+}
+
+/** Formato real com `@prisma/adapter-pg`: `meta.driverAdapterError.cause.constraint`. */
+function erroConflitoAdapter(constraint: { index?: string; fields?: string[] }) {
+  return erroConflito({
+    driverAdapterError: { cause: { kind: 'UniqueConstraintViolation', constraint } },
+    table: 'usuario',
+  });
+}
+
+function erroNaoEncontrado(): Prisma.PrismaClientKnownRequestError {
+  return new Prisma.PrismaClientKnownRequestError('Record not found', {
+    code: 'P2025',
     clientVersion: '0.0.0',
   });
 }
 
+const SELECAO_LISTADO = {
+  id: true,
+  nome: true,
+  email: true,
+  telefone: true,
+  perfil: true,
+  ativo: true,
+  cpf: true,
+  createdAt: true,
+};
+
 describe('UsuariosRepository', () => {
-  let prisma: { usuario: { findUnique: jest.Mock; findMany: jest.Mock; create: jest.Mock } };
+  let prisma: { usuario: { findUnique: jest.Mock; findMany: jest.Mock; create: jest.Mock; update: jest.Mock } };
   let repository: UsuariosRepository;
 
   beforeEach(() => {
     prisma = {
-      usuario: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn() },
+      usuario: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
     };
     repository = new UsuariosRepository(prisma as unknown as PrismaService);
   });
@@ -66,6 +93,8 @@ describe('UsuariosRepository', () => {
         telefone: '(11) 91234-5678',
         perfil: Perfil.MONTADOR,
         ativo: true,
+        cpf: null,
+        createdAt: new Date('2026-09-01T00:00:00Z'),
       });
 
       const usuario = await repository.buscarPorId(7);
@@ -77,10 +106,12 @@ describe('UsuariosRepository', () => {
         telefone: '(11) 91234-5678',
         perfil: Perfil.MONTADOR,
         ativo: true,
+        cpf: null,
+        createdAt: new Date('2026-09-01T00:00:00Z'),
       });
       expect(prisma.usuario.findUnique).toHaveBeenCalledWith({
         where: { id: 7 },
-        select: { id: true, nome: true, email: true, telefone: true, perfil: true, ativo: true },
+        select: SELECAO_LISTADO,
       });
     });
 
@@ -103,6 +134,8 @@ describe('UsuariosRepository', () => {
           telefone: null,
           perfil: Perfil.RH,
           ativo: true,
+          cpf: null,
+          createdAt: new Date('2026-09-01T00:00:00Z'),
         },
       ];
       prisma.usuario.findMany.mockResolvedValue(usuarios);
@@ -111,7 +144,7 @@ describe('UsuariosRepository', () => {
 
       expect(resultado).toEqual(usuarios);
       expect(prisma.usuario.findMany).toHaveBeenCalledWith({
-        select: { id: true, nome: true, email: true, telefone: true, perfil: true, ativo: true },
+        select: SELECAO_LISTADO,
         orderBy: { nome: 'asc' },
       });
     });
@@ -122,6 +155,7 @@ describe('UsuariosRepository', () => {
       nome: 'Nova Montadora',
       email: 'nova@montacontrol.local',
       telefone: '(11) 91234-5678',
+      cpf: '52998224725',
       perfil: Perfil.MONTADOR,
       authUserId: '22222222-2222-2222-2222-222222222222',
     };
@@ -134,6 +168,8 @@ describe('UsuariosRepository', () => {
         telefone: dados.telefone,
         perfil: dados.perfil,
         ativo: true,
+        cpf: dados.cpf,
+        createdAt: new Date('2026-09-01T00:00:00Z'),
       });
 
       const usuario = await repository.criar(dados);
@@ -145,10 +181,12 @@ describe('UsuariosRepository', () => {
         telefone: dados.telefone,
         perfil: dados.perfil,
         ativo: true,
+        cpf: dados.cpf,
+        createdAt: new Date('2026-09-01T00:00:00Z'),
       });
       expect(prisma.usuario.create).toHaveBeenCalledWith({
         data: dados,
-        select: { id: true, nome: true, email: true, telefone: true, perfil: true, ativo: true },
+        select: SELECAO_LISTADO,
       });
     });
 
@@ -160,10 +198,85 @@ describe('UsuariosRepository', () => {
       expect(usuario).toBeNull();
     });
 
+    it("retorna 'CPF_DUPLICADO' quando a violação é do índice de cpf", async () => {
+      prisma.usuario.create.mockRejectedValue(erroConflito({ target: ['cpf'] }));
+
+      await expect(repository.criar(dados)).resolves.toBe('CPF_DUPLICADO');
+    });
+
+    it.each([
+      ['meta.target', () => erroConflito({ target: ['cpf'] })],
+      ['driver adapter (index)', () => erroConflitoAdapter({ index: 'usuario_cpf_key' })],
+      ['driver adapter (fields)', () => erroConflitoAdapter({ fields: ['cpf'] })],
+    ])("CPF duplicado reconhecido via %s", async (_nome, fabricar) => {
+      prisma.usuario.create.mockRejectedValue(fabricar());
+      await expect(repository.criar(dados)).resolves.toBe('CPF_DUPLICADO');
+    });
+
+    it.each([
+      ['meta.target', () => erroConflito({ target: ['email'] })],
+      ['driver adapter (index e-mail)', () => erroConflitoAdapter({ index: 'usuario_email_key' })],
+      ['driver adapter (index auth)', () => erroConflitoAdapter({ index: 'usuario_auth_user_id_key' })],
+      ['driver adapter (fields)', () => erroConflitoAdapter({ fields: ['email'] })],
+    ])('conflito que não é de CPF devolve null via %s', async (_nome, fabricar) => {
+      prisma.usuario.create.mockRejectedValue(fabricar());
+      await expect(repository.criar(dados)).resolves.toBeNull();
+    });
+
     it('propaga outros erros do Postgres', async () => {
       prisma.usuario.create.mockRejectedValue(new Error('conexão perdida'));
 
       await expect(repository.criar(dados)).rejects.toThrow('conexão perdida');
     });
+  });
+
+  describe('definirCpf', () => {
+    it('atualiza o CPF e devolve a projeção', async () => {
+      const atualizado = { id: 4, cpf: '52998224725' };
+      prisma.usuario.update.mockResolvedValue(atualizado);
+
+      const resultado = await repository.definirCpf(4, '52998224725');
+
+      expect(resultado).toEqual(atualizado);
+      expect(prisma.usuario.update).toHaveBeenCalledWith({
+        where: { id: 4 },
+        data: { cpf: '52998224725' },
+        select: SELECAO_LISTADO,
+      });
+    });
+
+    it('retorna null quando o usuário não existe (P2025)', async () => {
+      prisma.usuario.update.mockRejectedValue(erroNaoEncontrado());
+
+      await expect(repository.definirCpf(999, '52998224725')).resolves.toBeNull();
+    });
+
+    it("retorna 'CPF_DUPLICADO' em violação de unicidade (P2002)", async () => {
+      prisma.usuario.update.mockRejectedValue(erroConflito({ target: ['cpf'] }));
+
+      await expect(repository.definirCpf(4, '52998224725')).resolves.toBe('CPF_DUPLICADO');
+    });
+
+    it.each([
+      ['index', { index: 'usuario_cpf_key' }],
+      ['fields', { fields: ['cpf'] }],
+    ])("CPF duplicado via driver adapter (%s)", async (_nome, constraint) => {
+      prisma.usuario.update.mockRejectedValue(erroConflitoAdapter(constraint));
+      await expect(repository.definirCpf(4, '52998224725')).resolves.toBe('CPF_DUPLICADO');
+    });
+
+    it('propaga outros erros', async () => {
+      prisma.usuario.update.mockRejectedValue(new Error('conexão perdida'));
+
+      await expect(repository.definirCpf(4, '52998224725')).rejects.toThrow('conexão perdida');
+    });
+  });
+});
+
+describe('violacaoDeCpf', () => {
+  it('não casa por substring e cai no JSON como último recurso', () => {
+    expect(violacaoDeCpf(erroConflito({ target: ['cpf_extra'] }))).toBe(false);
+    expect(violacaoDeCpf(erroConflito({ algo: ['usuario_cpf_key'] }))).toBe(true);
+    expect(violacaoDeCpf(erroConflito())).toBe(false);
   });
 });

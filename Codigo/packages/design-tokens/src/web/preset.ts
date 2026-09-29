@@ -50,6 +50,12 @@ const colors: Record<string, string> = {
   'success-container': cores.successContainer,
   'on-success-container': cores.onSuccessContainer,
 
+  ancora: cores.ancora,
+  'on-ancora': cores.onAncora,
+  'on-ancora-variant': cores.onAncoraVariant,
+  'on-ancora-apagado': cores.onAncoraApagado,
+  'ancora-divisor': cores.ancoraDivisor,
+
   background: cores.background,
   'on-background': cores.onBackground,
   surface: cores.surface,

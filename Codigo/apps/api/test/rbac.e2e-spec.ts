@@ -2,7 +2,7 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { Perfil } from '../generated/prisma';
 import { criarApp } from './setup/criar-app';
-import { apagarUsuarioFixture, criarUsuarioFixture, UsuarioFixture } from './fixtures/usuarios.fixture';
+import { apagarUsuariosFixture, criarUsuarioFixture, UsuarioFixture } from './fixtures/usuarios.fixture';
 
 async function login(app: INestApplication, usuario: UsuarioFixture): Promise<string> {
   const resposta = await request(app.getHttpServer())
@@ -22,10 +22,11 @@ describe('GET /api/usuarios — RBAC (e2e)', () => {
   });
 
   afterAll(async () => {
-    for (const fixture of fixturesCriadas.reverse()) {
-      await apagarUsuarioFixture(app, fixture);
+    try {
+      await apagarUsuariosFixture(app, fixturesCriadas);
+    } finally {
+      await app.close();
     }
-    await app.close();
   });
 
   async function criarFixture(perfil: Perfil): Promise<UsuarioFixture> {
@@ -94,10 +95,11 @@ describe('GET /api/espelho-ponto — RBAC (e2e)', () => {
   });
 
   afterAll(async () => {
-    for (const fixture of fixturesCriadas.reverse()) {
-      await apagarUsuarioFixture(app, fixture);
+    try {
+      await apagarUsuariosFixture(app, fixturesCriadas);
+    } finally {
+      await app.close();
     }
-    await app.close();
   });
 
   async function criarFixture(perfil: Perfil): Promise<UsuarioFixture> {

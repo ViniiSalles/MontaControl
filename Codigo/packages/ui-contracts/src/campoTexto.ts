@@ -27,4 +27,6 @@ export interface PropsCampoTexto {
   ajuda?: string;
   obrigatorio?: boolean;
   desabilitado?: boolean;
+  /** Várias linhas; só a implementação mobile usa por ora. */
+  multilinha?: boolean;
 }

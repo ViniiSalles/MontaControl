@@ -1,9 +1,8 @@
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { Perfil } from '../generated/prisma';
-import { PrismaService } from '../src/prisma/prisma.service';
 import { criarApp } from './setup/criar-app';
-import { apagarUsuarioFixture, criarUsuarioFixture, UsuarioFixture } from './fixtures/usuarios.fixture';
+import { apagarUsuariosFixture, criarUsuarioFixture, UsuarioFixture } from './fixtures/usuarios.fixture';
 
 async function login(app: INestApplication, usuario: UsuarioFixture): Promise<string> {
   const resposta = await request(app.getHttpServer())
@@ -32,14 +31,11 @@ describe('Rotas de RH — autorização (e2e)', () => {
   });
 
   afterAll(async () => {
-    const prisma = app.get(PrismaService);
-    for (const fixture of fixturesCriadas.reverse()) {
-      if (fixture.usuarioId) {
-        await prisma.bancoHoras.deleteMany({ where: { usuarioId: fixture.usuarioId } });
-      }
-      await apagarUsuarioFixture(app, fixture);
+    try {
+      await apagarUsuariosFixture(app, fixturesCriadas);
+    } finally {
+      await app.close();
     }
-    await app.close();
   });
 
   async function criarFixture(perfil: Perfil): Promise<UsuarioFixture> {
@@ -66,6 +62,40 @@ describe('Rotas de RH — autorização (e2e)', () => {
       .set('Authorization', `Bearer ${tokenMontador}`)
       .send({ ativo: false })
       .expect(403);
+  });
+
+  it('MONTADOR leva 403 ao informar CPF', async () => {
+    await request(app.getHttpServer())
+      .patch(`/api/usuarios/${montador.usuarioId}/cpf`)
+      .set('Authorization', `Bearer ${tokenMontador}`)
+      .send({ cpf: '52998224725' })
+      .expect(403);
+  });
+
+  it('RH com CPF inválido leva 400', async () => {
+    await request(app.getHttpServer())
+      .patch(`/api/usuarios/${montador.usuarioId}/cpf`)
+      .set('Authorization', `Bearer ${tokenRh}`)
+      .send({ cpf: '11111111111' })
+      .expect(400);
+  });
+
+  it('RH não consegue sobrescrever CPF já informado — segunda PATCH leva 409', async () => {
+    // Fixture própria (não a `montador` compartilhada): o CPF gravado aqui
+    // fica definitivo para o usuário, e não pode colidir com outro teste.
+    const semCpfAinda = await criarFixture(Perfil.MONTADOR);
+
+    await request(app.getHttpServer())
+      .patch(`/api/usuarios/${semCpfAinda.usuarioId}/cpf`)
+      .set('Authorization', `Bearer ${tokenRh}`)
+      .send({ cpf: '11122233396' })
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .patch(`/api/usuarios/${semCpfAinda.usuarioId}/cpf`)
+      .set('Authorization', `Bearer ${tokenRh}`)
+      .send({ cpf: '98765432100' })
+      .expect(409);
   });
 
   it('sem token, todas respondem 401', async () => {

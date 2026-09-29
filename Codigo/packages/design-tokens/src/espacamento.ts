@@ -28,4 +28,9 @@ export const espacamentoNomeado = {
   alturaBarraSuperior: 64,
   alturaBarraInferior: 88,
   gradeIcone: 24,
+  larguraBarraLateral: 256,
+  larguraPainelLateral: 440,
+  alturaGrafico: 160,
+  alturaPreviaDocumento: 320,
+  topoPainelLateral: 96,
 } as const;

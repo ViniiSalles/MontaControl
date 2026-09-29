@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { StatusAtestado } from '@montacontrol/shared'
 import type { AtestadoDTO, AtestadoDetalhadoDTO } from '@montacontrol/shared'
 import { useAuth } from '../auth/AuthContext'
@@ -10,43 +10,34 @@ import {
   rejeitarAtestado,
   validarAtestado,
 } from '../api/atestados'
+import { formatarDataHoraCurta } from '../formatacao/datas'
 import { Alerta } from '../ui/Alerta'
-import { Botao } from '../ui/Botao'
+import { Avatar } from '../ui/Avatar'
+import { BadgeStatus } from '../ui/BadgeStatus'
 import { CampoTexto } from '../ui/CampoTexto'
-import { Cartao } from '../ui/Cartao'
-import { Modal } from '../ui/Modal'
+import { SimboloMaterial } from '../ui/SimboloMaterial'
+import { TabelaDados, type ColunaTabela } from '../ui/TabelaDados'
 import { LayoutAutenticado } from './LayoutAutenticado'
+import { PainelAtestado, ROTULO_STATUS, VARIANTE_STATUS, textoPeriodo } from './atestados/PainelAtestado'
 
-/** Dia civil `YYYY-MM-DD` para exibição, sem `new Date` (que aplicaria fuso e voltaria um dia). */
-function formatarDia(dia: string): string {
-  const [ano, mes, diaDoMes] = dia.split('-')
-  return `${diaDoMes}/${mes}/${ano}`
-}
+const mensagemDe = (causa: unknown, padrao: string) => (causa instanceof ErroApi ? causa.message : padrao)
 
-function formatarDataHora(iso: string | null): string {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
-}
-
-const ROTULO_STATUS: Record<StatusAtestado, string> = {
-  [StatusAtestado.PENDENTE]: 'Pendente',
-  [StatusAtestado.VALIDADO]: 'Aprovado',
-  [StatusAtestado.REJEITADO]: 'Rejeitado',
-}
-
-/** US13/UC18 — fila de validação de atestados do RH (Figura 30). */
+/** US13/UC18 — fila e histórico de atestados do RH (`gest_o_de_atestados`). */
 export default function Atestados() {
   const { sessao } = useAuth()
   const token = sessao?.accessToken ?? ''
   const [pendentes, setPendentes] = useState<AtestadoDTO[]>([])
   const [historico, setHistorico] = useState<AtestadoDTO[]>([])
   const [busca, setBusca] = useState('')
-  const [emAnalise, setEmAnalise] = useState<AtestadoDetalhadoDTO | null>(null)
+  const [detalhe, setDetalhe] = useState<AtestadoDetalhadoDTO | null>(null)
   const [motivo, setMotivo] = useState('')
-  const [rejeitando, setRejeitando] = useState(false)
+  const [erroMotivo, setErroMotivo] = useState<string | undefined>()
+  const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
   const [recarregar, setRecarregar] = useState(0)
+  /** Guarda contra corrida: só a resposta da seleção mais recente pode atualizar `detalhe`/`erro`. */
+  const idRequisicaoRef = useRef(0)
 
   useEffect(() => {
     let ativo = true
@@ -57,207 +48,154 @@ export default function Atestados() {
         setHistorico(jaAnalisados)
       })
       .catch((causa: unknown) => {
-        if (ativo) setErro(causa instanceof ErroApi ? causa.message : 'Falha ao carregar a fila.')
+        if (ativo) setErro(mensagemDe(causa, 'Falha ao carregar os atestados.'))
       })
     return () => {
       ativo = false
     }
   }, [token, recarregar])
 
-  const buscaNormalizada = busca.trim().toLowerCase()
-  const pendentesFiltrados = pendentes.filter((atestado) =>
-    atestado.usuarioNome.toLowerCase().includes(buscaNormalizada),
-  )
-  const historicoFiltrado = historico.filter((atestado) =>
-    atestado.usuarioNome.toLowerCase().includes(buscaNormalizada),
-  )
+  const termo = busca.trim().toLowerCase()
+  const linhas = [...pendentes, ...historico].filter((atestado) => atestado.usuarioNome.toLowerCase().includes(termo))
 
-  function fecharModal() {
-    setEmAnalise(null)
-    setMotivo('')
-    setRejeitando(false)
-  }
-
-  /** Sai da fila de pendentes e entra no histórico — daí o refetch das duas listas. */
-  function removerDaFila(id: number, mensagem: string) {
-    setPendentes((atuais) => atuais.filter((item) => item.id !== id))
-    setAviso(mensagem)
-    setRecarregar((valor) => valor + 1)
-    fecharModal()
-  }
-
-  async function aoAnalisar(atestado: AtestadoDTO) {
+  async function aoSelecionar(atestado: AtestadoDTO) {
+    // Uma aprovação/recusa em andamento não pode ser interrompida por uma
+    // nova seleção — a tabela continua navegável, o clique só é ignorado.
+    if (enviando) return
+    const idRequisicao = ++idRequisicaoRef.current
     setErro(null)
+    setAviso(null)
+    setMotivo('')
+    setErroMotivo(undefined)
     try {
-      setEmAnalise(await detalharAtestado(token, atestado.id))
+      const detalhado = await detalharAtestado(token, atestado.id)
+      // Só aplica se ainda for a seleção mais recente — evita que uma
+      // resposta antiga (A) sobrescreva uma seleção mais nova (B).
+      if (idRequisicaoRef.current === idRequisicao) setDetalhe(detalhado)
     } catch (causa: unknown) {
-      setErro(causa instanceof ErroApi ? causa.message : 'Falha ao abrir o atestado.')
+      if (idRequisicaoRef.current === idRequisicao) setErro(mensagemDe(causa, 'Falha ao abrir o atestado.'))
     }
+  }
+
+  function aoFechar() {
+    if (enviando) return
+    idRequisicaoRef.current++
+    setDetalhe(null)
+  }
+
+  function concluir(mensagem: string) {
+    setAviso(mensagem)
+    setDetalhe(null)
+    setMotivo('')
+    setRecarregar((valor) => valor + 1)
   }
 
   async function aoAprovar() {
-    if (!emAnalise) return
+    if (!detalhe) return
+    setEnviando(true)
     try {
-      await validarAtestado(token, emAnalise.id)
-      removerDaFila(emAnalise.id, `Atestado de ${emAnalise.usuarioNome} aprovado.`)
+      await validarAtestado(token, detalhe.id)
+      concluir(`Atestado de ${detalhe.usuarioNome} aprovado.`)
     } catch (causa: unknown) {
-      setErro(causa instanceof ErroApi ? causa.message : 'Falha ao aprovar o atestado.')
+      setErro(mensagemDe(causa, 'Falha ao aprovar o atestado.'))
+    } finally {
+      setEnviando(false)
     }
   }
 
-  async function aoConfirmarRejeicao() {
-    if (!emAnalise) return
+  async function aoRecusar() {
+    if (!detalhe) return
+    if (!motivo.trim()) {
+      setErroMotivo('Informe o motivo para recusar.')
+      return
+    }
+    setEnviando(true)
     try {
-      await rejeitarAtestado(token, emAnalise.id, motivo)
-      removerDaFila(emAnalise.id, `Atestado de ${emAnalise.usuarioNome} rejeitado.`)
+      await rejeitarAtestado(token, detalhe.id, motivo.trim())
+      concluir(`Atestado de ${detalhe.usuarioNome} recusado.`)
     } catch (causa: unknown) {
-      setErro(causa instanceof ErroApi ? causa.message : 'Falha ao rejeitar o atestado.')
+      setErro(mensagemDe(causa, 'Falha ao recusar o atestado.'))
+    } finally {
+      setEnviando(false)
     }
   }
 
-  const acoesDoModal = rejeitando
-    ? [
-        { texto: 'Confirmar rejeição', aoPressionar: () => void aoConfirmarRejeicao() },
-        { texto: 'Voltar', variante: 'fantasma' as const, aoPressionar: () => setRejeitando(false) },
-      ]
-    : [
-        { texto: 'Aprovar', aoPressionar: () => void aoAprovar() },
-        { texto: 'Rejeitar', variante: 'fantasma' as const, aoPressionar: () => setRejeitando(true) },
-      ]
+  const colunas: ColunaTabela<AtestadoDTO>[] = [
+    {
+      titulo: 'Montador',
+      render: (atestado) => (
+        <div className="flex items-center gap-12">
+          <Avatar nome={atestado.usuarioNome} />
+          <span className="text-title-sm">{atestado.usuarioNome}</span>
+        </div>
+      ),
+    },
+    { titulo: 'Data de envio', render: (atestado) => formatarDataHoraCurta(atestado.criadoEm) },
+    { titulo: 'Período', render: (atestado) => textoPeriodo(atestado.dataInicio, atestado.dataFim) },
+    {
+      titulo: 'Status',
+      render: (atestado) => <BadgeStatus variante={VARIANTE_STATUS[atestado.status]} texto={ROTULO_STATUS[atestado.status]} />,
+    },
+    {
+      titulo: 'Ações',
+      alinhamento: 'direita',
+      render: (atestado) => (
+        <SimboloMaterial
+          nome="chevron_right"
+          className={['text-2xl', atestado.status === StatusAtestado.PENDENTE ? 'text-primary' : 'text-outline'].join(' ')}
+        />
+      ),
+    },
+  ]
 
   return (
-    <LayoutAutenticado aba="Atestados">
-      <div className="space-y-24">
-        <Cartao
-          elevacao="elev1"
-          tom="padrao"
-          conteudo={
-            <div className="space-y-16">
-              <h1 className="text-title-lg font-bold text-on-surface">Gestão de Atestados</h1>
-              {erro && <Alerta variante="erro" mensagem={erro} />}
-              {aviso && <Alerta variante="sucesso" mensagem={aviso} />}
-              <CampoTexto
-                rotulo="Buscar funcionário"
-                iconeEsquerda="search"
-                placeholder="Nome do montador"
-                valor={busca}
-                aoAlterar={setBusca}
-              />
-              <h2 className="text-title-md font-bold text-on-surface">Aguardando validação</h2>
-              {pendentesFiltrados.length === 0 ? (
-                <p className="text-body-md text-on-surface-variant">
-                  {pendentes.length === 0
-                    ? 'Nenhum atestado aguardando validação.'
-                    : 'Nenhum montador encontrado para a busca.'}
-                </p>
-              ) : (
-                <table className="w-full text-body-md text-on-surface">
-                  <thead className="text-label-md uppercase text-on-surface-variant">
-                    <tr>
-                      <th className="py-8 text-left">Montador</th>
-                      <th className="py-8 text-left">Período</th>
-                      <th className="py-8 text-right">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pendentesFiltrados.map((atestado) => (
-                      <tr key={atestado.id} className="border-t border-outline-variant/30">
-                        <td className="py-8">{atestado.usuarioNome}</td>
-                        <td className="py-8">
-                          {formatarDia(atestado.dataInicio)} a {formatarDia(atestado.dataFim)}
-                        </td>
-                        <td className="py-8 text-right">
-                          <Botao
-                            variante="primario"
-                            tamanho={40}
-                            forma="retangular"
-                            texto="Analisar"
-                            aoPressionar={() => void aoAnalisar(atestado)}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+    <LayoutAutenticado
+      itemAtivo="/atestados"
+      titulo="Atestados"
+      complementoTitulo={
+        pendentes.length > 0 ? (
+          <BadgeStatus variante="aviso" texto={`${pendentes.length} ${pendentes.length === 1 ? 'pendente' : 'pendentes'}`} />
+        ) : undefined
+      }
+    >
+      <div className="flex flex-col gap-32 lg:flex-row lg:items-start">
+        <section className="min-w-0 flex-1 space-y-24">
+          <div className="flex flex-wrap items-end justify-between gap-16">
+            <div>
+              <h2 className="text-headline-sm text-on-surface">Histórico de Submissões</h2>
+              <p className="text-body-md text-on-surface-variant">Gerencie e valide as ausências justificadas dos montadores.</p>
             </div>
-          }
-        />
+            <div className="w-full max-w-xs">
+              <CampoTexto rotulo="Buscar montador" iconeEsquerda="search" placeholder="Filtrar por nome…" valor={busca} aoAlterar={setBusca} />
+            </div>
+          </div>
+          {erro && <Alerta variante="erro" mensagem={erro} />}
+          {aviso && <Alerta variante="sucesso" mensagem={aviso} />}
+          <TabelaDados
+            rotulo="Atestados"
+            colunas={colunas}
+            linhas={linhas}
+            chave={(atestado) => atestado.id}
+            selecionada={detalhe?.id ?? null}
+            aoSelecionar={(atestado) => void aoSelecionar(atestado)}
+            vazio={pendentes.length + historico.length === 0 ? 'Nenhum atestado enviado ainda.' : 'Nenhum montador encontrado para a busca.'}
+          />
+        </section>
 
-        <Cartao
-          elevacao="elev1"
-          tom="padrao"
-          conteudo={
-            <div className="space-y-16">
-              <h2 className="text-title-md font-bold text-on-surface">Histórico</h2>
-              {historicoFiltrado.length === 0 ? (
-                <p className="text-body-md text-on-surface-variant">
-                  {historico.length === 0
-                    ? 'Nenhum atestado analisado ainda.'
-                    : 'Nenhum montador encontrado para a busca.'}
-                </p>
-              ) : (
-                <table className="w-full text-body-md text-on-surface">
-                  <thead className="text-label-md uppercase text-on-surface-variant">
-                    <tr>
-                      <th className="py-8 text-left">Montador</th>
-                      <th className="py-8 text-left">Período</th>
-                      <th className="py-8 text-left">Situação</th>
-                      <th className="py-8 text-left">Motivo</th>
-                      <th className="py-8 text-left">Analisado em</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {historicoFiltrado.map((atestado) => (
-                      <tr key={atestado.id} className="border-t border-outline-variant/30">
-                        <td className="py-8">{atestado.usuarioNome}</td>
-                        <td className="py-8">
-                          {formatarDia(atestado.dataInicio)} a {formatarDia(atestado.dataFim)}
-                        </td>
-                        <td className="py-8">{ROTULO_STATUS[atestado.status]}</td>
-                        <td className="py-8 text-on-surface-variant">{atestado.motivoRejeicao ?? '—'}</td>
-                        <td className="py-8">{formatarDataHora(atestado.validadoEm)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          }
+        <PainelAtestado
+          atestado={detalhe}
+          motivo={motivo}
+          erroMotivo={erroMotivo}
+          aoAlterarMotivo={(valor) => {
+            setMotivo(valor)
+            setErroMotivo(undefined)
+          }}
+          aoAprovar={() => void aoAprovar()}
+          aoRecusar={() => void aoRecusar()}
+          aoFechar={aoFechar}
+          enviando={enviando}
         />
       </div>
-
-      <Modal
-        visivel={emAnalise !== null}
-        apresentacao="centro"
-        titulo={emAnalise ? `Atestado de ${emAnalise.usuarioNome}` : ''}
-        aoFechar={fecharModal}
-        acoes={acoesDoModal}
-        conteudo={
-          emAnalise && (
-            <div className="space-y-16">
-              <p className="text-body-md text-on-surface-variant">
-                Período: {formatarDia(emAnalise.dataInicio)} a {formatarDia(emAnalise.dataFim)}
-              </p>
-              {emAnalise.fotos.map((foto) => (
-                <img
-                  key={foto.id}
-                  src={foto.url}
-                  alt="Foto do atestado"
-                  className="w-full rounded-md"
-                />
-              ))}
-              {rejeitando && (
-                <CampoTexto
-                  rotulo="Motivo da rejeição"
-                  valor={motivo}
-                  aoAlterar={setMotivo}
-                />
-              )}
-            </div>
-          )
-        }
-      />
     </LayoutAutenticado>
   )
 }

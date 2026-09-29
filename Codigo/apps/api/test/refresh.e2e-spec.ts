@@ -2,7 +2,7 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { criarApp } from './setup/criar-app';
-import { apagarUsuarioFixture, criarUsuarioFixture, UsuarioFixture } from './fixtures/usuarios.fixture';
+import { apagarUsuariosFixture, criarUsuarioFixture, UsuarioFixture } from './fixtures/usuarios.fixture';
 
 describe('POST /api/auth/refresh (e2e)', () => {
   let app: INestApplication;
@@ -13,10 +13,11 @@ describe('POST /api/auth/refresh (e2e)', () => {
   });
 
   afterAll(async () => {
-    for (const fixture of fixturesCriadas.reverse()) {
-      await apagarUsuarioFixture(app, fixture);
+    try {
+      await apagarUsuariosFixture(app, fixturesCriadas);
+    } finally {
+      await app.close();
     }
-    await app.close();
   });
 
   it('refresh token válido → 200 com uma nova sessão', async () => {

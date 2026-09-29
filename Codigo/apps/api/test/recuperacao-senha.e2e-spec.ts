@@ -3,7 +3,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import request from 'supertest';
 import { SUPABASE_CLIENT } from '../src/supabase/supabase-client.token';
 import { criarApp } from './setup/criar-app';
-import { apagarUsuarioFixture, criarUsuarioFixture, UsuarioFixture } from './fixtures/usuarios.fixture';
+import { apagarUsuariosFixture, criarUsuarioFixture, UsuarioFixture } from './fixtures/usuarios.fixture';
 
 const CORPO_202_FIXO = {
   message: 'Se o e-mail informado existir em nossa base, um código de recuperação foi enviado.',
@@ -18,10 +18,11 @@ describe('Recuperação de senha (e2e)', () => {
   });
 
   afterAll(async () => {
-    for (const fixture of fixturesCriadas.reverse()) {
-      await apagarUsuarioFixture(app, fixture);
+    try {
+      await apagarUsuariosFixture(app, fixturesCriadas);
+    } finally {
+      await app.close();
     }
-    await app.close();
   });
 
   describe('POST /api/auth/recuperar-senha', () => {

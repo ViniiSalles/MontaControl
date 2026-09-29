@@ -23,6 +23,7 @@ const atestadoPendente = {
   usuarioNome: 'Montador Um',
   dataInicio: '2026-09-01',
   dataFim: '2026-09-03',
+  observacao: null,
   status: StatusAtestado.PENDENTE,
   motivoRejeicao: null,
   validadoPor: null,
@@ -75,6 +76,24 @@ describe('AtestadosService', () => {
       expect(repository.criar).toHaveBeenCalledWith(
         expect.objectContaining({ usuarioId: 7, dataInicio: '2026-09-01', dataFim: '2026-09-03' }),
       );
+    });
+
+    it('grava a observação aparada', async () => {
+      repository.criar.mockResolvedValue({ ...atestadoPendente, observacao: 'Dor lombar' });
+
+      await service.enviar(7, corpoEnvio({ observacao: '  Dor lombar  ' }));
+
+      expect(repository.criar).toHaveBeenCalledWith(
+        expect.objectContaining({ observacao: 'Dor lombar' }),
+      );
+    });
+
+    it('trata observação vazia ou só espaços como ausente', async () => {
+      repository.criar.mockResolvedValue({ ...atestadoPendente, observacao: null });
+
+      await service.enviar(7, corpoEnvio({ observacao: '   ' }));
+
+      expect(repository.criar).toHaveBeenCalledWith(expect.objectContaining({ observacao: null }));
     });
 
     it('devolve o atestado existente no reenvio do mesmo idCliente, sem novo upload', async () => {

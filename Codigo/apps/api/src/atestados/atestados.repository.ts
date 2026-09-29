@@ -20,6 +20,7 @@ export interface DadosNovoAtestado {
   idCliente: string;
   dataInicio: string;
   dataFim: string;
+  observacao: string | null;
   fotos: FotoArmazenada[];
 }
 
@@ -45,6 +46,7 @@ export class AtestadosRepository {
         idCliente: dados.idCliente,
         dataInicio: new Date(`${dados.dataInicio}T00:00:00.000Z`),
         dataFim: new Date(`${dados.dataFim}T00:00:00.000Z`),
+        observacao: dados.observacao,
         status: StatusAtestado.PENDENTE,
         fotos: { create: dados.fotos },
       },

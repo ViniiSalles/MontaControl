@@ -1,168 +1,250 @@
-import { Fragment, useEffect, useState } from 'react'
-import { useParams, useSearchParams } from 'react-router-dom'
-import type { EspelhoPontoDTO } from '@montacontrol/shared'
+import { useEffect, useState } from 'react'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Perfil } from '@montacontrol/shared'
+import type { EspelhoPontoDTO, UsuarioDTO } from '@montacontrol/shared'
 import { useAuth } from '../auth/AuthContext'
+import { baixarAfd } from '../api/afd'
 import { ErroApi } from '../api/clienteHttp'
 import { buscarEspelhoPonto } from '../api/espelhoPonto'
+import { listarUsuarios } from '../api/usuarios'
+import { competenciaParaTexto, nomeDoMes, textoParaCompetencia } from '../formatacao/datas'
+import { contarFaltas, hojeCivil } from '../formatacao/espelho'
+import { formatarMinutos } from '../formatacao/horas'
 import { Alerta } from '../ui/Alerta'
-import { Cartao } from '../ui/Cartao'
+import { BadgeStatus } from '../ui/BadgeStatus'
+import { Botao } from '../ui/Botao'
+import { CartaoIndicador } from '../ui/CartaoIndicador'
+import { SimboloMaterial } from '../ui/SimboloMaterial'
 import { LayoutAutenticado } from './LayoutAutenticado'
+import { TabelaEspelho } from './espelho-ponto/TabelaEspelho'
 
-/** Minutos → `HH:mm`; hora do dia a partir do ISO, no fuso do navegador do RH. */
-function formatarMinutos(minutos: number): string {
-  const sinal = minutos < 0 ? '-' : ''
-  const total = Math.abs(minutos)
-  return `${sinal}${Math.floor(total / 60)}h${String(total % 60).padStart(2, '0')}`
+const mensagemDe = (causa: unknown, padrao: string) => (causa instanceof ErroApi ? causa.message : padrao)
+const classeRotulo = 'mb-8 block text-label-md uppercase text-on-surface-variant'
+const classeCampo = 'h-alturaCampo w-full rounded-lg border-none bg-surface-container-low px-16 text-body-lg text-on-surface focus:bg-surface-container-lowest focus:shadow-elev2 focus:outline-none'
+
+interface PropsFiltroEspelho {
+  montadores: UsuarioDTO[]
+  montadorInicial: string
+  competenciaInicial: string
+  aoVisualizar: (montadorId: string, competencia: string) => void
 }
 
-function formatarHora(iso: string | null): string {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+/** Estado do formulário vive aqui; o pai troca a `key` quando a URL muda para ressincronizar. */
+function FiltroEspelho({ montadores, montadorInicial, competenciaInicial, aoVisualizar }: PropsFiltroEspelho) {
+  const [montadorEscolhido, setMontadorEscolhido] = useState(montadorInicial)
+  const [competencia, setCompetencia] = useState(competenciaInicial)
+
+  return (
+    <form
+      className="flex flex-col gap-24 rounded-xl bg-surface-container-lowest p-24 shadow-elev1 md:flex-row md:items-end lg:col-span-2"
+      onSubmit={(evento) => {
+        evento.preventDefault()
+        aoVisualizar(montadorEscolhido, competencia)
+      }}
+    >
+      <div className="flex-1">
+        <label htmlFor="filtro-montador" className={classeRotulo}>Selecionar montador</label>
+        <select id="filtro-montador" value={montadorEscolhido} onChange={(evento) => setMontadorEscolhido(evento.target.value)} className={classeCampo}>
+          <option value="">Escolha…</option>
+          {montadores.map((montador) => (
+            <option key={montador.id} value={montador.id}>{montador.nome}</option>
+          ))}
+        </select>
+      </div>
+      <div className="flex-1">
+        <label htmlFor="filtro-mes" className={classeRotulo}>Mês de referência</label>
+        <input id="filtro-mes" type="month" value={competencia} onChange={(evento) => setCompetencia(evento.target.value)} className={classeCampo} />
+      </div>
+      <Botao variante="primario" tamanho={56} forma="pilula" icone="search" texto="Visualizar" aoPressionar={() => aoVisualizar(montadorEscolhido, competencia)} />
+    </form>
+  )
 }
 
-/** US14/UC19 — espelho de ponto completo do montador, mês a mês. */
+/** US14/UC19 — espelho de ponto mensal do montador (`espelho_de_ponto`). */
 export default function EspelhoPonto() {
   const { sessao } = useAuth()
   const token = sessao?.accessToken ?? ''
-  const { usuarioId } = useParams<{ usuarioId: string }>()
+  const navigate = useNavigate()
+  const { usuarioId } = useParams<{ usuarioId?: string }>()
   const [parametros] = useSearchParams()
   const agora = new Date()
   const ano = Number(parametros.get('ano') ?? agora.getFullYear())
   const mes = Number(parametros.get('mes') ?? agora.getMonth() + 1)
+  const hoje = hojeCivil(agora)
+
+  const [montadores, setMontadores] = useState<UsuarioDTO[]>([])
   const [espelho, setEspelho] = useState<EspelhoPontoDTO | null>(null)
   const [erro, setErro] = useState<string | null>(null)
-  const [diasExpandidos, setDiasExpandidos] = useState<Set<string>>(new Set())
-
-  function alternarDia(data: string) {
-    setDiasExpandidos((atual) => {
-      const proximo = new Set(atual)
-      if (proximo.has(data)) proximo.delete(data)
-      else proximo.add(data)
-      return proximo
-    })
-  }
+  const [baixandoAfd, setBaixandoAfd] = useState(false)
+  const [erroAfd, setErroAfd] = useState<string | null>(null)
+  const [erroAfdSemCpf, setErroAfdSemCpf] = useState(false)
 
   useEffect(() => {
+    let ativo = true
+    listarUsuarios(token)
+      .then((usuarios) => {
+        if (ativo) setMontadores(usuarios.filter((usuario) => usuario.perfil === Perfil.MONTADOR))
+      })
+      .catch((causa: unknown) => {
+        if (ativo) setErro(mensagemDe(causa, 'Falha ao carregar montadores.'))
+      })
+    return () => {
+      ativo = false
+    }
+  }, [token])
+
+  useEffect(() => {
+    if (!usuarioId) return
     let ativo = true
     buscarEspelhoPonto(token, Number(usuarioId), ano, mes)
       .then((dados) => {
         if (ativo) setEspelho(dados)
       })
       .catch((causa: unknown) => {
-        if (ativo) setErro(causa instanceof ErroApi ? causa.message : 'Falha ao carregar o espelho.')
+        if (ativo) setErro(mensagemDe(causa, 'Falha ao carregar o espelho.'))
       })
     return () => {
       ativo = false
     }
   }, [token, usuarioId, ano, mes])
 
+  function aoVisualizar(montadorEscolhido: string, competencia: string) {
+    const alvo = textoParaCompetencia(competencia)
+    if (!montadorEscolhido || !alvo) {
+      setErro('Selecione um montador e o mês de referência.')
+      return
+    }
+    setErro(null)
+    setErroAfd(null)
+    setErroAfdSemCpf(false)
+    navigate(`/espelho-ponto/${montadorEscolhido}?ano=${alvo.ano}&mes=${alvo.mes}`)
+  }
+
+  async function aoExportarAfd() {
+    setErroAfd(null)
+    setErroAfdSemCpf(false)
+    setBaixandoAfd(true)
+    try {
+      // O AFD é o arquivo do mês inteiro (todos os montadores, não só o
+      // selecionado no filtro) — por isso usa `ano`/`mes` da página, não do
+      // espelho de um montador específico.
+      await baixarAfd(token, ano, mes)
+    } catch (causa: unknown) {
+      setErroAfd(mensagemDe(causa, 'Falha ao exportar o AFD.'))
+      // "Ir para Montadores" só faz sentido quando o motivo do erro é CPF
+      // faltando (422) — não para 403, 500 ou falha de rede.
+      setErroAfdSemCpf(causa instanceof ErroApi && causa.status === 422)
+    } finally {
+      setBaixandoAfd(false)
+    }
+  }
+
+  // Espelho de outro montador/mês ainda na tela enquanto o novo carrega: não mostrar dados trocados.
+  const espelhoAtual = espelho && String(espelho.usuarioId) === usuarioId && espelho.ano === ano && espelho.mes === mes ? espelho : null
+  const faltas = espelhoAtual ? contarFaltas(espelhoAtual.dias, hoje) : 0
+
   return (
-    <LayoutAutenticado aba="Banco de Horas">
-      <Cartao
-        elevacao="elev1"
-        tom="padrao"
-        conteudo={
-          <div className="space-y-16">
-            <h1 className="text-title-lg font-bold text-on-surface">Espelho de Ponto</h1>
-            {erro && <Alerta variante="erro" mensagem={erro} />}
-            {espelho && (
-              <>
-                <p className="text-body-md text-on-surface-variant">
-                  {espelho.usuarioNome} — {String(espelho.mes).padStart(2, '0')}/{espelho.ano}
-                </p>
-                <table className="w-full text-body-md text-on-surface">
-                  <thead className="text-label-md uppercase text-on-surface-variant">
-                    <tr>
-                      <th className="py-8 text-left">Dia</th>
-                      <th className="py-8 text-left">Entrada</th>
-                      <th className="py-8 text-left">Saída</th>
-                      <th className="py-8 text-right">Horas</th>
-                      <th className="py-8 text-left">Observação</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {espelho.dias.map((dia) => {
-                      const multiploTurnos = dia.turnos.length > 1
-                      const expandido = diasExpandidos.has(dia.data)
-                      return (
-                        <Fragment key={dia.data}>
-                          <tr className="border-t border-outline-variant/30">
-                            <td className="py-8">{dia.data.slice(8, 10)}</td>
-                            {multiploTurnos ? (
-                              <td className="py-8" colSpan={2}>
-                                <button
-                                  type="button"
-                                  onClick={() => alternarDia(dia.data)}
-                                  aria-expanded={expandido}
-                                  className="text-primary underline underline-offset-2"
-                                >
-                                  {dia.turnos.length} turnos {expandido ? '▲' : '▼'}
-                                </button>
-                              </td>
-                            ) : (
-                              <>
-                                <td className="py-8">{formatarHora(dia.inicio)}</td>
-                                <td className="py-8">{formatarHora(dia.fim)}</td>
-                              </>
-                            )}
-                            <td className="py-8 text-right">{formatarMinutos(dia.minutosTrabalhados)}</td>
-                            <td className="py-8 text-on-surface-variant">
-                              {[
-                                dia.abonado ? 'Abonado' : null,
-                                dia.lancadoEmAtraso
-                                  ? (dia.justificativaLancamento ?? 'Lançado em atraso')
-                                  : null,
-                                dia.emAndamento ? 'Sem check-out' : null,
-                                !dia.diaUtil ? 'Não útil' : null,
-                              ]
-                                .filter(Boolean)
-                                .join(' · ')}
-                            </td>
-                          </tr>
-                          {multiploTurnos &&
-                            expandido &&
-                            dia.turnos.map((turno, indice) => (
-                              <tr
-                                key={`${dia.data}-turno-${indice}`}
-                                className="border-t border-outline-variant/10 text-on-surface-variant"
-                              >
-                                <td className="py-4" />
-                                <td className="py-4">{formatarHora(turno.inicio)}</td>
-                                <td className="py-4">{formatarHora(turno.fim)}</td>
-                                <td className="py-4 text-right">
-                                  {formatarMinutos(turno.minutosTrabalhados)}
-                                </td>
-                                <td className="py-4">{turno.lancadoEmAtraso ? 'Lançado em atraso' : ''}</td>
-                              </tr>
-                            ))}
-                        </Fragment>
-                      )
-                    })}
-                  </tbody>
-                </table>
-                <dl className="flex gap-32 text-body-md text-on-surface">
-                  <div>
-                    <dt className="text-label-md uppercase text-on-surface-variant">Trabalhadas</dt>
-                    <dd>{formatarMinutos(espelho.minutosTrabalhados)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-label-md uppercase text-on-surface-variant">Previstas</dt>
-                    <dd>{formatarMinutos(espelho.minutosPrevistos)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-label-md uppercase text-on-surface-variant">Abonadas</dt>
-                    <dd>{formatarMinutos(espelho.minutosAbonados)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-label-md uppercase text-on-surface-variant">Saldo do mês</dt>
-                    <dd className="font-bold">{formatarMinutos(espelho.saldoMinutos)}</dd>
-                  </div>
-                </dl>
-              </>
+    <LayoutAutenticado
+      itemAtivo="/espelho-ponto"
+      titulo="Espelho de Ponto"
+      complementoTitulo={
+        <p className="flex items-center gap-8 text-label-md uppercase text-on-surface-variant">
+          <SimboloMaterial nome="calendar_month" className="text-base" />
+          {nomeDoMes(mes)} {ano}
+        </p>
+      }
+    >
+      <div className="space-y-32">
+        <div className="grid gap-24 lg:grid-cols-3 print:hidden">
+          <FiltroEspelho
+            key={`${usuarioId ?? ''}-${ano}-${mes}`}
+            montadores={montadores}
+            montadorInicial={usuarioId ?? ''}
+            competenciaInicial={competenciaParaTexto(ano, mes)}
+            aoVisualizar={aoVisualizar}
+          />
+          <div className="flex flex-col gap-24">
+            <button
+              type="button"
+              onClick={() => window.print()}
+              disabled={!espelhoAtual}
+              className="flex flex-1 items-center gap-16 rounded-xl bg-surface-container-lowest p-24 text-left shadow-elev1 transition-shadow hover:shadow-elev3 disabled:opacity-40"
+            >
+              <span className="flex h-48 w-48 items-center justify-center rounded-lg bg-error-container text-error">
+                <SimboloMaterial nome="picture_as_pdf" className="text-2xl" />
+              </span>
+              <span className="text-title-md uppercase text-on-surface">Exportar PDF</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => void aoExportarAfd()}
+              disabled={baixandoAfd}
+              className="flex flex-1 items-center gap-16 rounded-xl bg-surface-container-lowest p-24 text-left shadow-elev1 transition-shadow hover:shadow-elev3 disabled:opacity-40"
+            >
+              <span className="flex h-48 w-48 items-center justify-center rounded-lg bg-primary-fixed text-primary">
+                <SimboloMaterial nome="database" className="text-2xl" />
+              </span>
+              <span className="text-title-md uppercase text-on-surface">
+                {baixandoAfd ? 'Exportando…' : 'Exportar AFD'}
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {erroAfd && (
+          <div className="space-y-8">
+            <Alerta variante="erro" mensagem={erroAfd} />
+            {erroAfdSemCpf && (
+              <Link to="/montadores" className="text-body-md font-bold text-primary underline">
+                Ir para Montadores
+              </Link>
             )}
           </div>
-        }
-      />
+        )}
+
+        {erro && <Alerta variante="erro" mensagem={erro} />}
+
+        {!usuarioId && (
+          <p className="rounded-xl bg-surface-container-low p-32 text-center text-body-md text-on-surface-variant">
+            Selecione um montador e o mês de referência.
+          </p>
+        )}
+
+        {espelhoAtual && (
+          <>
+            {/* Cabeçalho só do PDF: o cabeçalho da página é print:hidden. */}
+            <p className="hidden text-title-lg print:block">
+              Espelho de Ponto — {espelhoAtual.usuarioNome} — {nomeDoMes(espelhoAtual.mes)} {espelhoAtual.ano}
+            </p>
+            <section className="space-y-16">
+              <div className="flex items-center justify-between">
+                <h2 className="flex items-center gap-12 text-title-lg text-on-surface">
+                  <span aria-hidden="true" className="h-24 w-4 rounded-full bg-primary" />
+                  Detalhamento Mensal — {espelhoAtual.usuarioNome}
+                </h2>
+                {faltas > 0 && (
+                  <BadgeStatus variante="erro" texto={`${faltas} ${faltas === 1 ? 'falta identificada' : 'faltas identificadas'}`} />
+                )}
+              </div>
+              <TabelaEspelho dias={espelhoAtual.dias} hoje={hoje} />
+              <div className="flex items-center justify-end gap-32 rounded-xl bg-surface-container-high px-24 py-24">
+                <span className="text-label-lg uppercase text-on-surface-variant">Total mensal acumulado:</span>
+                <span className="text-headline-sm text-primary">{formatarMinutos(espelhoAtual.minutosTrabalhados)}</span>
+              </div>
+            </section>
+            <div className="grid gap-24 sm:grid-cols-2 xl:grid-cols-4">
+              <CartaoIndicador rotulo="Horas trabalhadas" valor={formatarMinutos(espelhoAtual.minutosTrabalhados)} />
+              <CartaoIndicador
+                rotulo="Banco de horas"
+                valor={formatarMinutos(espelhoAtual.saldoMinutos, true)}
+                complemento={espelhoAtual.saldoMinutos < 0 ? 'Débito' : 'Crédito'}
+              />
+              <CartaoIndicador tom="erro" rotulo="Total de faltas" valor={String(faltas).padStart(2, '0')} complemento="Dias ausentes" />
+              <CartaoIndicador tom="alerta" rotulo="Horas abonadas" valor={formatarMinutos(espelhoAtual.minutosAbonados)} complemento="Horas" />
+            </div>
+          </>
+        )}
+      </div>
     </LayoutAutenticado>
   )
 }

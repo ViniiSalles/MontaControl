@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Início da execução e2e (limpeza pós-suíte)
+e2e/.inicio-execucao

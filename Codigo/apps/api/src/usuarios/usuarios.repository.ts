@@ -11,6 +11,7 @@ export interface DadosNovoUsuario {
   nome: string;
   email: string;
   telefone: string | null;
+  cpf: string | null;
   perfil: Perfil;
   authUserId: string;
 }
@@ -26,6 +27,35 @@ function ehViolacaoDeUnicidade(erro: unknown): boolean {
     'code' in erro &&
     (erro as { code?: unknown }).code === CODIGO_PRISMA_VIOLACAO_UNICIDADE
   );
+}
+
+/**
+ * Identifica se a violação de unicidade (P2002) é do CPF. O formato de `meta`
+ * depende do runtime: engine clássico traz `meta.target`; com driver adapter
+ * (`@prisma/adapter-pg`) vem `meta.driverAdapterError.cause.constraint` como
+ * `{ index }` ou `{ fields }`. Casa nome exato — nunca substring.
+ */
+export function violacaoDeCpf(erro: unknown): boolean {
+  const meta =
+    (
+      erro as {
+        meta?: {
+          target?: unknown;
+          driverAdapterError?: { cause?: { constraint?: { index?: unknown; fields?: unknown } } };
+        };
+      }
+    ).meta ?? {};
+  const alvos: string[] = [];
+  const empilhar = (valor: unknown): void => {
+    if (Array.isArray(valor)) alvos.push(...valor.map(String));
+    else if (typeof valor === 'string') alvos.push(valor);
+  };
+  empilhar(meta.target);
+  const constraint = meta.driverAdapterError?.cause?.constraint;
+  empilhar(constraint?.index);
+  empilhar(constraint?.fields);
+  if (alvos.length === 0) return /"usuario_cpf_key"|"cpf"/.test(JSON.stringify(meta));
+  return alvos.some((alvo) => alvo === 'cpf' || alvo === 'usuario_cpf_key');
 }
 
 function ehRegistroNaoEncontrado(erro: unknown): boolean {
@@ -53,6 +83,8 @@ const SELECAO_USUARIO_LISTADO = {
   telefone: true,
   perfil: true,
   ativo: true,
+  cpf: true,
+  createdAt: true,
 } as const;
 
 @Injectable()
@@ -80,15 +112,26 @@ export class UsuariosRepository {
     });
   }
 
-  /** Retorna `null` em violação de unicidade (e-mail ou authUserId já existentes). */
-  async criar(dados: DadosNovoUsuario): Promise<UsuarioListado | null> {
+  /** `null` = e-mail ou authUserId já existentes; `'CPF_DUPLICADO'` = CPF já usado por outro usuário. */
+  async criar(dados: DadosNovoUsuario): Promise<UsuarioListado | 'CPF_DUPLICADO' | null> {
     try {
       return await this.prisma.usuario.create({
         data: dados,
         select: SELECAO_USUARIO_LISTADO,
       });
     } catch (erro) {
-      if (ehViolacaoDeUnicidade(erro)) return null;
+      if (ehViolacaoDeUnicidade(erro)) return violacaoDeCpf(erro) ? 'CPF_DUPLICADO' : null;
+      throw erro;
+    }
+  }
+
+  /** `null` = usuário inexistente; `'CPF_DUPLICADO'` = outro usuário já tem esse CPF. */
+  async definirCpf(id: number, cpf: string): Promise<UsuarioListado | 'CPF_DUPLICADO' | null> {
+    try {
+      return await this.prisma.usuario.update({ where: { id }, data: { cpf }, select: SELECAO_USUARIO_LISTADO });
+    } catch (erro) {
+      if (ehRegistroNaoEncontrado(erro)) return null;
+      if (ehViolacaoDeUnicidade(erro)) return 'CPF_DUPLICADO';
       throw erro;
     }
   }

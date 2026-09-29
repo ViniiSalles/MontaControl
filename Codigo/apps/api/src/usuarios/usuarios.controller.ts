@@ -6,6 +6,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { UsuarioAutenticado } from '../auth/usuario-autenticado';
 import { AlterarAtivoDto } from './dto/alterar-ativo.dto';
 import { CadastrarUsuarioDto } from './dto/cadastrar-usuario.dto';
+import { InformarCpfDto } from './dto/informar-cpf.dto';
 import { UsuarioListado } from './usuario-listado';
 import { UsuariosService } from './usuarios.service';
 
@@ -40,6 +41,12 @@ export class UsuariosController {
     return this.mapear(usuario);
   }
 
+  @Roles(Perfil.RH, Perfil.GESTOR)
+  @Patch(':id/cpf')
+  async informarCpf(@Param('id', ParseIntPipe) id: number, @Body() dto: InformarCpfDto): Promise<UsuarioDTO> {
+    return this.mapear(await this.usuarios.informarCpf(id, dto.cpf));
+  }
+
   private mapear(usuario: UsuarioListado): UsuarioDTO {
     return {
       id: usuario.id,
@@ -48,6 +55,8 @@ export class UsuariosController {
       telefone: usuario.telefone,
       perfil: usuario.perfil as unknown as PerfilCompartilhado,
       ativo: usuario.ativo,
+      cpf: usuario.cpf,
+      criadoEm: usuario.createdAt.toISOString(),
     };
   }
 }

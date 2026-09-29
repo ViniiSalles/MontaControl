@@ -2,9 +2,9 @@ import { INestApplication } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { Perfil } from '../generated/prisma';
-import { PrismaService } from '../src/prisma/prisma.service';
 import { criarApp } from './setup/criar-app';
-import { apagarUsuarioFixture, criarUsuarioFixture, UsuarioFixture } from './fixtures/usuarios.fixture';
+import { apagarUsuariosFixture, criarUsuarioFixture, UsuarioFixture } from './fixtures/usuarios.fixture';
+import { PrismaService } from '../src/prisma/prisma.service';
 
 async function login(app: INestApplication, usuario: UsuarioFixture): Promise<string> {
   const resposta = await request(app.getHttpServer())
@@ -32,17 +32,11 @@ describe('Jornadas (e2e)', () => {
   });
 
   afterAll(async () => {
-    // As fixtures MONTADOR desta suíte criam jornadas de verdade via API;
-    // sem apagá-las antes, a FK usuario_id→jornada barra o delete do
-    // usuário e deixa lixo permanente no MontaControlDev.
-    const prisma = app.get(PrismaService);
-    for (const fixture of fixturesCriadas.reverse()) {
-      if (fixture.usuarioId) {
-        await prisma.jornada.deleteMany({ where: { usuarioId: fixture.usuarioId } });
-      }
-      await apagarUsuarioFixture(app, fixture);
+    try {
+      await apagarUsuariosFixture(app, fixturesCriadas);
+    } finally {
+      await app.close();
     }
-    await app.close();
   });
 
   async function criarFixture(perfil: Perfil): Promise<UsuarioFixture> {
@@ -138,5 +132,37 @@ describe('Jornadas (e2e)', () => {
       .get('/api/jornadas/historico?dias=7')
       .set('Authorization', `Bearer ${token}`)
       .expect(400);
+  });
+
+  it('N check-ins paralelos de montadores diferentes geram NSR consecutivo, sem buracos', async () => {
+    const prisma = app.get(PrismaService);
+    const N = 5;
+    const fixturesConcorrentes = await Promise.all(
+      Array.from({ length: N }, () => criarFixture(Perfil.MONTADOR)),
+    );
+    const tokens = await Promise.all(fixturesConcorrentes.map((fixture) => login(app, fixture)));
+
+    const respostas = await Promise.all(
+      tokens.map((token) =>
+        request(app.getHttpServer())
+          .post('/api/jornadas/checkin')
+          .set('Authorization', `Bearer ${token}`)
+          .send(corpoCheckin())
+          .expect(201),
+      ),
+    );
+
+    const jornadaIds = respostas.map((resposta) => resposta.body.id as number);
+    const marcacoes = await prisma.marcacaoPonto.findMany({
+      where: { jornadaId: { in: jornadaIds } },
+      orderBy: { nsr: 'asc' },
+      select: { nsr: true },
+    });
+
+    expect(marcacoes).toHaveLength(N);
+    const nsrs = marcacoes.map((marcacao) => marcacao.nsr);
+    for (let indice = 1; indice < nsrs.length; indice += 1) {
+      expect(nsrs[indice]).toBe(nsrs[indice - 1] + 1); // consecutivo — não checa o valor absoluto, só a ausência de buraco
+    }
   });
 });

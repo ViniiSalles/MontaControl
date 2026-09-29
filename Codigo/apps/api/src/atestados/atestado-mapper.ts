@@ -6,6 +6,7 @@ export const SELECAO_ATESTADO = {
   usuarioId: true,
   dataInicio: true,
   dataFim: true,
+  observacao: true,
   status: true,
   motivoRejeicao: true,
   validadoPor: true,
@@ -24,6 +25,7 @@ interface LinhaAtestado {
   usuarioId: number;
   dataInicio: Date;
   dataFim: Date;
+  observacao: string | null;
   status: StatusAtestado;
   motivoRejeicao: string | null;
   validadoPor: number | null;
@@ -44,6 +46,7 @@ export function paraAtestadoDTO(linha: LinhaAtestado): AtestadoDTO {
     usuarioNome: linha.usuario.nome,
     dataInicio: paraDiaCivil(linha.dataInicio),
     dataFim: paraDiaCivil(linha.dataFim),
+    observacao: linha.observacao,
     status: linha.status as unknown as AtestadoDTO['status'],
     motivoRejeicao: linha.motivoRejeicao,
     validadoPor: linha.validadoPor,

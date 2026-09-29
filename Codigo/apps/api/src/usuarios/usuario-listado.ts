@@ -8,4 +8,6 @@ export interface UsuarioListado {
   telefone: string | null;
   perfil: Perfil;
   ativo: boolean;
+  cpf: string | null;
+  createdAt: Date;
 }

@@ -14,6 +14,7 @@ const ATESTADO: AtestadoDTO = {
   usuarioNome: 'Vinicius Salles',
   dataInicio: '2026-09-01',
   dataFim: '2026-09-03',
+  observacao: null,
   status: StatusAtestado.PENDENTE,
   motivoRejeicao: null,
   validadoPor: null,

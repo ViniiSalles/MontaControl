@@ -3,7 +3,7 @@ import { generateKeyPair, SignJWT } from 'jose';
 import request from 'supertest';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { criarApp } from './setup/criar-app';
-import { apagarUsuarioFixture, criarUsuarioFixture, UsuarioFixture } from './fixtures/usuarios.fixture';
+import { apagarUsuariosFixture, criarUsuarioFixture, UsuarioFixture } from './fixtures/usuarios.fixture';
 
 /**
  * TI02: qualquer variação de token inválido numa rota autenticada
@@ -21,10 +21,11 @@ describe('GET /api/auth/me — token inválido (e2e, TI02)', () => {
   });
 
   afterAll(async () => {
-    for (const fixture of fixturesCriadas.reverse()) {
-      await apagarUsuarioFixture(app, fixture);
+    try {
+      await apagarUsuariosFixture(app, fixturesCriadas);
+    } finally {
+      await app.close();
     }
-    await app.close();
   });
 
   it('token ausente → 401', async () => {

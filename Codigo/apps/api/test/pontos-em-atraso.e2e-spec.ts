@@ -4,9 +4,8 @@ import request from 'supertest';
 import { diaNoFuso, somarDias } from '@montacontrol/shared';
 import { Perfil } from '../generated/prisma';
 import { FUSO_OPERACAO } from '../src/common/fuso';
-import { PrismaService } from '../src/prisma/prisma.service';
 import { criarApp } from './setup/criar-app';
-import { apagarUsuarioFixture, criarUsuarioFixture, UsuarioFixture } from './fixtures/usuarios.fixture';
+import { apagarUsuariosFixture, criarUsuarioFixture, UsuarioFixture } from './fixtures/usuarios.fixture';
 
 async function login(app: INestApplication, usuario: UsuarioFixture): Promise<string> {
   const resposta = await request(app.getHttpServer())
@@ -40,16 +39,11 @@ describe('Pontos em atraso (e2e)', () => {
   });
 
   afterAll(async () => {
-    // A FK solicitacao_ponto.usuario_id barra o delete do usuário; sem
-    // limpar antes, a fixture deixa lixo permanente no MontaControlDev.
-    const prisma = app.get(PrismaService);
-    for (const fixture of fixturesCriadas.reverse()) {
-      if (fixture.usuarioId) {
-        await prisma.solicitacaoPonto.deleteMany({ where: { usuarioId: fixture.usuarioId } });
-      }
-      await apagarUsuarioFixture(app, fixture);
+    try {
+      await apagarUsuariosFixture(app, fixturesCriadas);
+    } finally {
+      await app.close();
     }
-    await app.close();
   });
 
   async function criarFixture(perfil: Perfil): Promise<UsuarioFixture> {

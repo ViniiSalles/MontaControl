@@ -10,6 +10,7 @@ import { preset } from '../src/web/preset';
 import { variaveisCss, variaveisCssTexto } from '../src/web/variaveis';
 import { estiloTexto, tipografia as tipografiaNative } from '../src/native/texto';
 import { sombraPorNivel } from '../src/native/sombra';
+import { NOMES_ICONE } from '../src/icones';
 
 const hex = /^#[0-9a-f]{6}$/i;
 
@@ -75,4 +76,25 @@ assert.equal(navAndroid.shadowOffset.height, 0, 'Android não faz offset negativ
 assert.ok(navAndroid.elevation > 0, 'Android usa elevation, não shadow*');
 
 console.log('OK — native/ (texto, sombra) smoke test passou.');
+
+// Sidebar "âncora" (DESIGN.md §4) — valores do code.html do Stitch.
+assert.equal(cores.ancora, '#1e1e2d');
+assert.equal(preset.colors.ancora, cores.ancora);
+assert.equal(preset.colors['on-ancora-variant'], cores.onAncoraVariant);
+assert.equal(espacamentoNomeado.larguraBarraLateral, 256);
+assert.equal(espacamentoNomeado.larguraPainelLateral, 440);
+assert.equal(espacamentoNomeado.alturaGrafico, 160);
+// PainelLateral sticky (Task 6, fix round 1): altura da prévia do
+// documento e o topo do `sticky` = alturaBarraSuperior (64) + paddingTelaWeb (32).
+assert.equal(espacamentoNomeado.alturaPreviaDocumento, 320);
+assert.equal(espacamentoNomeado.topoPainelLateral, 96);
+assert.equal(
+  espacamentoNomeado.topoPainelLateral,
+  espacamentoNomeado.alturaBarraSuperior + espacamentoNomeado.paddingTelaWeb,
+);
+
+// Ícones: lista em runtime (gerador do mobile) sem duplicatas.
+assert.equal(new Set(NOMES_ICONE).size, NOMES_ICONE.length);
+assert.ok(NOMES_ICONE.includes('pending_actions'));
+
 console.log('OK — @montacontrol/design-tokens smoke test passou.');

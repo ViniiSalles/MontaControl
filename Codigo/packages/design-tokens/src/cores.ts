@@ -65,6 +65,15 @@ export const cores = {
   successContainer: '#a4f4ab',
   onSuccessContainer: '#00390f',
 
+  // Sidebar "âncora" (DESIGN.md §4, "The Dark Sidebar acts as the Anchor").
+  // Transcritos do code.html das telas web do Stitch: bg-[#1E1E2D],
+  // text-slate-400 (itens), text-slate-500 (subtítulo), border-slate-800.
+  ancora: '#1e1e2d',
+  onAncora: '#ffffff',
+  onAncoraVariant: '#94a3b8',
+  onAncoraApagado: '#64748b',
+  ancoraDivisor: '#1e293b',
+
   // `scrim`: overlay usado atrás de modais/drawers (glassmorphism). O valor é
   // só a cor — opacidade (40%) e blur (4px) são decisão de uso do
   // componente/preset consumidor, não ficam embutidos no token.

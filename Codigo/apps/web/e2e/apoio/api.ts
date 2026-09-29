@@ -22,6 +22,7 @@ export async function criarAtestadoPendente(
   request: APIRequestContext,
   token: string,
   dia: string,
+  observacao?: string,
 ): Promise<number> {
   const resposta = await request.post('/api/atestados', {
     headers: { Authorization: `Bearer ${token}` },
@@ -30,6 +31,7 @@ export async function criarAtestadoPendente(
       dataInicio: dia,
       dataFim: dia,
       fotos: [{ conteudoBase64: UM_PIXEL_PNG_BASE64, mimeType: 'image/png' }],
+      ...(observacao && { observacao }),
     },
   })
   const corpo = (await resposta.json()) as { id: number }
@@ -76,4 +78,17 @@ export async function entrarComoRh(page: import('@playwright/test').Page): Promi
   await page.getByRole('textbox', { name: 'Senha', exact: true }).fill(SENHA_SEED)
   await page.getByRole('button', { name: 'Entrar' }).click()
   await page.waitForURL(/\/atestados$/)
+}
+
+/** CPF válido e aleatório (único por execução, na prática). */
+export function gerarCpfValido(): string {
+  const digitos = Array.from({ length: 9 }, () => Math.floor(Math.random() * 10))
+  const verificador = (base: number[]) => {
+    const soma = base.reduce((acc, d, i) => acc + d * (base.length + 1 - i), 0)
+    const resto = (soma * 10) % 11
+    return resto === 10 ? 0 : resto
+  }
+  digitos.push(verificador(digitos))
+  digitos.push(verificador(digitos))
+  return digitos.join('')
 }

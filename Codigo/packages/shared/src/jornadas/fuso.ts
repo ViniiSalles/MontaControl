@@ -130,3 +130,17 @@ export function limitesDoMes(
 
   return { inicioIso, fimIso };
 }
+
+/** Hora local (`HH:mm`) do instante, no fuso informado. */
+export function horaNoFuso(instanteIso: string, fuso: string): string {
+  const p = partesLocais(new Date(instanteIso), fuso);
+  return `${doisDigitos(p.hora)}:${doisDigitos(p.minuto)}`;
+}
+
+/** Deslocamento do fuso no instante, como `"+HHMM"`/`"-HHMM"` (ex.: `"-0300"`). */
+export function offsetFuso(instanteIso: string, fuso: string): string {
+  const minutos = deslocamentoMinutos(new Date(instanteIso), fuso);
+  const sinal = minutos < 0 ? '-' : '+';
+  const absolutos = Math.abs(minutos);
+  return `${sinal}${doisDigitos(Math.floor(absolutos / 60))}${doisDigitos(absolutos % 60)}`;
+}

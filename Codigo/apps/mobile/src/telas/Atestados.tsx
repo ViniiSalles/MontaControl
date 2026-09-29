@@ -1,16 +1,21 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 import { StatusAtestado } from '@montacontrol/shared';
+import type { AtestadoDTO } from '@montacontrol/shared';
+import type { NomeIcone } from '@montacontrol/design-tokens/icones';
 import { cores, espacamento, espacamentoNomeado } from '@montacontrol/design-tokens/native';
 import { Alerta } from '../ui/Alerta';
 import { Badge } from '../ui/Badge';
 import type { VarianteBadge } from '@montacontrol/ui-contracts/badge';
 import { Botao } from '../ui/Botao';
 import { Cartao } from '../ui/Cartao';
+import { Icone } from '../ui/Icone';
 import { Carregando } from '../ui/Carregando';
 import { Tela } from '../ui/Tela';
 import { Texto } from '../ui/Texto';
 import { useAuth } from '../auth/AuthContext';
+import { textoPeriodo } from '../atestados/formatarPeriodo';
+import { atestadosRecentes } from '../atestados/recentes';
 import { useMeusAtestados } from '../atestados/useMeusAtestados';
 import { NovoAtestado } from './atestados/NovoAtestado';
 
@@ -23,13 +28,43 @@ const VARIANTE_POR_STATUS: Record<StatusAtestado, VarianteBadge> = {
 const ROTULO_POR_STATUS: Record<StatusAtestado, string> = {
   [StatusAtestado.PENDENTE]: 'Em análise',
   [StatusAtestado.VALIDADO]: 'Aprovado',
-  [StatusAtestado.REJEITADO]: 'Rejeitado',
+  [StatusAtestado.REJEITADO]: 'Recusado',
 };
 
-/** Dia civil `YYYY-MM-DD` para exibição, sem `new Date` (que aplicaria fuso e voltaria um dia). */
-function formatarDia(dia: string): string {
-  const [ano, mes, diaDoMes] = dia.split('-');
-  return `${diaDoMes}/${mes}/${ano}`;
+const ICONE_POR_STATUS: Record<StatusAtestado, NomeIcone> = {
+  [StatusAtestado.PENDENTE]: 'schedule',
+  [StatusAtestado.VALIDADO]: 'check_circle',
+  [StatusAtestado.REJEITADO]: 'cancel',
+};
+
+const COR_ICONE_POR_STATUS: Record<StatusAtestado, string> = {
+  [StatusAtestado.PENDENTE]: cores.onSurfaceVariant,
+  [StatusAtestado.VALIDADO]: cores.primary,
+  [StatusAtestado.REJEITADO]: cores.error,
+};
+
+const LIMITE_HISTORICO = 5;
+
+function ItemHistorico({ atestado }: { atestado: AtestadoDTO }) {
+  return (
+    <View style={{ gap: espacamento[8] }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: espacamento[12] }}>
+        <Icone nome={ICONE_POR_STATUS[atestado.status]} cor={COR_ICONE_POR_STATUS[atestado.status]} />
+        <View style={{ flex: 1 }}>
+          <Texto variante="titleMd">Atestado</Texto>
+          <Texto variante="bodySm" cor={cores.onSurfaceVariant}>
+            {textoPeriodo(atestado.dataInicio, atestado.dataFim)}
+          </Texto>
+        </View>
+        <Badge variante={VARIANTE_POR_STATUS[atestado.status]} texto={ROTULO_POR_STATUS[atestado.status]} />
+      </View>
+      {atestado.status === StatusAtestado.REJEITADO && atestado.motivoRejeicao && (
+        <Texto variante="bodyMd" cor={cores.onSurfaceVariant}>
+          {atestado.motivoRejeicao}
+        </Texto>
+      )}
+    </View>
+  );
 }
 
 /** US13/UC18 — envio de atestado pelo montador, com foto e acompanhamento da análise. */
@@ -37,11 +72,11 @@ export function Atestados() {
   const { sessao } = useAuth();
   const token = sessao?.accessToken ?? '';
   const { atestados, carregando, erro, recarregar } = useMeusAtestados(token);
-  const [formularioAberto, setFormularioAberto] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [mostrarTodos, setMostrarTodos] = useState<boolean>(false);
+  const { visiveis, ocultos } = atestadosRecentes(atestados, LIMITE_HISTORICO, mostrarTodos);
 
   function aoEnviado() {
-    setFormularioAberto(false);
     setAviso('Atestado enviado. O RH vai analisar.');
     void recarregar();
   }
@@ -49,26 +84,15 @@ export function Atestados() {
   return (
     <Tela rolavel>
       <View style={{ gap: espacamentoNomeado.gapPilha }}>
-        <View style={{ gap: espacamento[4] }}>
-          <Texto variante="labelMd" cor={cores.onSurfaceVariant}>
-            ATESTADOS
-          </Texto>
-          <Texto variante="headlineMd">Meus atestados</Texto>
-        </View>
+        <Texto variante="headlineMd">Atestados Médicos</Texto>
 
         {aviso && <Alerta variante="sucesso" mensagem={aviso} />}
 
-        <Botao
-          variante="primario"
-          tamanho={48}
-          forma="pilula"
-          texto="Novo atestado"
-          larguraTotal
-          aoPressionar={() => {
-            setAviso(null);
-            setFormularioAberto(true);
-          }}
-        />
+        <NovoAtestado token={token} aoEnviado={aoEnviado} aoIniciarEnvio={() => setAviso(null)} />
+
+        <Texto variante="labelMd" cor={cores.onSurfaceVariant}>
+          HISTÓRICO RECENTE
+        </Texto>
 
         {carregando ? (
           <View style={{ alignItems: 'center', paddingVertical: espacamento[32] }}>
@@ -96,38 +120,32 @@ export function Atestados() {
           </Texto>
         ) : (
           <View style={{ gap: espacamento[12] }}>
-            {atestados.map((atestado) => (
+            {visiveis.map((atestado) => (
               <Cartao
                 key={atestado.id}
                 elevacao="elev1"
                 tom="baixo"
-                conteudo={
-                  <View style={{ gap: espacamento[8] }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Texto variante="titleMd">
-                        {formatarDia(atestado.dataInicio)} a {formatarDia(atestado.dataFim)}
-                      </Texto>
-                      <Badge
-                        variante={VARIANTE_POR_STATUS[atestado.status]}
-                        texto={ROTULO_POR_STATUS[atestado.status]}
-                      />
-                    </View>
-                    {atestado.status === StatusAtestado.REJEITADO && atestado.motivoRejeicao && (
-                      <Texto variante="bodyMd" cor={cores.onSurfaceVariant}>
-                        {atestado.motivoRejeicao}
-                      </Texto>
-                    )}
-                  </View>
-                }
+                conteudo={<ItemHistorico atestado={atestado} />}
               />
             ))}
+            {(ocultos > 0 || mostrarTodos) && (
+              <Botao
+                variante="fantasma"
+                tamanho={40}
+                forma="pilula"
+                texto={mostrarTodos ? 'Ver menos' : `Ver todos (${atestados.length})`}
+                larguraTotal
+                aoPressionar={() => setMostrarTodos((atual) => !atual)}
+              />
+            )}
           </View>
         )}
-      </View>
 
-      {formularioAberto && (
-        <NovoAtestado token={token} aoFechar={() => setFormularioAberto(false)} aoEnviado={aoEnviado} />
-      )}
+        <Texto variante="bodySm" cor={cores.onSurfaceVariant}>
+          Aviso LGPD: os dados e documentos enviados são protegidos pela Lei Geral de Proteção de Dados
+          (13.709/2018) e usados exclusivamente para fins de gestão de pessoas.
+        </Texto>
+      </View>
     </Tela>
   );
 }

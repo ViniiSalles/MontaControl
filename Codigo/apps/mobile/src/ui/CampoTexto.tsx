@@ -35,6 +35,7 @@ export function CampoTexto({
   ajuda,
   obrigatorio = false,
   desabilitado = false,
+  multilinha = false,
 }: PropsCampoTexto) {
   const [senhaVisivel, setSenhaVisivel] = useState(false);
   const foco = useRef(new Animated.Value(0)).current;
@@ -78,8 +79,13 @@ export function CampoTexto({
           editable={!desabilitado}
           secureTextEntry={ehSenha && !senhaVisivel}
           keyboardType={tipoNativoPorTipo[tipo]}
+          multiline={multilinha}
+          numberOfLines={multilinha ? 4 : undefined}
+          textAlignVertical={multilinha ? 'top' : undefined}
           style={{
-            height: espacamentoNomeado.alturaCampo,
+            ...(multilinha
+              ? { minHeight: espacamento[80], paddingTop: espacamento[12], paddingBottom: espacamento[12] }
+              : { height: espacamentoNomeado.alturaCampo }),
             borderRadius: raio.lg,
             backgroundColor: cores.surfaceContainerLow,
             paddingLeft: iconeEsquerda ? espacamento[48] : espacamento[16],

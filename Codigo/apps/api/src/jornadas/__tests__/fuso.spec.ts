@@ -1,4 +1,4 @@
-import { comporInstante, diaNoFuso, limitesDoMes, somarDias } from '@montacontrol/shared';
+import { comporInstante, diaNoFuso, horaNoFuso, limitesDoMes, offsetFuso, somarDias } from '@montacontrol/shared';
 
 const FUSO = 'America/Sao_Paulo';
 
@@ -46,5 +46,17 @@ describe('limitesDoMes', () => {
     const { fimIso } = limitesDoMes(12, 2026, FUSO);
 
     expect(fimIso).toBe('2027-01-01T02:59:59.999Z');
+  });
+});
+
+describe('horaNoFuso', () => {
+  it('hora local a partir do instante UTC', () => {
+    expect(horaNoFuso('2026-08-26T11:30:00.000Z', FUSO)).toBe('08:30');
+  });
+});
+
+describe('offsetFuso', () => {
+  it('offset de -03:00 no fuso de operação', () => {
+    expect(offsetFuso('2026-08-26T11:30:00.000Z', FUSO)).toBe('-0300');
   });
 });

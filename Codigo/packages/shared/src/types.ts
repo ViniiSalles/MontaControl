@@ -55,6 +55,10 @@ export interface UsuarioDTO {
   telefone?: string | null;
   perfil: Perfil;
   ativo: boolean;
+  /** 11 dígitos. Só a listagem de usuários (RH/Gestor) projeta; ausente nas respostas de `/auth`. */
+  cpf?: string | null;
+  /** Instante ISO do cadastro. Só a listagem projeta. */
+  criadoEm?: string;
 }
 
 export interface CadastrarUsuarioRequest {
@@ -63,6 +67,11 @@ export interface CadastrarUsuarioRequest {
   senha: string;
   telefone?: string;
   perfil: Perfil;
+  cpf?: string;
+}
+
+export interface InformarCpfRequest {
+  cpf: string;
 }
 
 export interface CheckinRequest {
@@ -218,6 +227,8 @@ export interface EnviarAtestadoRequest {
   dataInicio: string;
   /** `YYYY-MM-DD`, inclusivo. */
   dataFim: string;
+  /** Texto livre do montador (até 500 caracteres); opcional. */
+  observacao?: string;
   /** Ao menos uma foto; o atestado sem documento não é analisável. */
   fotos: FotoBase64[];
 }
@@ -229,6 +240,7 @@ export interface AtestadoDTO {
   usuarioNome: string;
   dataInicio: string;
   dataFim: string;
+  observacao: string | null;
   status: StatusAtestado;
   motivoRejeicao: string | null;
   validadoPor: number | null;
