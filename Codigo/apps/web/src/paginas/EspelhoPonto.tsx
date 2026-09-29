@@ -121,12 +121,14 @@ export default function EspelhoPonto() {
   }
 
   async function aoExportarAfd() {
-    if (!espelhoAtual) return
     setErroAfd(null)
     setErroAfdSemCpf(false)
     setBaixandoAfd(true)
     try {
-      await baixarAfd(token, espelhoAtual.ano, espelhoAtual.mes)
+      // O AFD é o arquivo do mês inteiro (todos os montadores, não só o
+      // selecionado no filtro) — por isso usa `ano`/`mes` da página, não do
+      // espelho de um montador específico.
+      await baixarAfd(token, ano, mes)
     } catch (causa: unknown) {
       setErroAfd(mensagemDe(causa, 'Falha ao exportar o AFD.'))
       // "Ir para Montadores" só faz sentido quando o motivo do erro é CPF
@@ -176,7 +178,7 @@ export default function EspelhoPonto() {
             <button
               type="button"
               onClick={() => void aoExportarAfd()}
-              disabled={!espelhoAtual || baixandoAfd}
+              disabled={baixandoAfd}
               className="flex flex-1 items-center gap-16 rounded-xl bg-surface-container-lowest p-24 text-left shadow-elev1 transition-shadow hover:shadow-elev3 disabled:opacity-40"
             >
               <span className="flex h-48 w-48 items-center justify-center rounded-lg bg-primary-fixed text-primary">
