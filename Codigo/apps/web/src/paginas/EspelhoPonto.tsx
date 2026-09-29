@@ -77,6 +77,7 @@ export default function EspelhoPonto() {
   const [erro, setErro] = useState<string | null>(null)
   const [baixandoAfd, setBaixandoAfd] = useState(false)
   const [erroAfd, setErroAfd] = useState<string | null>(null)
+  const [erroAfdSemCpf, setErroAfdSemCpf] = useState(false)
 
   useEffect(() => {
     let ativo = true
@@ -115,17 +116,22 @@ export default function EspelhoPonto() {
     }
     setErro(null)
     setErroAfd(null)
+    setErroAfdSemCpf(false)
     navigate(`/espelho-ponto/${montadorEscolhido}?ano=${alvo.ano}&mes=${alvo.mes}`)
   }
 
   async function aoExportarAfd() {
     if (!espelhoAtual) return
     setErroAfd(null)
+    setErroAfdSemCpf(false)
     setBaixandoAfd(true)
     try {
       await baixarAfd(token, espelhoAtual.ano, espelhoAtual.mes)
     } catch (causa: unknown) {
       setErroAfd(mensagemDe(causa, 'Falha ao exportar o AFD.'))
+      // "Ir para Montadores" só faz sentido quando o motivo do erro é CPF
+      // faltando (422) — não para 403, 500 ou falha de rede.
+      setErroAfdSemCpf(causa instanceof ErroApi && causa.status === 422)
     } finally {
       setBaixandoAfd(false)
     }
@@ -186,9 +192,11 @@ export default function EspelhoPonto() {
         {erroAfd && (
           <div className="space-y-8">
             <Alerta variante="erro" mensagem={erroAfd} />
-            <Link to="/montadores" className="text-body-md font-bold text-primary underline">
-              Ir para Montadores
-            </Link>
+            {erroAfdSemCpf && (
+              <Link to="/montadores" className="text-body-md font-bold text-primary underline">
+                Ir para Montadores
+              </Link>
+            )}
           </div>
         )}
 
