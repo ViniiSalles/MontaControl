@@ -3,8 +3,8 @@ import { autenticar, baterPontoDeHoje, entrarComoRh, USUARIOS_SEED } from './apo
 
 /**
  * N3T3 — visualização do espelho de ponto com todas as marcações e saldo
- * calculado (US14, UC19). A metade "Exportar AFD" do caso de teste é a
- * issue #56 (plano 3 da refatoração RH).
+ * calculado (US14, UC19), incluindo a exportação do AFD (issue #56, Portaria
+ * 671/2021).
  */
 test('N3T3 — RH abre o espelho de ponto do montador pelo banco de horas', async ({ page, request }) => {
   const token = await autenticar(request, USUARIOS_SEED.montador)
@@ -30,6 +30,12 @@ test('N3T3 — RH abre o espelho de ponto do montador pelo banco de horas', asyn
 
   // Saldo calculado.
   await expect(page.getByText('Banco de horas', { exact: true })).toBeVisible()
+
+  // Exportação do AFD (issue #56).
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: /Exportar AFD/ }).click()
+  const download = await downloadPromise
+  expect(download.suggestedFilename()).toMatch(/^AFD.*REP_P\.txt$/)
 })
 
 test('RH abre o espelho pelo menu e filtra por montador e mês', async ({ page }) => {
