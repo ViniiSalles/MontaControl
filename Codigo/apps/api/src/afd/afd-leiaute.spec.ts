@@ -98,10 +98,27 @@ describe('calcularHashTipo7 e montarLinhaTipo7', () => {
     expect(hash).toHaveLength(64);
   });
 
-  it('encadeia o hash anterior quando existe (resultado muda)', () => {
-    const semAnterior = calcularHashTipo7(dados, null, FUSO);
-    const comAnterior = calcularHashTipo7(dados, 'a'.repeat(64), FUSO);
-    expect(comAnterior).not.toBe(semAnterior);
+  it('encadeia o hash anterior quando existe (valor exato, não só "diferente")', () => {
+    const hashAnterior = 'a'.repeat(64);
+    const comAnterior = calcularHashTipo7(dados, hashAnterior, FUSO);
+
+    // Reconstrói os campos 1-7 do jeito que o teste anterior já reconstrói,
+    // e concatena o hash anterior — pinando o valor exato em vez de só
+    // comparar com o caso sem encadeamento (que mudaria mesmo se
+    // `hashAnterior` fosse ignorado, já que o NSR já basta para diferenciar
+    // os hashes entre si).
+    const camposBase =
+      '000000001' +
+      '7' +
+      formatarDataHora(dados.marcadoEmIso, FUSO) +
+      formatarCampoNumerico(dados.cpf, 12) +
+      formatarDataHora(dados.gravadoEmIso, FUSO) +
+      '01' +
+      '0';
+    const hashEsperado = createHash('sha256').update(camposBase + hashAnterior, 'latin1').digest('hex');
+
+    expect(comAnterior).toBe(hashEsperado);
+    expect(comAnterior).not.toBe(calcularHashTipo7(dados, null, FUSO));
   });
 
   it('a linha tem 137 posições e termina no hash informado', () => {

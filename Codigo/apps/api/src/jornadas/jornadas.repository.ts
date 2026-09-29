@@ -123,6 +123,12 @@ export class JornadasRepository {
    * não sabe deserializar essa coluna (`UnsupportedNativeDataType`) — por isso o
    * `IS NULL` no final, só para dar ao resultado um tipo (`boolean`) que o
    * adapter consegue ler; o valor em si é descartado.
+   *
+   * Correção do `MAX(nsr)+1` depende do nível de isolamento padrão (READ
+   * COMMITTED): o `aggregate` abaixo enxerga um snapshot novo, tirado depois
+   * de adquirir o lock. Se algum dia alguém passar um `isolationLevel`
+   * explícito para este `$transaction`, essa suposição precisa ser
+   * reconferida.
    */
   private async registrarMarcacao(
     tx: Prisma.TransactionClient,
