@@ -30,11 +30,14 @@ export async function baixarAfd(token: string, ano: number, mes: number): Promis
   const blob = await resposta.blob()
   const nomeArquivo = nomeDoArquivo(resposta.headers.get('Content-Disposition'))
   const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = nomeArquivo
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-  URL.revokeObjectURL(url)
+  try {
+    const link = document.createElement('a')
+    link.href = url
+    link.download = nomeArquivo
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+  } finally {
+    URL.revokeObjectURL(url)
+  }
 }

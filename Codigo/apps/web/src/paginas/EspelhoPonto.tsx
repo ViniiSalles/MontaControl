@@ -114,6 +114,7 @@ export default function EspelhoPonto() {
       return
     }
     setErro(null)
+    setErroAfd(null)
     navigate(`/espelho-ponto/${montadorEscolhido}?ano=${alvo.ano}&mes=${alvo.mes}`)
   }
 
