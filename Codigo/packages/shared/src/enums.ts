@@ -25,6 +25,8 @@ export enum StatusAmbiente {
 }
 
 export enum StatusPeca {
+  /** Cadastrada pelo gestor, ainda sem código de barras — aguarda a triagem. */
+  PENDENTE = 'PENDENTE',
   TRIADA = 'TRIADA',
   CARREGADA = 'CARREGADA',
   ENTREGUE = 'ENTREGUE',

@@ -39,6 +39,7 @@ enum StatusAmbiente {
 }
 
 enum StatusPeca {
+  PENDENTE
   TRIADA
   CARREGADA
   ENTREGUE
@@ -175,9 +176,12 @@ model Ambiente {
 model Peca {
   id           Int        @id @default(autoincrement())
   ambienteId   Int        @map("ambiente_id")
-  codigoBarras String     @unique @map("codigo_barras")
+  /// Agrupa as linhas de um mesmo item do pedido ("card" na tela). Recebe o
+  /// `id` da primeira peça criada no grupo — tag de agrupamento, não FK.
+  itemId       Int        @map("item_id")
+  codigoBarras String?    @unique @map("codigo_barras")
   descricao    String
-  status       StatusPeca @default(TRIADA)
+  status       StatusPeca @default(PENDENTE)
   triadaPor    Int?       @map("triada_por")
   conferidaPor Int?       @map("conferida_por")
   conferidaAt  DateTime?  @map("conferida_at")
@@ -189,6 +193,7 @@ model Peca {
   conferente Usuario? @relation("PecaConferidaPor", fields: [conferidaPor], references: [id])
   avarias    Avaria[]
 
+  @@index([itemId])
   @@map("peca")
 }
 
