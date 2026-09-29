@@ -23,9 +23,12 @@ const config: Config = {
    * usuário e login, ambas com hash de senha no servidor) mais quatro idas
    * ao Postgres. Roda em ~650ms com o projeto quente e estoura os 5s quando
    * ele está frio, falhando por latência e não por regressão. O mesmo vale
-   * para o `afterAll`, que apaga as fixtures uma a uma.
+   * para o `afterAll`, que apaga as fixtures uma a uma — em runners de CI
+   * (mais distantes do São Paulo que a máquina local) os specs com mais
+   * fixtures (`afd`, `jornadas`) estouraram os 30s antigos mesmo com todos
+   * os testes passando, deixando a limpeza pela metade.
    */
-  testTimeout: 30_000,
+  testTimeout: 60_000,
   globalSetup: '<rootDir>/setup/global-setup.ts',
   setupFiles: ['<rootDir>/setup/env.ts'],
 };
