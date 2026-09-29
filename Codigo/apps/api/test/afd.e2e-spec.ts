@@ -85,8 +85,11 @@ describe('GET /api/afd (e2e)', () => {
 
     expect(resposta.headers['content-type']).toContain('text/plain');
     expect(resposta.headers['content-disposition']).toMatch(/^attachment; filename="AFD.*REP_P\.txt"$/);
-    const texto = (resposta.body as Buffer).toString('latin1');
-    const linhas = texto.split('\r\n');
+    // Corpo é `text/plain`, que o superagent não decodifica em `resposta.body`
+    // (fica `{}`) — o texto vem em `resposta.text`. O conteúdo do AFD é
+    // sempre ASCII puro (dígitos, letras maiúsculas, espaços — sem acento),
+    // então `resposta.text` é idêntico byte a byte ao latin1 original.
+    const linhas = resposta.text.split('\r\n');
     expect(linhas[0]).toHaveLength(302); // tipo 1
     expect(linhas[0].slice(0, 10)).toBe('0000000001'); // campo 1 (9 zeros) + campo 2 (tipo "1")
     expect(linhas.at(-1)).toBe(''); // termina em CRLF, sem linha em branco extra
@@ -137,7 +140,7 @@ describe('GET /api/afd (e2e)', () => {
       .set('Authorization', `Bearer ${tokenRh}`)
       .expect(200);
 
-    const linhas = (resposta.body as Buffer).toString('latin1').split('\r\n');
+    const linhas = resposta.text.split('\r\n');
     // Ao menos as 2 marcações deste teste entre as linhas tipo 7 (podem existir mais, de outros e2e do mesmo mês).
     const linhasTipo7 = linhas.filter((linha) => linha.length === 137 && linha[9] === '7');
     expect(linhasTipo7.length).toBeGreaterThanOrEqual(2);
