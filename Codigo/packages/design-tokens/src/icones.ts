@@ -19,6 +19,7 @@ export const NOMES_ICONE = [
   'close',
   'conveyor_belt',
   'dashboard',
+  'database',
   'description',
   'edit_document',
   'event_note',

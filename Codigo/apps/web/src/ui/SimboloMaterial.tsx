@@ -12,6 +12,7 @@ import chevronLeft from '@material-symbols/svg-400/outlined/chevron_left.svg?raw
 import chevronRight from '@material-symbols/svg-400/outlined/chevron_right.svg?raw';
 import conveyorBelt from '@material-symbols/svg-400/outlined/conveyor_belt.svg?raw';
 import dashboard from '@material-symbols/svg-400/outlined/dashboard.svg?raw';
+import database from '@material-symbols/svg-400/outlined/database.svg?raw';
 import description from '@material-symbols/svg-400/outlined/description.svg?raw';
 import editDocument from '@material-symbols/svg-400/outlined/edit_document.svg?raw';
 import eventNote from '@material-symbols/svg-400/outlined/event_note.svg?raw';
@@ -62,6 +63,7 @@ const svgPorIcone: Record<NomeIcone, string> = {
   chevron_right: comCorAtual(chevronRight),
   conveyor_belt: comCorAtual(conveyorBelt),
   dashboard: comCorAtual(dashboard),
+  database: comCorAtual(database),
   description: comCorAtual(description),
   edit_document: comCorAtual(editDocument),
   event_note: comCorAtual(eventNote),

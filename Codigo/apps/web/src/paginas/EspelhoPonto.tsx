@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Perfil } from '@montacontrol/shared'
 import type { EspelhoPontoDTO, UsuarioDTO } from '@montacontrol/shared'
 import { useAuth } from '../auth/AuthContext'
+import { baixarAfd } from '../api/afd'
 import { ErroApi } from '../api/clienteHttp'
 import { buscarEspelhoPonto } from '../api/espelhoPonto'
 import { listarUsuarios } from '../api/usuarios'
@@ -74,6 +75,8 @@ export default function EspelhoPonto() {
   const [montadores, setMontadores] = useState<UsuarioDTO[]>([])
   const [espelho, setEspelho] = useState<EspelhoPontoDTO | null>(null)
   const [erro, setErro] = useState<string | null>(null)
+  const [baixandoAfd, setBaixandoAfd] = useState(false)
+  const [erroAfd, setErroAfd] = useState<string | null>(null)
 
   useEffect(() => {
     let ativo = true
@@ -114,6 +117,19 @@ export default function EspelhoPonto() {
     navigate(`/espelho-ponto/${montadorEscolhido}?ano=${alvo.ano}&mes=${alvo.mes}`)
   }
 
+  async function aoExportarAfd() {
+    if (!espelhoAtual) return
+    setErroAfd(null)
+    setBaixandoAfd(true)
+    try {
+      await baixarAfd(token, espelhoAtual.ano, espelhoAtual.mes)
+    } catch (causa: unknown) {
+      setErroAfd(mensagemDe(causa, 'Falha ao exportar o AFD.'))
+    } finally {
+      setBaixandoAfd(false)
+    }
+  }
+
   // Espelho de outro montador/mês ainda na tela enquanto o novo carrega: não mostrar dados trocados.
   const espelhoAtual = espelho && String(espelho.usuarioId) === usuarioId && espelho.ano === ano && espelho.mes === mes ? espelho : null
   const faltas = espelhoAtual ? contarFaltas(espelhoAtual.dias, hoje) : 0
@@ -138,18 +154,42 @@ export default function EspelhoPonto() {
             competenciaInicial={competenciaParaTexto(ano, mes)}
             aoVisualizar={aoVisualizar}
           />
-          <button
-            type="button"
-            onClick={() => window.print()}
-            disabled={!espelhoAtual}
-            className="flex items-center gap-16 rounded-xl bg-surface-container-lowest p-24 text-left shadow-elev1 transition-shadow hover:shadow-elev3 disabled:opacity-40"
-          >
-            <span className="flex h-48 w-48 items-center justify-center rounded-lg bg-error-container text-error">
-              <SimboloMaterial nome="picture_as_pdf" className="text-2xl" />
-            </span>
-            <span className="text-title-md uppercase text-on-surface">Exportar PDF</span>
-          </button>
+          <div className="flex flex-col gap-24">
+            <button
+              type="button"
+              onClick={() => window.print()}
+              disabled={!espelhoAtual}
+              className="flex flex-1 items-center gap-16 rounded-xl bg-surface-container-lowest p-24 text-left shadow-elev1 transition-shadow hover:shadow-elev3 disabled:opacity-40"
+            >
+              <span className="flex h-48 w-48 items-center justify-center rounded-lg bg-error-container text-error">
+                <SimboloMaterial nome="picture_as_pdf" className="text-2xl" />
+              </span>
+              <span className="text-title-md uppercase text-on-surface">Exportar PDF</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => void aoExportarAfd()}
+              disabled={!espelhoAtual || baixandoAfd}
+              className="flex flex-1 items-center gap-16 rounded-xl bg-surface-container-lowest p-24 text-left shadow-elev1 transition-shadow hover:shadow-elev3 disabled:opacity-40"
+            >
+              <span className="flex h-48 w-48 items-center justify-center rounded-lg bg-primary-fixed text-primary">
+                <SimboloMaterial nome="database" className="text-2xl" />
+              </span>
+              <span className="text-title-md uppercase text-on-surface">
+                {baixandoAfd ? 'Exportando…' : 'Exportar AFD'}
+              </span>
+            </button>
+          </div>
         </div>
+
+        {erroAfd && (
+          <div className="space-y-8">
+            <Alerta variante="erro" mensagem={erroAfd} />
+            <Link to="/montadores" className="text-body-md font-bold text-primary underline">
+              Ir para Montadores
+            </Link>
+          </div>
+        )}
 
         {erro && <Alerta variante="erro" mensagem={erro} />}
 
