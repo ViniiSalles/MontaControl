@@ -10,6 +10,7 @@ import { RotaProtegida } from './auth/RotaProtegida'
 // chunk inicial.
 const Login = lazy(() => import('./paginas/Login.tsx'))
 const Dashboard = lazy(() => import('./paginas/Dashboard.tsx'))
+const Pedidos = lazy(() => import('./paginas/Pedidos.tsx'))
 const Atestados = lazy(() => import('./paginas/Atestados.tsx'))
 const Triagem = lazy(() => import('./paginas/Triagem.tsx'))
 const Montadores = lazy(() => import('./paginas/Montadores.tsx'))
@@ -28,6 +29,14 @@ function App() {
             element={
               <RotaProtegida perfilExigido={Perfil.GESTOR}>
                 <Dashboard />
+              </RotaProtegida>
+            }
+          />
+          <Route
+            path="/pedidos"
+            element={
+              <RotaProtegida perfilExigido={Perfil.GESTOR}>
+                <Pedidos />
               </RotaProtegida>
             }
           />

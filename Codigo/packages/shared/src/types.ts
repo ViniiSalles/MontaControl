@@ -1,5 +1,6 @@
 import {
   Perfil,
+  StatusAmbiente,
   StatusAtestado,
   StatusAvaria,
   StatusJornada,
@@ -177,6 +178,60 @@ export interface SolicitacaoPontoDTO {
 
 export interface RejeitarPontoRequest {
   motivo: string;
+}
+
+export interface ClienteResumoDTO {
+  id: number;
+  nome: string;
+  endereco: string;
+  cidade: string;
+  estado: string;
+}
+
+export interface ItemPedidoRequest {
+  descricao: string;
+  quantidade: number;
+}
+
+export interface AmbientePedidoRequest {
+  nome: string;
+  itens: ItemPedidoRequest[];
+}
+
+export interface CriarPedidoRequest {
+  clienteId: number;
+  ambientes: AmbientePedidoRequest[];
+}
+
+export interface ItemPedidoDTO {
+  /** Id do grupo de peças do item (`Peca.itemId`) — chave do card na tela. */
+  itemId: number;
+  ambienteId: number;
+  descricao: string;
+  quantidade: number;
+  /** Peças do item já bipadas pelo depósito. */
+  quantidadeTriada: number;
+}
+
+export interface AmbientePedidoDTO {
+  id: number;
+  nome: string;
+  status: StatusAmbiente;
+  itens: ItemPedidoDTO[];
+}
+
+export interface PedidoResumoDTO {
+  id: number;
+  numeroPedido: string;
+  status: StatusPedido;
+  clienteId: number;
+  clienteNome: string;
+  quantidadeTotal: number;
+  quantidadeTriada: number;
+}
+
+export interface PedidoDetalheDTO extends PedidoResumoDTO {
+  ambientes: AmbientePedidoDTO[];
 }
 
 export interface BipagemRequest {

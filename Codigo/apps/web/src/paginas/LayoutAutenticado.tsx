@@ -25,7 +25,10 @@ const ITENS_POR_PERFIL: Record<PerfilWeb, ItemMenu[]> = {
     { rotulo: 'Banco de Horas', caminho: '/banco-horas', icone: 'pending_actions' },
     { rotulo: 'Espelho de Ponto', caminho: '/espelho-ponto', icone: 'edit_document' },
   ],
-  [Perfil.GESTOR]: [{ rotulo: 'Dashboard', caminho: '/dashboard', icone: 'dashboard' }],
+  [Perfil.GESTOR]: [
+    { rotulo: 'Dashboard', caminho: '/dashboard', icone: 'dashboard' },
+    { rotulo: 'Pedidos', caminho: '/pedidos', icone: 'event_note' },
+  ],
   [Perfil.DEPOSITO]: [{ rotulo: 'Triagem de Peças', caminho: '/triagem', icone: 'conveyor_belt' }],
 }
 

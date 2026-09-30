@@ -55,9 +55,10 @@ erDiagram
   PECA {
       int id PK
       int ambiente_id FK
-      string codigo_barras UK
+      int item_id "agrupa as pecas de um mesmo item do pedido"
+      string codigo_barras UK "nulo ate a bipagem"
       string descricao
-      enum status "TRIADA<br>CARREGADA<br>ENTREGUE"
+      enum status "PENDENTE<br>TRIADA<br>CARREGADA<br>ENTREGUE"
       int triada_por FK
       int conferida_por FK
       timestamp conferida_at

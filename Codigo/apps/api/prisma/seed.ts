@@ -1,5 +1,5 @@
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient, Perfil, StatusPedido } from '../generated/prisma';
+import { PrismaClient, Perfil, StatusPeca, StatusPedido } from '../generated/prisma';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
@@ -151,12 +151,17 @@ async function seedPedidoDemo(): Promise<void> {
 
   const pecasExistentes = await prisma.peca.count({ where: { ambienteId: ambiente.id } });
   if (pecasExistentes === 0) {
-    await prisma.peca.createMany({
-      data: [
-        { ambienteId: ambiente.id, codigoBarras: 'PEC-SEED-0001', descricao: 'Painel lateral' },
-        { ambienteId: ambiente.id, codigoBarras: 'PEC-SEED-0002', descricao: 'Prateleira' },
-      ],
-    });
+    // `itemId` é o id da própria peça quando o item tem uma unidade só — precisa
+    // de dois passos porque o id só existe depois do insert.
+    for (const dados of [
+      { codigoBarras: 'PEC-SEED-0001', descricao: 'Painel lateral' },
+      { codigoBarras: 'PEC-SEED-0002', descricao: 'Prateleira' },
+    ]) {
+      const peca = await prisma.peca.create({
+        data: { ambienteId: ambiente.id, itemId: 0, status: StatusPeca.TRIADA, ...dados },
+      });
+      await prisma.peca.update({ where: { id: peca.id }, data: { itemId: peca.id } });
+    }
   }
 }
 

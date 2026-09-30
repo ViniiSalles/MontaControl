@@ -6,11 +6,13 @@ import { AfdModule } from './afd/afd.module';
 import { AtestadosModule } from './atestados/atestados.module';
 import { AuthModule } from './auth/auth.module';
 import { BancoHorasModule } from './banco-horas/banco-horas.module';
+import { ClientesModule } from './clientes/clientes.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { HealthController } from './common/health.controller';
 import { validate } from './config/env.validation';
 import { EspelhoPontoModule } from './espelho-ponto/espelho-ponto.module';
 import { JornadasModule } from './jornadas/jornadas.module';
+import { PedidosModule } from './pedidos/pedidos.module';
 import { PontosEmAtrasoModule } from './pontos-em-atraso/pontos-em-atraso.module';
 import { PrismaModule } from './prisma/prisma.module';
 
@@ -29,6 +31,8 @@ import { PrismaModule } from './prisma/prisma.module';
     BancoHorasModule,
     EspelhoPontoModule,
     AfdModule,
+    ClientesModule,
+    PedidosModule,
   ],
   controllers: [HealthController],
   providers: [
