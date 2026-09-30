@@ -14,7 +14,15 @@
     },
     "plugins": [
       "expo-font",
-      "expo-splash-screen",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#f9f9f9"
+        }
+      ],
       "@lovesworking/watermelondb-expo-plugin-sdk-52-plus",
       [
         "expo-image-picker",
