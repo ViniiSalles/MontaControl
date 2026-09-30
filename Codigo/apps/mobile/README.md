@@ -52,12 +52,18 @@ abertura.
 
 ## URL da API
 
-`src/config/api.ts` lê `expo.extra.apiUrl` do `app.json`. Sem isso, cai no padrão de emulador:
-`http://10.0.2.2:3000` no Android (a AVD roda em outra interface de rede, então `localhost` ali é o
-próprio emulador) e `http://localhost:3000` no iOS.
+`src/config/api.ts` resolve a base da API nesta ordem:
 
-**Em aparelho físico o padrão não serve** — nem `localhost` nem `10.0.2.2` alcançam a máquina do
-desenvolvedor. Aponte `expo.extra.apiUrl` para o IP dela na rede local (`http://192.168.x.y:3000`).
+1. `EXPO_PUBLIC_API_URL` (`.env.local`) — override explícito;
+2. `expo.extra.apiUrl` do `app.json`;
+3. **IP do servidor de desenvolvimento do Expo**, detectado sozinho (`Constants.expoConfig.hostUri`)
+   com a porta `3000` — funciona em aparelho físico e emulador, e acompanha mudanças de IP a cada
+   `expo start`. Em modo túnel (`--tunnel`) o host não é um IP e esse passo é ignorado;
+4. padrão de emulador: `http://10.0.2.2:3000` no Android e `http://localhost:3000` no iOS.
+
+Na prática, em dev não é preciso configurar nada: deixe `EXPO_PUBLIC_API_URL` comentada. A API e o
+Expo precisam rodar na mesma máquina. Após mudar de rede, reinicie o `expo start` para o IP novo
+valer.
 
 ## Abas
 
