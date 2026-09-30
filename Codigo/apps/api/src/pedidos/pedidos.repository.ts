@@ -1,11 +1,22 @@
 import { randomUUID } from 'crypto';
 import { Injectable } from '@nestjs/common';
-import type { PedidoResumoDTO, StatusPedido } from '@montacontrol/shared';
+import type {
+  PedidoComAmbientesDTO,
+  PedidoDTO,
+  PedidoResumoDTO,
+  StatusPedido,
+} from '@montacontrol/shared';
 import {
   StatusPeca as StatusPecaPrisma,
-  type StatusPedido as StatusPedidoPrisma,
+  StatusPedido as StatusPedidoPrisma,
 } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  paraPedidoComAmbientesDTO,
+  paraPedidoDTO,
+  SELECAO_PEDIDO,
+  SELECAO_PEDIDO_COM_AMBIENTES,
+} from './pedido-mapper';
 
 export interface CoordenadasCliente {
   latitude: number;
@@ -141,6 +152,31 @@ export class PedidosRepository {
         quantidadeTotal: pecas.length,
         quantidadeTriada: pecas.filter((peca) => peca.status !== StatusPecaPrisma.PENDENTE).length,
       };
+    });
+  }
+
+  async buscarPorNumero(numeroPedido: string): Promise<PedidoDTO | null> {
+    const linha = await this.prisma.pedido.findUnique({
+      where: { numeroPedido },
+      select: SELECAO_PEDIDO,
+    });
+    return linha ? paraPedidoDTO(linha) : null;
+  }
+
+  /** Peças agrupadas por ambiente (N7T3) — conferência visual antes do despacho. */
+  async buscarComAmbientes(numeroPedido: string): Promise<PedidoComAmbientesDTO | null> {
+    const linha = await this.prisma.pedido.findUnique({
+      where: { numeroPedido },
+      select: SELECAO_PEDIDO_COM_AMBIENTES,
+    });
+    return linha ? paraPedidoComAmbientesDTO(linha) : null;
+  }
+
+  /** Primeira triagem do pedido: sai de AGUARDANDO para EM_TRIAGEM. Não-AGUARDANDO fica como está. */
+  async marcarEmTriagem(id: number): Promise<void> {
+    await this.prisma.pedido.updateMany({
+      where: { id, status: StatusPedidoPrisma.AGUARDANDO },
+      data: { status: StatusPedidoPrisma.EM_TRIAGEM },
     });
   }
 }

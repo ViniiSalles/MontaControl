@@ -2,11 +2,13 @@ import { Injectable } from '@nestjs/common';
 import {
   StatusPedido,
   type CriarPedidoRequest,
+  type PedidoComAmbientesDTO,
   type PedidoDTO,
   type PedidoResumoDTO,
 } from '@montacontrol/shared';
 import { ClientesRepository } from '../clientes/clientes.repository';
 import { ClienteNaoEncontradoException } from './exceptions/cliente-nao-encontrado.exception';
+import { PedidoNaoEncontradoException } from './exceptions/pedido-nao-encontrado.exception';
 import { PedidosRepository } from './pedidos.repository';
 
 @Injectable()
@@ -30,5 +32,12 @@ export class PedidosService {
 
   async listar(status?: StatusPedido): Promise<PedidoResumoDTO[]> {
     return this.pedidos.listar(status);
+  }
+
+  /** N7T3 — peças do pedido organizadas por ambiente, para conferência antes do despacho. */
+  async buscarComAmbientes(numeroPedido: string): Promise<PedidoComAmbientesDTO> {
+    const pedido = await this.pedidos.buscarComAmbientes(numeroPedido);
+    if (!pedido) throw new PedidoNaoEncontradoException();
+    return pedido;
   }
 }

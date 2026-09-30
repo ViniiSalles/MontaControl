@@ -248,7 +248,8 @@ export interface BipagemResponse {
 
 export interface PecaDTO {
   id: number;
-  codigoBarras: string;
+  /** `null` enquanto a peça está PENDENTE — o código só existe depois da triagem. */
+  codigoBarras: string | null;
   descricao: string;
   status: StatusPeca;
   ambienteId: number;
@@ -259,6 +260,26 @@ export interface PedidoDTO {
   numeroPedido: string;
   status: StatusPedido;
   clienteId: number;
+}
+
+/** US07/UC09/UC10 — Operador Logístico lê o código de barras e confirma pedido + ambiente. */
+export interface TriarPecaRequest {
+  codigoBarras: string;
+  descricao: string;
+  numeroPedido: string;
+  ambiente: string;
+}
+
+export interface AmbienteComPecasDTO {
+  id: number;
+  nome: string;
+  status: StatusAmbiente;
+  pecas: PecaDTO[];
+}
+
+/** N7T3 — peças do pedido organizadas por ambiente, para conferência antes do despacho. */
+export interface PedidoComAmbientesDTO extends PedidoDTO {
+  ambientes: AmbienteComPecasDTO[];
 }
 
 export interface AvariaDTO {

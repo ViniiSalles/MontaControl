@@ -1,5 +1,6 @@
 import type {
   CriarPedidoRequest,
+  PedidoComAmbientesDTO,
   PedidoDTO,
   PedidoResumoDTO,
   StatusPedido,
@@ -13,4 +14,14 @@ export function listarPedidos(token: string, status?: StatusPedido): Promise<Ped
 
 export function criarPedido(token: string, dados: CriarPedidoRequest): Promise<PedidoDTO> {
   return requisitar<PedidoDTO>('/api/pedidos', { token, metodo: 'POST', corpo: dados })
+}
+
+/** N7T3 — peças do pedido organizadas por ambiente, para conferência antes do despacho. */
+export function buscarPedidoComAmbientes(
+  token: string,
+  numeroPedido: string,
+): Promise<PedidoComAmbientesDTO> {
+  return requisitar<PedidoComAmbientesDTO>(`/api/pedidos/${encodeURIComponent(numeroPedido)}`, {
+    token,
+  })
 }

@@ -9,8 +9,8 @@ import { PedidosService } from './pedidos.service';
   imports: [PrismaModule, ClientesModule],
   controllers: [PedidosController],
   providers: [PedidosRepository, PedidosService],
-  // A validação de distância tolerada da jornada precisa das coordenadas
-  // do cliente do pedido.
+  // A validação de distância tolerada da jornada (coordenadas do cliente) e a
+  // triagem de peças precisam do repositório.
   exports: [PedidosRepository, PedidosService],
 })
 export class PedidosModule {}

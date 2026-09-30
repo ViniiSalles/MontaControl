@@ -1,6 +1,8 @@
 import { StatusPedido } from '@montacontrol/shared';
+import { StatusAmbiente } from '../../generated/prisma';
 import { ClientesRepository } from '../clientes/clientes.repository';
 import { ClienteNaoEncontradoException } from './exceptions/cliente-nao-encontrado.exception';
+import { PedidoNaoEncontradoException } from './exceptions/pedido-nao-encontrado.exception';
 import { PedidosRepository } from './pedidos.repository';
 import { PedidosService } from './pedidos.service';
 
@@ -9,13 +11,21 @@ const dadosPedido = {
   ambientes: [{ nome: 'Cozinha', itens: [{ descricao: 'Porta 90cm', quantidade: 3 }] }],
 };
 
+const pedidoComAmbientes = {
+  id: 3,
+  numeroPedido: 'PED-001',
+  status: StatusPedido.EM_TRIAGEM,
+  clienteId: 1,
+  ambientes: [{ id: 4, nome: 'Cozinha', status: StatusAmbiente.PENDENTE, pecas: [] }],
+};
+
 describe('PedidosService', () => {
-  let pedidos: { criar: jest.Mock; listar: jest.Mock };
+  let pedidos: { criar: jest.Mock; listar: jest.Mock; buscarComAmbientes: jest.Mock };
   let clientes: { existe: jest.Mock };
   let service: PedidosService;
 
   beforeEach(() => {
-    pedidos = { criar: jest.fn(), listar: jest.fn() };
+    pedidos = { criar: jest.fn(), listar: jest.fn(), buscarComAmbientes: jest.fn() };
     clientes = { existe: jest.fn().mockResolvedValue(true) };
     service = new PedidosService(
       pedidos as unknown as PedidosRepository,
@@ -53,6 +63,24 @@ describe('PedidosService', () => {
       await service.listar(StatusPedido.AGUARDANDO);
 
       expect(pedidos.listar).toHaveBeenCalledWith(StatusPedido.AGUARDANDO);
+    });
+  });
+
+  describe('buscarComAmbientes', () => {
+    it('devolve o pedido com as peças agrupadas por ambiente (N7T3)', async () => {
+      pedidos.buscarComAmbientes.mockResolvedValue(pedidoComAmbientes);
+
+      const resultado = await service.buscarComAmbientes('PED-001');
+
+      expect(resultado).toEqual(pedidoComAmbientes);
+    });
+
+    it('recusa número de pedido inexistente com 404', async () => {
+      pedidos.buscarComAmbientes.mockResolvedValue(null);
+
+      await expect(service.buscarComAmbientes('PED-INEXISTENTE')).rejects.toBeInstanceOf(
+        PedidoNaoEncontradoException,
+      );
     });
   });
 });
