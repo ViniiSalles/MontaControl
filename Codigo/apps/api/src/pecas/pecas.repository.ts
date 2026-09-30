@@ -30,6 +30,42 @@ export interface DadosNovaPeca {
 export class PecasRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  async buscarPorId(
+    id: number,
+  ): Promise<{ id: number; status: StatusPeca; pedidoId: number } | null> {
+    const linha = await this.prisma.peca.findUnique({
+      where: { id },
+      select: { id: true, status: true, ambiente: { select: { pedidoId: true } } },
+    });
+    return linha ? { id: linha.id, status: linha.status, pedidoId: linha.ambiente.pedidoId } : null;
+  }
+
+  /**
+   * Dá código de barras a uma peça ainda PENDENTE e a marca TRIADA. `null` se
+   * a peça deixou de estar PENDENTE (corrida) ou o código já pertence a outra (N7T2).
+   */
+  async associarCodigoBarras(
+    id: number,
+    codigoBarras: string,
+    triadaPor: number,
+  ): Promise<PecaDTO | null> {
+    try {
+      const { count } = await this.prisma.peca.updateMany({
+        where: { id, status: StatusPeca.PENDENTE },
+        data: { codigoBarras, status: StatusPeca.TRIADA, triadaPor },
+      });
+      if (count === 0) return null;
+      const linha = await this.prisma.peca.findUniqueOrThrow({
+        where: { id },
+        select: SELECAO_PECA,
+      });
+      return paraPecaDTO(linha);
+    } catch (erro) {
+      if (ehViolacaoDeUnicidade(erro)) return null;
+      throw erro;
+    }
+  }
+
   async buscarPorCodigoBarras(codigoBarras: string): Promise<{ id: number } | null> {
     return this.prisma.peca.findUnique({
       where: { codigoBarras },

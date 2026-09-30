@@ -60,8 +60,8 @@ export class PedidosRepository {
   }
 
   /**
-   * Cria pedido + ambientes + uma linha de `Peca` PENDENTE por unidade
-   * planejada, tudo numa transação. `numeroPedido` só pode ser calculado
+   * Cria pedido + ambientes + um slot de `Peca` PENDENTE por item
+   * planejado, tudo numa transação. `numeroPedido` só pode ser calculado
    * depois do insert (depende do id gerado), então nasce com um valor
    * temporário único e é corrigido em seguida, na mesma transação.
    */
@@ -95,8 +95,9 @@ export class PedidosRepository {
   }
 
   /**
-   * Um item do pedido = N linhas de `Peca` com o mesmo `itemId`, que é o id da
-   * primeira linha do grupo. Cada chamada cria um item novo, mesmo que já
+   * Um item do pedido = um slot: uma única linha de `Peca` PENDENTE que carrega
+   * a `quantidade` planejada (150 pregos = 1 linha, bipada uma vez). `itemId`
+   * recebe o próprio id da linha. Cada chamada cria um item novo, mesmo que já
    * exista outro com a mesma descrição no ambiente.
    */
   async criarItem(
@@ -106,21 +107,12 @@ export class PedidosRepository {
     tx?: PrismaTransacao,
   ): Promise<number> {
     const executar = async (cliente: PrismaTransacao): Promise<number> => {
-      const cabeca = await cliente.peca.create({
-        data: { ambienteId, descricao, itemId: 0 },
+      const slot = await cliente.peca.create({
+        data: { ambienteId, descricao, quantidade, itemId: 0 },
         select: { id: true },
       });
-      await cliente.peca.update({ where: { id: cabeca.id }, data: { itemId: cabeca.id } });
-      if (quantidade > 1) {
-        await cliente.peca.createMany({
-          data: Array.from({ length: quantidade - 1 }, () => ({
-            ambienteId,
-            descricao,
-            itemId: cabeca.id,
-          })),
-        });
-      }
-      return cabeca.id;
+      await cliente.peca.update({ where: { id: slot.id }, data: { itemId: slot.id } });
+      return slot.id;
     };
 
     if (tx) return executar(tx);

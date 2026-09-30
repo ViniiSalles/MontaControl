@@ -251,6 +251,8 @@ export interface PecaDTO {
   /** `null` enquanto a peça está PENDENTE — o código só existe depois da triagem. */
   codigoBarras: string | null;
   descricao: string;
+  /** Unidades que o slot representa (ex.: caixa com 150 pregos) — bipadas de uma só vez. */
+  quantidade: number;
   status: StatusPeca;
   ambienteId: number;
 }
@@ -268,6 +270,11 @@ export interface TriarPecaRequest {
   descricao: string;
   numeroPedido: string;
   ambiente: string;
+}
+
+/** Operador associa o código de barras lido a uma peça PENDENTE já cadastrada pelo gestor. */
+export interface AssociarCodigoBarrasRequest {
+  codigoBarras: string;
 }
 
 export interface AmbienteComPecasDTO {
