@@ -5,3 +5,16 @@ import { requisitar } from './clienteHttp'
 export function triarPeca(token: string, dados: TriarPecaRequest): Promise<PecaDTO> {
   return requisitar<PecaDTO>('/api/pecas', { token, metodo: 'POST', corpo: dados })
 }
+
+/** Associa o código de barras lido a uma peça PENDENTE do pedido (cadastrada pelo gestor). */
+export function associarCodigoBarras(
+  token: string,
+  pecaId: number,
+  codigoBarras: string,
+): Promise<PecaDTO> {
+  return requisitar<PecaDTO>(`/api/pecas/${pecaId}/codigo-barras`, {
+    token,
+    metodo: 'PATCH',
+    corpo: { codigoBarras },
+  })
+}

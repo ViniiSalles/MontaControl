@@ -184,6 +184,8 @@ model Peca {
   itemId       Int        @map("item_id")
   codigoBarras String?    @unique @map("codigo_barras")
   descricao    String
+  /// Peça é um "slot": 150 pregos = 1 linha com quantidade 150, bipada uma única vez.
+  quantidade   Int        @default(1)
   status       StatusPeca @default(PENDENTE)
   triadaPor    Int?       @map("triada_por")
   conferidaPor Int?       @map("conferida_por")

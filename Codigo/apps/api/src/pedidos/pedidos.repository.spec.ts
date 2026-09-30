@@ -39,7 +39,7 @@ describe('PedidosRepository', () => {
   });
 
   describe('criar', () => {
-    it('cria pedido, numeroPedido derivado do id, ambientes e uma linha de peça por unidade', async () => {
+    it('cria pedido, numeroPedido derivado do id, ambientes e um slot de peça por item', async () => {
       const tx = {
         pedido: {
           create: jest.fn().mockResolvedValue({ id: 42 }),
@@ -49,7 +49,6 @@ describe('PedidosRepository', () => {
         peca: {
           create: jest.fn().mockResolvedValue({ id: 100 }),
           update: jest.fn().mockResolvedValue({ id: 100, itemId: 100 }),
-          createMany: jest.fn().mockResolvedValue({ count: 2 }),
         },
       };
       const prismaComTransacao = {
@@ -71,38 +70,13 @@ describe('PedidosRepository', () => {
         data: { pedidoId: 42, nome: 'Cozinha' },
         select: { id: true },
       });
-      // 1ª unidade nasce sozinha para o id virar `itemId` do grupo…
+      // Um item = um slot com a quantidade planejada, bipado uma única vez.
+      expect(tx.peca.create).toHaveBeenCalledTimes(1);
       expect(tx.peca.create).toHaveBeenCalledWith({
-        data: { ambienteId: 7, descricao: 'Porta 90cm', itemId: 0 },
+        data: { ambienteId: 7, descricao: 'Porta 90cm', quantidade: 3, itemId: 0 },
         select: { id: true },
       });
       expect(tx.peca.update).toHaveBeenCalledWith({ where: { id: 100 }, data: { itemId: 100 } });
-      // …e as 2 restantes entram em lote já com o itemId conhecido.
-      expect(tx.peca.createMany).toHaveBeenCalledWith({
-        data: [
-          { ambienteId: 7, descricao: 'Porta 90cm', itemId: 100 },
-          { ambienteId: 7, descricao: 'Porta 90cm', itemId: 100 },
-        ],
-      });
-    });
-
-    it('quantidade 1 não chama createMany', async () => {
-      const tx = {
-        pedido: {
-          create: jest.fn().mockResolvedValue({ id: 5 }),
-          update: jest.fn().mockResolvedValue({ id: 5, numeroPedido: 'PED-000005' }),
-        },
-        ambiente: { create: jest.fn().mockResolvedValue({ id: 8 }) },
-        peca: { create: jest.fn().mockResolvedValue({ id: 200 }), update: jest.fn(), createMany: jest.fn() },
-      };
-      const prismaComTransacao = {
-        $transaction: jest.fn((fn: (t: unknown) => unknown) => fn(tx)),
-      };
-      const repositorio = new PedidosRepository(prismaComTransacao as unknown as PrismaService);
-
-      await repositorio.criar(1, [{ nome: 'Sala', itens: [{ descricao: 'Prateleira', quantidade: 1 }] }]);
-
-      expect(tx.peca.createMany).not.toHaveBeenCalled();
     });
   });
 

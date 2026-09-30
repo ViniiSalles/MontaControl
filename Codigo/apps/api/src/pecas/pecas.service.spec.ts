@@ -23,13 +23,23 @@ const pecaCriada = {
 };
 
 describe('PecasService', () => {
-  let pecas: { buscarPorCodigoBarras: jest.Mock; criar: jest.Mock };
+  let pecas: {
+    buscarPorCodigoBarras: jest.Mock;
+    buscarPorId: jest.Mock;
+    associarCodigoBarras: jest.Mock;
+    criar: jest.Mock;
+  };
   let ambientes: { buscarOuCriar: jest.Mock };
   let pedidos: { buscarPorNumero: jest.Mock; marcarEmTriagem: jest.Mock };
   let service: PecasService;
 
   beforeEach(() => {
-    pecas = { buscarPorCodigoBarras: jest.fn().mockResolvedValue(null), criar: jest.fn() };
+    pecas = {
+      buscarPorCodigoBarras: jest.fn().mockResolvedValue(null),
+      buscarPorId: jest.fn(),
+      associarCodigoBarras: jest.fn(),
+      criar: jest.fn(),
+    };
     ambientes = { buscarOuCriar: jest.fn().mockResolvedValue({ id: 4, nome: 'Cozinha' }) };
     pedidos = {
       buscarPorNumero: jest.fn().mockResolvedValue(pedidoAguardando),
@@ -95,6 +105,50 @@ describe('PecasService', () => {
       pecas.criar.mockResolvedValue(null);
 
       await expect(service.triar(2, dadosTriagem)).rejects.toThrow(ConflictException);
+    });
+  });
+
+  describe('associarCodigoBarras', () => {
+    const pendente = { id: 9, status: StatusPeca.PENDENTE, pedidoId: 3 };
+
+    it('associa o código à peça pendente e move o pedido para EM_TRIAGEM', async () => {
+      pecas.buscarPorId.mockResolvedValue(pendente);
+      pecas.associarCodigoBarras.mockResolvedValue(pecaCriada);
+
+      const resultado = await service.associarCodigoBarras(2, 9, 'COD-123');
+
+      expect(resultado).toEqual(pecaCriada);
+      expect(pecas.associarCodigoBarras).toHaveBeenCalledWith(9, 'COD-123', 2);
+      expect(pedidos.marcarEmTriagem).toHaveBeenCalledWith(3);
+    });
+
+    it('peça inexistente → 404', async () => {
+      pecas.buscarPorId.mockResolvedValue(null);
+
+      await expect(service.associarCodigoBarras(2, 9, 'COD-123')).rejects.toThrow(NotFoundException);
+    });
+
+    it('peça já triada → 409', async () => {
+      pecas.buscarPorId.mockResolvedValue({ ...pendente, status: StatusPeca.TRIADA });
+
+      await expect(service.associarCodigoBarras(2, 9, 'COD-123')).rejects.toThrow(ConflictException);
+      expect(pecas.associarCodigoBarras).not.toHaveBeenCalled();
+    });
+
+    it('código de barras já usado por outra peça → 409 (N7T2)', async () => {
+      pecas.buscarPorId.mockResolvedValue(pendente);
+      pecas.buscarPorCodigoBarras.mockResolvedValue({ id: 99 });
+
+      await expect(service.associarCodigoBarras(2, 9, 'COD-123')).rejects.toThrow(ConflictException);
+      expect(pecas.associarCodigoBarras).not.toHaveBeenCalled();
+    });
+
+    it('corrida no update (repositório devolve null) → 409 e pedido intocado', async () => {
+      pecas.buscarPorId.mockResolvedValue(pendente);
+      pecas.associarCodigoBarras.mockResolvedValue(null);
+
+      await expect(service.associarCodigoBarras(2, 9, 'COD-123')).rejects.toThrow(ConflictException);
+      expect(pedidos.marcarEmTriagem).not.toHaveBeenCalled();
     });
   });
 });
