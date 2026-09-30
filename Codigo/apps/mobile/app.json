@@ -24,6 +24,7 @@
         }
       ],
       "@lovesworking/watermelondb-expo-plugin-sdk-52-plus",
+      "./plugins/withCaminhoCurtoCxx",
       [
         "expo-image-picker",
         {

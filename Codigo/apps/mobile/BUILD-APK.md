@@ -87,8 +87,12 @@ diretório de build — o caminho do repositório entra duas vezes. Com o reposi
 
 Habilitar `LongPathsEnabled` no registro **não resolve**: esse `ninja` não é long-path aware.
 
-Dois ajustes em `android/app/build.gradle` (bloco `android { ... }`) resolvem. Como `android/` não é
-versionado, **cole os dois de novo depois de cada prebuild**:
+Dois ajustes em `android/app/build.gradle` (bloco `android { ... }`) resolvem, mais a propriedade
+`mc.cxxDir=C:/mcx` no `android/gradle.properties`. **Tudo isso é aplicado automaticamente a cada
+`expo prebuild`** pelo config plugin `plugins/withCaminhoCurtoCxx.js` (registrado em `app.json`) — no
+Windows; em Linux/macOS o `mc.cxxDir` não é definido. O restante desta seção explica o que o plugin
+faz, caso o template do Expo mude e o prebuild reclame de âncora ausente (aí o ajuste manual abaixo
+serve de referência):
 
 **4.1 — `CMAKE_OBJECT_PATH_MAX`** (o que de fato conserta). Com o limite explícito, o CMake troca o
 caminho espelhado do fonte por um diretório curto com hash em vez de deixar o nome estourar. Vai
