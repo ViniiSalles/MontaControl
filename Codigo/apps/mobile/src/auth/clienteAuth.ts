@@ -16,6 +16,26 @@ export class ErroAutenticacao extends Error {
   }
 }
 
+/**
+ * Teto de espera das chamadas feitas durante o boot (`/auth/me`, `/auth/refresh`).
+ * A splash nativa só some quando a restauração termina, e o `fetch` do RN não
+ * tem timeout próprio: contra um host inalcançável (API fora do ar, firewall
+ * descartando pacotes, IP da rede mudou) ele espera o timeout do SO — minutos
+ * de tela em branco. Estourar aqui cai no ramo de "falha de rede", que segue
+ * para o Login preservando os tokens.
+ */
+export const TIMEOUT_REDE_BOOT_MS = 5000;
+
+async function fetchComTimeout(url: string, init: RequestInit = {}): Promise<Response> {
+  const controlador = new AbortController();
+  const temporizador = setTimeout(() => controlador.abort(), TIMEOUT_REDE_BOOT_MS);
+  try {
+    return await fetch(url, { ...init, signal: controlador.signal });
+  } finally {
+    clearTimeout(temporizador);
+  }
+}
+
 /** Sinaliza 401 sem tratar como falha definitiva — quem chama decide se tenta o refresh (TI02). */
 export class ErroNaoAutorizado extends Error {}
 
@@ -47,7 +67,7 @@ export async function entrarComCredenciais(email: string, senha: string): Promis
  * só quando o token expirar.
  */
 export async function buscarUsuarioAtual(accessToken: string): Promise<UsuarioDTO> {
-  const resposta = await fetch(`${urlBaseApi}/api/auth/me`, {
+  const resposta = await fetchComTimeout(`${urlBaseApi}/api/auth/me`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 
@@ -61,7 +81,7 @@ export async function buscarUsuarioAtual(accessToken: string): Promise<UsuarioDT
 
 /** POST /api/auth/refresh — troca o refresh token por uma sessão nova (TI02). */
 export async function renovarSessao(refreshToken: string): Promise<LoginResponse> {
-  const resposta = await fetch(`${urlBaseApi}/api/auth/refresh`, {
+  const resposta = await fetchComTimeout(`${urlBaseApi}/api/auth/refresh`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refreshToken }),

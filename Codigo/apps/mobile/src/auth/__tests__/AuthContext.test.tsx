@@ -1,6 +1,7 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Pressable, Text } from 'react-native';
 import { ProvedorAuth, useAuth } from '../AuthContext';
+import { TIMEOUT_REDE_BOOT_MS } from '../clienteAuth';
 import * as armazenamento from '../armazenamentoSessao';
 import * as database from '../../db/database';
 import { gestor, montador, respostaJson, sessaoDe } from './apoio';
@@ -123,6 +124,38 @@ describe('restauração de sessão no boot', () => {
     // Falha de rede mantém a sessão local para a próxima abertura — não é
     // fim de sessão, então o espelho não deve ser tocado.
     expect(databaseMock.limparBancoLocal).not.toHaveBeenCalled();
+  });
+
+  test('API que não responde não prende o boot: estoura o timeout e preserva os tokens', async () => {
+    jest.useFakeTimers();
+    try {
+      armazenamentoMock.lerTokens.mockResolvedValue({ accessToken: 'access', refreshToken: 'refresh' });
+      // Simula o `fetch` do RN contra um host inalcançável: nunca resolve,
+      // só rejeita quando o `AbortSignal` dispara.
+      jest.mocked(globalThis.fetch).mockImplementation(
+        (_url, init) =>
+          new Promise((_resolve, rejeitar) => {
+            init?.signal?.addEventListener('abort', () => rejeitar(new Error('Aborted')));
+          }),
+      );
+
+      await render(
+        <ProvedorAuth>
+          <Sonda />
+        </ProvedorAuth>,
+      );
+      expect(screen.getByTestId('restaurando')).toHaveTextContent('true');
+
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(TIMEOUT_REDE_BOOT_MS);
+      });
+
+      expect(screen.getByTestId('restaurando')).toHaveTextContent('false');
+      expect(screen.getByTestId('usuario')).toHaveTextContent('sem-sessao');
+      expect(armazenamentoMock.limparTokens).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test('perfil não-MONTADOR guardado no aparelho é descartado', async () => {
