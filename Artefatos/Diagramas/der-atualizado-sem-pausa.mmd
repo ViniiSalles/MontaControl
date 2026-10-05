@@ -77,8 +77,12 @@ erDiagram
       int peca_id FK
       int tipo_avaria_id FK
       int registrada_por FK
+      uuid id_cliente UK
       text descricao
       enum status "REPORTADA<br>EM_ANALISE<br>REPOSICAO_SOLICITADA<br>RESOLVIDA"
+      int analisada_por FK
+      timestamp analisada_at
+      text parecer
       timestamp created_at
       timestamp updated_at
   }
@@ -199,6 +203,7 @@ erDiagram
   PECA ||--o{ AVARIA : "pode ter"
   TIPO_AVARIA ||--o{ AVARIA : "classifica"
   USUARIO ||--o{ AVARIA : "registra"
+  USUARIO ||--o{ AVARIA : "analisa (gestor)"
   AVARIA ||--o{ AVARIA_FOTO : "pode ter"
   USUARIO ||--o{ JORNADA : "registra"
   PEDIDO ||--o{ JORNADA : "vincula"

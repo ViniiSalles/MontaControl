@@ -164,6 +164,21 @@ export class PedidosRepository {
     return linha ? paraPedidoComAmbientesDTO(linha) : null;
   }
 
+  /**
+   * Montador está trabalhando no pedido: atribuído a ele (`pedido_montador`)
+   * ou com jornada vinculada a ele. Qualquer jornada, não só a aberta — o
+   * reporte pode sincronizar da outbox depois do check-out.
+   */
+  async montadorVinculado(pedidoId: number, usuarioId: number): Promise<boolean> {
+    const total = await this.prisma.pedido.count({
+      where: {
+        id: pedidoId,
+        OR: [{ montadores: { some: { usuarioId } } }, { jornadas: { some: { usuarioId } } }],
+      },
+    });
+    return total > 0;
+  }
+
   /** Primeira triagem do pedido: sai de AGUARDANDO para EM_TRIAGEM. Não-AGUARDANDO fica como está. */
   async marcarEmTriagem(id: number): Promise<void> {
     await this.prisma.pedido.updateMany({

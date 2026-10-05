@@ -76,6 +76,7 @@ async function seedTiposAvaria(): Promise<void> {
       { nome: 'Risco', descricao: 'Marca superficial em acabamento' },
       { nome: 'Quebrado', descricao: 'Peça fraturada ou partida' },
       { nome: 'Manchado', descricao: 'Mancha ou descoloração no acabamento' },
+      { nome: 'Faltante', descricao: 'Peça não veio no carregamento ou não foi encontrada' },
     ],
   });
 }

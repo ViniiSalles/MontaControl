@@ -4,6 +4,7 @@ import { APP_FILTER, APP_GUARD, APP_PIPE } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AfdModule } from './afd/afd.module';
 import { AtestadosModule } from './atestados/atestados.module';
+import { AvariasModule } from './avarias/avarias.module';
 import { AuthModule } from './auth/auth.module';
 import { BancoHorasModule } from './banco-horas/banco-horas.module';
 import { ClientesModule } from './clientes/clientes.module';
@@ -35,6 +36,7 @@ import { PrismaModule } from './prisma/prisma.module';
     ClientesModule,
     PedidosModule,
     PecasModule,
+    AvariasModule,
   ],
   controllers: [HealthController],
   providers: [

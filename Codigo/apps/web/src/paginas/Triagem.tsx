@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { StatusAmbiente, StatusPeca } from '@montacontrol/shared'
-import type { PecaDTO, PedidoComAmbientesDTO, PedidoResumoDTO } from '@montacontrol/shared'
+import type { PecaDTO, PedidoComAmbientesDTO, PedidoResumoDTO, TipoAvariaDTO } from '@montacontrol/shared'
 import { useAuth } from '../auth/AuthContext'
+import { reportarAvaria, listarTiposAvaria } from '../api/avarias'
 import { ErroApi } from '../api/clienteHttp'
 import { associarCodigoBarras } from '../api/pecas'
 import { buscarPedidoComAmbientes, listarPedidos } from '../api/pedidos'
@@ -11,7 +12,7 @@ import { BadgeStatus } from '../ui/BadgeStatus'
 import { Botao } from '../ui/Botao'
 import { Cartao } from '../ui/Cartao'
 import { LayoutAutenticado } from './LayoutAutenticado'
-import { ModalProblemaPeca } from './triagem/ModalProblemaPeca'
+import { ModalProblemaPeca, type DadosProblemaPeca } from './triagem/ModalProblemaPeca'
 
 const ROTULO_STATUS_PECA: Record<StatusPeca, string> = {
   [StatusPeca.PENDENTE]: 'Pendente',
@@ -42,13 +43,16 @@ export default function Triagem() {
   const [erro, setErro] = useState<string | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
   const [pecaComProblema, setPecaComProblema] = useState<PecaDTO | null>(null)
+  const [tiposAvaria, setTiposAvaria] = useState<TipoAvariaDTO[]>([])
   const painelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     let ativo = true
-    listarPedidos(token)
-      .then((lista) => {
-        if (ativo) setPedidos(lista)
+    Promise.all([listarPedidos(token), listarTiposAvaria(token)])
+      .then(([lista, tipos]) => {
+        if (!ativo) return
+        setPedidos(lista)
+        setTiposAvaria(tipos)
       })
       .catch((causa: unknown) => {
         if (ativo) setErro(mensagemDe(causa, 'Falha ao carregar pedidos.'))
@@ -57,6 +61,17 @@ export default function Triagem() {
       ativo = false
     }
   }, [token])
+
+  async function aoReportarProblema(dados: DadosProblemaPeca) {
+    if (!pecaComProblema) return
+    try {
+      await reportarAvaria(token, { idCliente: crypto.randomUUID(), pecaId: pecaComProblema.id, ...dados })
+    } catch (causa: unknown) {
+      throw new Error(mensagemDe(causa, 'Falha ao enviar o problema.'), { cause: causa })
+    }
+    setErro(null)
+    setAviso(`Problema em ${pecaComProblema.descricao} enviado ao gestor.`)
+  }
 
   async function aoSelecionar(numeroPedido: string) {
     setNumeroSelecionado(numeroPedido)
@@ -247,6 +262,8 @@ export default function Triagem() {
         visivel={pecaComProblema !== null}
         descricaoPeca={pecaComProblema?.descricao ?? ''}
         numeroPedido={pedido?.numeroPedido ?? ''}
+        tipos={tiposAvaria}
+        aoEnviar={aoReportarProblema}
         aoFechar={() => setPecaComProblema(null)}
       />
     </LayoutAutenticado>

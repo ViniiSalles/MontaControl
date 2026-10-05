@@ -10,6 +10,7 @@ const BASE_VALIDA: Record<string, string> = {
   SUPABASE_JWT_ISSUER: 'https://exemplo.supabase.co/auth/v1',
   PASSWORD_RESET_REDIRECT_URL: 'https://app.montacontrol.local/redefinir-senha',
   SUPABASE_BUCKET_ATESTADOS: 'atestados',
+  SUPABASE_BUCKET_AVARIAS: 'avarias',
   EMPRESA_CNPJ: '12345678000199',
   EMPRESA_RAZAO_SOCIAL: 'MontaControl Montagens Planejadas Ltda',
   REP_P_REGISTRO_INPI: '12345678901234567',

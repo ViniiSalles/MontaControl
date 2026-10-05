@@ -51,6 +51,10 @@ class EnvironmentVariables {
   @IsString()
   SUPABASE_BUCKET_ATESTADOS!: string;
 
+  /** Bucket privado das fotos de avaria. Separado do de atestados; acesso só por URL assinada. */
+  @IsString()
+  SUPABASE_BUCKET_AVARIAS!: string;
+
   /** Dados do empregador no AFD (Portaria 671/2021, Anexo V, registro tipo 1). */
   @Matches(/^\d{14}$/, { message: 'EMPRESA_CNPJ deve ter 14 dígitos numéricos' })
   EMPRESA_CNPJ!: string;
