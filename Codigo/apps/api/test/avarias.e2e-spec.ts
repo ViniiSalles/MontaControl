@@ -158,6 +158,14 @@ describe('Avarias (e2e)', () => {
     await prisma.pedidoMontador.create({
       data: { pedidoId: proprio.pedidoId, usuarioId: montador.usuarioId },
     });
+    const meusPedidos = await request(app.getHttpServer())
+      .get('/api/pedidos/meus')
+      .set('Authorization', `Bearer ${tokenMontador}`)
+      .expect(200);
+    const idsPedidos = meusPedidos.body.map((p: { id: number }) => p.id);
+    expect(idsPedidos).toContain(proprio.pedidoId);
+    expect(idsPedidos).not.toContain(alheio.pedidoId);
+
     const criada = await reportar(tokenMontador, proprio.pecaId).expect(201);
     expect(criada.body.registradaPorPerfil).toBe(Perfil.MONTADOR);
 

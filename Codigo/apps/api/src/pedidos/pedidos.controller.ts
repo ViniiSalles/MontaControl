@@ -6,7 +6,9 @@ import type {
   StatusPedido as StatusPedidoCompartilhado,
 } from '@montacontrol/shared';
 import { Perfil } from '../../generated/prisma';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { UsuarioAutenticado } from '../auth/usuario-autenticado';
 import { CriarPedidoDto } from './dto/criar-pedido.dto';
 import { ListarPedidosQueryDto } from './dto/listar-pedidos.query.dto';
 import { PedidosService } from './pedidos.service';
@@ -26,6 +28,17 @@ export class PedidosController {
   @Get()
   async listar(@Query() query: ListarPedidosQueryDto): Promise<PedidoResumoDTO[]> {
     return this.pedidos.listar(query.status as unknown as StatusPedidoCompartilhado);
+  }
+
+  /**
+   * Pedidos em que o montador está trabalhando, com ambientes e peças — de
+   * onde ele escolhe a peça ao reportar avaria. Antes de `:numeroPedido`,
+   * senão "meus" vira um número de pedido.
+   */
+  @Roles(Perfil.MONTADOR)
+  @Get('meus')
+  async meus(@CurrentUser() usuario: UsuarioAutenticado): Promise<PedidoComAmbientesDTO[]> {
+    return this.pedidos.listarDoMontador(usuario.id);
   }
 
   /** US07/N7T3 — o Operador Logístico confere o pedido triado antes do despacho. */

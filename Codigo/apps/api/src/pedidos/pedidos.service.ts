@@ -34,6 +34,10 @@ export class PedidosService {
     return this.pedidos.listar(status);
   }
 
+  async listarDoMontador(usuarioId: number): Promise<PedidoComAmbientesDTO[]> {
+    return this.pedidos.listarDoMontador(usuarioId);
+  }
+
   /** N7T3 — peças do pedido organizadas por ambiente, para conferência antes do despacho. */
   async buscarComAmbientes(numeroPedido: string): Promise<PedidoComAmbientesDTO> {
     const pedido = await this.pedidos.buscarComAmbientes(numeroPedido);

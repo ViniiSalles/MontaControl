@@ -2,6 +2,7 @@ import NetInfo from '@react-native-community/netinfo';
 import { AppState } from 'react-native';
 import { Q } from '@nozbe/watermelondb';
 import type { Database } from '@nozbe/watermelondb';
+import { enviarAvaria } from '../avarias/clienteAvarias';
 import { buscarBancoHoras } from '../banco-horas/clienteBancoHoras';
 import { upsertBancoHoras } from '../banco-horas/espelhoBancoHoras';
 import { periodoAtual } from '../banco-horas/periodo';
@@ -64,6 +65,10 @@ async function reenviar(
   try {
     if (acao.tipo === 'checkin') return { tipo: 'ok', jornada: await enviarCheckin(token, payload) };
     if (acao.tipo === 'checkout') return { tipo: 'ok', jornada: await enviarCheckout(token, payload) };
+    if (acao.tipo === 'avaria') {
+      await enviarAvaria(token, payload);
+      return { tipo: 'ok', jornada: null };
+    }
     await enviarSolicitacaoPonto(token, payload);
     return { tipo: 'ok', jornada: null };
   } catch (erro) {

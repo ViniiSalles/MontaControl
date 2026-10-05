@@ -5,8 +5,10 @@ import type {
   CheckinRequest,
   CheckoutRequest,
   JornadaDTO,
+  ReportarAvariaRequest,
   SolicitarPontoEmAtrasoRequest,
 } from '@montacontrol/shared';
+import { enviarAvaria } from '../avarias/clienteAvarias';
 import { AcaoPendente } from '../db/AcaoPendente';
 import { Jornada } from '../db/Jornada';
 import {
@@ -19,6 +21,11 @@ import { paraJornadaDTO } from '../jornada/espelhoJornada';
 
 export type ResultadoEnvio<T> = { tipo: 'ok'; dado: T } | { tipo: 'recusado'; codigo: string };
 export type ResultadoPontoEmAtraso = { tipo: 'ok' } | { tipo: 'recusado'; codigo: string };
+/** `pendente`: sem rede agora, fica na fila e sobe sozinho quando a conexão voltar. */
+export type ResultadoAvaria =
+  | { tipo: 'enviada' }
+  | { tipo: 'pendente' }
+  | { tipo: 'recusado'; codigo: string; mensagem: string };
 
 function ehRecusaDoServidor(erro: unknown): erro is ErroApi {
   return erro instanceof ErroApi && erro.status >= 400 && erro.status < 500;
@@ -197,5 +204,30 @@ export async function executarAcaoPontoEmAtraso(
       return { tipo: 'recusado', codigo: erro.codigo };
     }
     return { tipo: 'ok' };
+  }
+}
+
+/**
+ * Reporte de avaria: o montador está na casa do cliente, muitas vezes sem
+ * sinal — o reporte entra na fila antes da rede e nunca se perde. Recusa do
+ * servidor (4xx) sai da fila e volta para a tela com a mensagem.
+ */
+export async function executarAcaoAvaria(
+  database: Database,
+  token: string,
+  payload: ReportarAvariaRequest,
+): Promise<ResultadoAvaria> {
+  const acao = await enfileirar(database, 'avaria', payload.idCliente, payload);
+
+  try {
+    await enviarAvaria(token, payload);
+    await database.write(() => acao.destroyPermanently());
+    return { tipo: 'enviada' };
+  } catch (erro) {
+    if (ehRecusaDoServidor(erro)) {
+      await database.write(() => acao.destroyPermanently());
+      return { tipo: 'recusado', codigo: erro.codigo, mensagem: erro.message };
+    }
+    return { tipo: 'pendente' };
   }
 }

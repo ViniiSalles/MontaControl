@@ -41,6 +41,13 @@ function numeroDoPedido(id: number): string {
   return `PED-${String(id).padStart(6, '0')}`;
 }
 
+/** Atribuído ao montador (`pedido_montador`) ou com jornada dele vinculada ao pedido. */
+function vinculoDoMontador(usuarioId: number) {
+  return {
+    OR: [{ montadores: { some: { usuarioId } } }, { jornadas: { some: { usuarioId } } }],
+  };
+}
+
 @Injectable()
 export class PedidosRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -171,12 +178,19 @@ export class PedidosRepository {
    */
   async montadorVinculado(pedidoId: number, usuarioId: number): Promise<boolean> {
     const total = await this.prisma.pedido.count({
-      where: {
-        id: pedidoId,
-        OR: [{ montadores: { some: { usuarioId } } }, { jornadas: { some: { usuarioId } } }],
-      },
+      where: { id: pedidoId, ...vinculoDoMontador(usuarioId) },
     });
     return total > 0;
+  }
+
+  /** Pedidos em que o montador está trabalhando, com as peças — base do reporte de avaria no app. */
+  async listarDoMontador(usuarioId: number): Promise<PedidoComAmbientesDTO[]> {
+    const linhas = await this.prisma.pedido.findMany({
+      where: vinculoDoMontador(usuarioId),
+      orderBy: { id: 'desc' },
+      select: SELECAO_PEDIDO_COM_AMBIENTES,
+    });
+    return linhas.map(paraPedidoComAmbientesDTO);
   }
 
   /** Primeira triagem do pedido: sai de AGUARDANDO para EM_TRIAGEM. Não-AGUARDANDO fica como está. */
