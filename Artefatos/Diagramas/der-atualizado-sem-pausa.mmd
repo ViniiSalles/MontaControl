@@ -45,6 +45,19 @@ erDiagram
       int usuario_id FK
   }
 
+  EQUIPE {
+      int id PK
+      string nome UK
+      timestamp created_at
+      timestamp updated_at
+  }
+
+  EQUIPE_MEMBRO {
+      int id PK
+      int equipe_id FK
+      int usuario_id FK
+  }
+
   AMBIENTE {
       int id PK
       int pedido_id FK
@@ -196,6 +209,8 @@ erDiagram
   CLIENTE ||--o{ PEDIDO : "possui"
   PEDIDO ||--|{ AMBIENTE : "contem"
   PEDIDO ||--o{ PEDIDO_MONTADOR : "atribuido a"
+  EQUIPE ||--o{ EQUIPE_MEMBRO : "agrupa"
+  USUARIO ||--o{ EQUIPE_MEMBRO : "integra"
   USUARIO ||--o{ PEDIDO_MONTADOR : "trabalha em"
   AMBIENTE ||--|{ PECA : "agrupa"
   USUARIO ||--o{ PECA : "tria (deposito)"

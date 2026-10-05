@@ -228,6 +228,8 @@ export interface PedidoResumoDTO {
   clienteNome: string;
   quantidadeTotal: number;
   quantidadeTriada: number;
+  /** Montadores atribuídos à obra (`pedido_montador`). */
+  quantidadeMontadores: number;
 }
 
 export interface PedidoDetalheDTO extends PedidoResumoDTO {
@@ -287,6 +289,30 @@ export interface AmbienteComPecasDTO {
 /** N7T3 — peças do pedido organizadas por ambiente, para conferência antes do despacho. */
 export interface PedidoComAmbientesDTO extends PedidoDTO {
   ambientes: AmbienteComPecasDTO[];
+}
+
+/** Montador como aparece em equipe e em atribuição de pedido. */
+export interface MontadorResumoDTO {
+  id: number;
+  nome: string;
+  ativo: boolean;
+}
+
+/** Equipe é atalho de preenchimento: a obra recebe cada membro, não a equipe. */
+export interface EquipeDTO {
+  id: number;
+  nome: string;
+  membros: MontadorResumoDTO[];
+}
+
+export interface SalvarEquipeRequest {
+  nome: string;
+  membrosIds: number[];
+}
+
+/** Substitui o conjunto inteiro de montadores do pedido. */
+export interface AtribuirMontadoresRequest {
+  usuarioIds: number[];
 }
 
 export interface TipoAvariaDTO {

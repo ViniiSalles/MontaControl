@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { Injectable } from '@nestjs/common';
 import type {
+  MontadorResumoDTO,
   PedidoComAmbientesDTO,
   PedidoDTO,
   PedidoResumoDTO,
@@ -136,6 +137,7 @@ export class PedidosRepository {
         clienteId: true,
         cliente: { select: { nome: true } },
         ambientes: { select: { pecas: { select: { status: true } } } },
+        _count: { select: { montadores: true } },
       },
       orderBy: { id: 'desc' },
     });
@@ -150,6 +152,7 @@ export class PedidosRepository {
         clienteNome: linha.cliente.nome,
         quantidadeTotal: pecas.length,
         quantidadeTriada: pecas.filter((peca) => peca.status !== StatusPecaPrisma.PENDENTE).length,
+        quantidadeMontadores: linha._count.montadores,
       };
     });
   }
@@ -191,6 +194,37 @@ export class PedidosRepository {
       select: SELECAO_PEDIDO_COM_AMBIENTES,
     });
     return linhas.map(paraPedidoComAmbientesDTO);
+  }
+
+  async existe(id: number): Promise<boolean> {
+    return (await this.prisma.pedido.count({ where: { id } })) > 0;
+  }
+
+  /** Montadores atribuídos à obra, em ordem alfabética. */
+  async listarMontadores(pedidoId: number): Promise<MontadorResumoDTO[]> {
+    const linhas = await this.prisma.pedidoMontador.findMany({
+      where: { pedidoId },
+      select: { usuario: { select: { id: true, nome: true, ativo: true } } },
+      orderBy: { usuario: { nome: 'asc' } },
+    });
+    return linhas.map((linha) => linha.usuario);
+  }
+
+  /**
+   * Troca o conjunto inteiro de montadores do pedido numa transação: quem
+   * saiu da lista perde o vínculo, quem entrou ganha, quem ficou não é tocado.
+   */
+  async definirMontadores(pedidoId: number, usuarioIds: number[]): Promise<MontadorResumoDTO[]> {
+    await this.prisma.$transaction([
+      this.prisma.pedidoMontador.deleteMany({
+        where: { pedidoId, usuarioId: { notIn: usuarioIds } },
+      }),
+      this.prisma.pedidoMontador.createMany({
+        data: usuarioIds.map((usuarioId) => ({ pedidoId, usuarioId })),
+        skipDuplicates: true,
+      }),
+    ]);
+    return this.listarMontadores(pedidoId);
   }
 
   /** Primeira triagem do pedido: sai de AGUARDANDO para EM_TRIAGEM. Não-AGUARDANDO fica como está. */

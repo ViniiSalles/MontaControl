@@ -105,6 +105,16 @@ export class UsuariosRepository {
     });
   }
 
+  /** Dos ids informados, só os que são montadores ativos — o resto não pode ir para obra nem equipe. */
+  async filtrarMontadoresAtivos(ids: number[]): Promise<number[]> {
+    if (ids.length === 0) return [];
+    const linhas = await this.prisma.usuario.findMany({
+      where: { id: { in: ids }, perfil: Perfil.MONTADOR, ativo: true },
+      select: { id: true },
+    });
+    return linhas.map((linha) => linha.id);
+  }
+
   async listar(): Promise<UsuarioListado[]> {
     return this.prisma.usuario.findMany({
       select: SELECAO_USUARIO_LISTADO,

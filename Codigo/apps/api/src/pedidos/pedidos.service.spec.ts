@@ -5,6 +5,8 @@ import { ClienteNaoEncontradoException } from './exceptions/cliente-nao-encontra
 import { PedidoNaoEncontradoException } from './exceptions/pedido-nao-encontrado.exception';
 import { PedidosRepository } from './pedidos.repository';
 import { PedidosService } from './pedidos.service';
+import { MontadoresInvalidosException } from '../usuarios/exceptions/montadores-invalidos.exception';
+import { UsuariosRepository } from '../usuarios/usuarios.repository';
 
 const dadosPedido = {
   clienteId: 1,
@@ -20,17 +22,65 @@ const pedidoComAmbientes = {
 };
 
 describe('PedidosService', () => {
-  let pedidos: { criar: jest.Mock; listar: jest.Mock; buscarComAmbientes: jest.Mock };
+  let pedidos: {
+    criar: jest.Mock;
+    listar: jest.Mock;
+    buscarComAmbientes: jest.Mock;
+    existe: jest.Mock;
+    listarMontadores: jest.Mock;
+    definirMontadores: jest.Mock;
+  };
   let clientes: { existe: jest.Mock };
+  let usuarios: { filtrarMontadoresAtivos: jest.Mock };
   let service: PedidosService;
 
   beforeEach(() => {
-    pedidos = { criar: jest.fn(), listar: jest.fn(), buscarComAmbientes: jest.fn() };
+    pedidos = {
+      criar: jest.fn(),
+      listar: jest.fn(),
+      buscarComAmbientes: jest.fn(),
+      existe: jest.fn().mockResolvedValue(true),
+      listarMontadores: jest.fn(),
+      definirMontadores: jest.fn().mockResolvedValue([]),
+    };
     clientes = { existe: jest.fn().mockResolvedValue(true) };
+    usuarios = { filtrarMontadoresAtivos: jest.fn((ids: number[]) => Promise.resolve(ids)) };
     service = new PedidosService(
       pedidos as unknown as PedidosRepository,
       clientes as unknown as ClientesRepository,
+      usuarios as unknown as UsuariosRepository,
     );
+  });
+
+  describe('atribuirMontadores', () => {
+    it('remove repetidos e grava cada membro', async () => {
+      await service.atribuirMontadores(3, [7, 8, 7]);
+
+      expect(usuarios.filtrarMontadoresAtivos).toHaveBeenCalledWith([7, 8]);
+      expect(pedidos.definirMontadores).toHaveBeenCalledWith(3, [7, 8]);
+    });
+
+    it('lista vazia tira todos da obra', async () => {
+      await service.atribuirMontadores(3, []);
+
+      expect(pedidos.definirMontadores).toHaveBeenCalledWith(3, []);
+    });
+
+    it('recusa quem não é montador ativo (422) sem gravar nada', async () => {
+      usuarios.filtrarMontadoresAtivos.mockResolvedValue([7]);
+
+      await expect(service.atribuirMontadores(3, [7, 99])).rejects.toThrow(
+        MontadoresInvalidosException,
+      );
+      expect(pedidos.definirMontadores).not.toHaveBeenCalled();
+    });
+
+    it('pedido inexistente é 404', async () => {
+      pedidos.existe.mockResolvedValue(false);
+
+      await expect(service.atribuirMontadores(3, [7])).rejects.toThrow(PedidoNaoEncontradoException);
+      await expect(service.listarMontadores(3)).rejects.toThrow(PedidoNaoEncontradoException);
+    });
   });
 
   describe('criar', () => {

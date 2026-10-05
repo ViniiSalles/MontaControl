@@ -92,6 +92,7 @@ describe('PedidosRepository', () => {
               clienteId: 1,
               cliente: { nome: 'Cliente Um' },
               ambientes: [{ pecas: [{ status: 'TRIADA' }, { status: 'PENDENTE' }] }],
+              _count: { montadores: 2 },
             },
           ]),
         },
@@ -109,6 +110,7 @@ describe('PedidosRepository', () => {
           clienteNome: 'Cliente Um',
           quantidadeTotal: 2,
           quantidadeTriada: 1,
+          quantidadeMontadores: 2,
         },
       ]);
       expect(prismaComLista.pedido.findMany).toHaveBeenCalledWith(

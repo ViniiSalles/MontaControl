@@ -1,5 +1,17 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseIntPipe,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
 import type {
+  MontadorResumoDTO,
   PedidoComAmbientesDTO,
   PedidoDTO,
   PedidoResumoDTO,
@@ -9,6 +21,7 @@ import { Perfil } from '../../generated/prisma';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UsuarioAutenticado } from '../auth/usuario-autenticado';
+import { AtribuirMontadoresDto } from './dto/atribuir-montadores.dto';
 import { CriarPedidoDto } from './dto/criar-pedido.dto';
 import { ListarPedidosQueryDto } from './dto/listar-pedidos.query.dto';
 import { PedidosService } from './pedidos.service';
@@ -46,5 +59,21 @@ export class PedidosController {
   @Get(':numeroPedido')
   async buscar(@Param('numeroPedido') numeroPedido: string): Promise<PedidoComAmbientesDTO> {
     return this.pedidos.buscarComAmbientes(numeroPedido);
+  }
+
+  @Roles(Perfil.GESTOR)
+  @Get(':id/montadores')
+  async montadores(@Param('id', ParseIntPipe) id: number): Promise<MontadorResumoDTO[]> {
+    return this.pedidos.listarMontadores(id);
+  }
+
+  /** Substitui a lista inteira de montadores da obra — a equipe só pré-preenche na tela. */
+  @Roles(Perfil.GESTOR)
+  @Put(':id/montadores')
+  async atribuirMontadores(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AtribuirMontadoresDto,
+  ): Promise<MontadorResumoDTO[]> {
+    return this.pedidos.atribuirMontadores(id, dto.usuarioIds);
   }
 }

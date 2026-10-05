@@ -28,6 +28,7 @@ const ITENS_POR_PERFIL: Record<PerfilWeb, ItemMenu[]> = {
   [Perfil.GESTOR]: [
     { rotulo: 'Dashboard', caminho: '/dashboard', icone: 'dashboard' },
     { rotulo: 'Pedidos', caminho: '/pedidos', icone: 'event_note' },
+    { rotulo: 'Equipes', caminho: '/equipes', icone: 'groups' },
     { rotulo: 'Avarias', caminho: '/avarias', icone: 'report' },
   ],
   [Perfil.DEPOSITO]: [{ rotulo: 'Triagem de Peças', caminho: '/triagem', icone: 'conveyor_belt' }],
