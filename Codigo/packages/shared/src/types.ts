@@ -188,6 +188,32 @@ export interface ClienteResumoDTO {
   estado: string;
 }
 
+/** Cliente = local da obra. As coordenadas são a referência do check-in do montador. */
+export interface ClienteDTO extends ClienteResumoDTO {
+  /** `00000-000`. */
+  cep: string;
+  /** Só dígitos, com DDD (10 ou 11). */
+  telefone: string;
+  latitude: number;
+  longitude: number;
+}
+
+export type SalvarClienteRequest = Omit<ClienteDTO, 'id'>;
+
+export interface GeocodificarEnderecoRequest {
+  endereco: string;
+  cidade: string;
+  estado: string;
+  cep?: string;
+}
+
+export interface CoordenadasEncontradasDTO {
+  latitude: number;
+  longitude: number;
+  /** Como o serviço de mapas entendeu o endereço — o gestor confere antes de salvar. */
+  enderecoEncontrado: string;
+}
+
 export interface ItemPedidoRequest {
   descricao: string;
   quantidade: number;

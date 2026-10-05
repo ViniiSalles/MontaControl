@@ -1,7 +1,7 @@
 import { StatusPedido } from '@montacontrol/shared';
 import { StatusAmbiente } from '../../generated/prisma';
 import { ClientesRepository } from '../clientes/clientes.repository';
-import { ClienteNaoEncontradoException } from './exceptions/cliente-nao-encontrado.exception';
+import { ClienteNaoEncontradoException } from '../clientes/exceptions/cliente-nao-encontrado.exception';
 import { PedidoNaoEncontradoException } from './exceptions/pedido-nao-encontrado.exception';
 import { PedidosRepository } from './pedidos.repository';
 import { PedidosService } from './pedidos.service';

@@ -8,7 +8,7 @@ import {
   type PedidoResumoDTO,
 } from '@montacontrol/shared';
 import { ClientesRepository } from '../clientes/clientes.repository';
-import { ClienteNaoEncontradoException } from './exceptions/cliente-nao-encontrado.exception';
+import { ClienteNaoEncontradoException } from '../clientes/exceptions/cliente-nao-encontrado.exception';
 import { MontadoresInvalidosException } from '../usuarios/exceptions/montadores-invalidos.exception';
 import { UsuariosRepository } from '../usuarios/usuarios.repository';
 import { PedidoNaoEncontradoException } from './exceptions/pedido-nao-encontrado.exception';

@@ -7,3 +7,4 @@ export * from './jornadas/limite';
 export * from './jornadas/distancia';
 export * from './rh/calendario';
 export * from './rh/cpf';
+export * from './clientes/uf';

@@ -13,6 +13,7 @@ const Dashboard = lazy(() => import('./paginas/Dashboard.tsx'))
 const Pedidos = lazy(() => import('./paginas/Pedidos.tsx'))
 const Avarias = lazy(() => import('./paginas/Avarias.tsx'))
 const Equipes = lazy(() => import('./paginas/Equipes.tsx'))
+const Clientes = lazy(() => import('./paginas/Clientes.tsx'))
 const Atestados = lazy(() => import('./paginas/Atestados.tsx'))
 const Triagem = lazy(() => import('./paginas/Triagem.tsx'))
 const Montadores = lazy(() => import('./paginas/Montadores.tsx'))
@@ -39,6 +40,14 @@ function App() {
             element={
               <RotaProtegida perfilExigido={Perfil.GESTOR}>
                 <Pedidos />
+              </RotaProtegida>
+            }
+          />
+          <Route
+            path="/clientes"
+            element={
+              <RotaProtegida perfilExigido={Perfil.GESTOR}>
+                <Clientes />
               </RotaProtegida>
             }
           />
