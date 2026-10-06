@@ -7,7 +7,7 @@ import { UsuarioAutenticado } from '../auth/usuario-autenticado';
 import { AlterarAtivoDto } from './dto/alterar-ativo.dto';
 import { CadastrarUsuarioDto } from './dto/cadastrar-usuario.dto';
 import { InformarCpfDto } from './dto/informar-cpf.dto';
-import { UsuarioListado } from './usuario-listado';
+import { UsuarioComFoto } from './usuario-listado';
 import { UsuariosService } from './usuarios.service';
 
 /** Alvo de N1T3: MONTADOR aqui deve receber 403. */
@@ -47,7 +47,7 @@ export class UsuariosController {
     return this.mapear(await this.usuarios.informarCpf(id, dto.cpf));
   }
 
-  private mapear(usuario: UsuarioListado): UsuarioDTO {
+  private mapear(usuario: UsuarioComFoto): UsuarioDTO {
     return {
       id: usuario.id,
       nome: usuario.nome,
@@ -57,6 +57,7 @@ export class UsuariosController {
       ativo: usuario.ativo,
       cpf: usuario.cpf,
       criadoEm: usuario.createdAt.toISOString(),
+      fotoUrl: usuario.fotoUrl,
     };
   }
 }

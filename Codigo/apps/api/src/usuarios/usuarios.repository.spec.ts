@@ -34,6 +34,7 @@ const SELECAO_LISTADO = {
   perfil: true,
   ativo: true,
   cpf: true,
+  fotoPath: true,
   createdAt: true,
 };
 
@@ -158,6 +159,7 @@ describe('UsuariosRepository', () => {
       cpf: '52998224725',
       perfil: Perfil.MONTADOR,
       authUserId: '22222222-2222-2222-2222-222222222222',
+      fotoPath: null,
     };
 
     it('cria o usuário e retorna a projeção sem authUserId', async () => {

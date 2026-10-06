@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { createClient } from '@supabase/supabase-js';
 import { SupabaseAuthGateway } from './supabase-auth.gateway';
 import { AvariasStorageGateway } from './avarias-storage.gateway';
+import { FotosUsuariosStorageGateway } from './fotos-usuarios-storage.gateway';
 import { SupabaseStorageGateway } from './supabase-storage.gateway';
 import { SUPABASE_CLIENT, SUPABASE_SESSION_CLIENT } from './supabase-client.token';
 
@@ -31,7 +32,13 @@ import { SUPABASE_CLIENT, SUPABASE_SESSION_CLIENT } from './supabase-client.toke
     SupabaseAuthGateway,
     SupabaseStorageGateway,
     AvariasStorageGateway,
+    FotosUsuariosStorageGateway,
   ],
-  exports: [SupabaseAuthGateway, SupabaseStorageGateway, AvariasStorageGateway],
+  exports: [
+    SupabaseAuthGateway,
+    SupabaseStorageGateway,
+    AvariasStorageGateway,
+    FotosUsuariosStorageGateway,
+  ],
 })
 export class SupabaseModule {}

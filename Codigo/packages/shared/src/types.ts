@@ -60,6 +60,8 @@ export interface UsuarioDTO {
   cpf?: string | null;
   /** Instante ISO do cadastro. Só a listagem projeta. */
   criadoEm?: string;
+  /** URL assinada (expira) da foto de perfil; `null` sem foto. Só a listagem projeta. */
+  fotoUrl?: string | null;
 }
 
 export interface CadastrarUsuarioRequest {
@@ -69,6 +71,8 @@ export interface CadastrarUsuarioRequest {
   telefone?: string;
   perfil: Perfil;
   cpf?: string;
+  /** Foto de perfil opcional (JPEG/PNG, até 5 MB). */
+  foto?: FotoBase64;
 }
 
 export interface InformarCpfRequest {

@@ -89,6 +89,8 @@ model Usuario {
   telefone   String?
   cpf        String?  @unique @db.VarChar(11)
   authUserId String   @unique @map("auth_user_id") @db.Uuid
+  /// Caminho da foto no bucket privado de fotos de usuário (opcional).
+  fotoPath   String?  @map("foto_path")
   perfil     Perfil
   ativo      Boolean  @default(true)
   createdAt  DateTime @default(now()) @map("created_at")

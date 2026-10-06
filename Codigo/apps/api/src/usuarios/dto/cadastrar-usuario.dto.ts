@@ -1,4 +1,15 @@
-import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  IsEmail,
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+  ValidateNested,
+} from 'class-validator';
+import { FotoBase64Dto } from '../../common/dto/foto-base64.dto';
 import { IsCpf } from '../../common/validators/is-cpf.validator';
 import { Perfil } from '../../../generated/prisma';
 
@@ -25,4 +36,9 @@ export class CadastrarUsuarioDto {
   @IsOptional()
   @IsCpf()
   cpf?: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => FotoBase64Dto)
+  foto?: FotoBase64Dto;
 }

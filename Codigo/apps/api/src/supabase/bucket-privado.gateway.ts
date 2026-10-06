@@ -27,6 +27,20 @@ export abstract class BucketPrivadoGateway {
     return error || !data ? null : data.signedUrl;
   }
 
+  /** Várias URLs numa chamada só (listagens). Caminho que falhar fica fora do mapa. */
+  async gerarUrlsAssinadas(caminhos: string[], segundos: number): Promise<Map<string, string>> {
+    const urls = new Map<string, string>();
+    if (caminhos.length === 0) return urls;
+    const { data, error } = await this.cliente.storage
+      .from(this.bucket)
+      .createSignedUrls(caminhos, segundos);
+    if (error || !data) return urls;
+    for (const item of data) {
+      if (item.path && item.signedUrl && !item.error) urls.set(item.path, item.signedUrl);
+    }
+    return urls;
+  }
+
   /** Compensação: usada quando a linha da foto falha depois do upload. */
   async remover(caminho: string): Promise<void> {
     await this.cliente.storage.from(this.bucket).remove([caminho]);

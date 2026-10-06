@@ -70,6 +70,7 @@ export default function Montadores() {
         senha: dados.senha,
         telefone: dados.telefone.trim() || undefined,
         perfil: Perfil.MONTADOR,
+        ...(dados.foto ? { foto: dados.foto } : {}),
       })
       setMontadores((atuais) => [...atuais, criado].sort((a, b) => a.nome.localeCompare(b.nome)))
       setModalAberto(false)
@@ -109,7 +110,7 @@ export default function Montadores() {
       titulo: 'Montador',
       render: (montador) => (
         <div className="flex items-center gap-12">
-          <Avatar nome={montador.nome} />
+          <Avatar nome={montador.nome} fotoUrl={montador.fotoUrl} />
           <div>
             <p className="text-title-sm text-on-surface">{montador.nome}</p>
             <p className="break-all text-body-sm text-on-surface-variant">{montador.email}</p>

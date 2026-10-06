@@ -11,6 +11,7 @@ const BASE_VALIDA: Record<string, string> = {
   PASSWORD_RESET_REDIRECT_URL: 'https://app.montacontrol.local/redefinir-senha',
   SUPABASE_BUCKET_ATESTADOS: 'atestados',
   SUPABASE_BUCKET_AVARIAS: 'avarias',
+  SUPABASE_BUCKET_FOTOS_USUARIOS: 'fotos-usuarios',
   EMPRESA_CNPJ: '12345678000199',
   EMPRESA_RAZAO_SOCIAL: 'MontaControl Montagens Planejadas Ltda',
   REP_P_REGISTRO_INPI: '12345678901234567',
