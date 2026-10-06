@@ -328,11 +328,19 @@ export interface MontadorResumoDTO {
   ativo: boolean;
 }
 
+/** Membro como aparece no detalhe da equipe. */
+export interface MembroEquipeDTO extends MontadorResumoDTO {
+  email: string;
+  telefone: string | null;
+  /** URL assinada (expira) da foto de perfil; `null` sem foto. */
+  fotoUrl: string | null;
+}
+
 /** Equipe é atalho de preenchimento: a obra recebe cada membro, não a equipe. */
 export interface EquipeDTO {
   id: number;
   nome: string;
-  membros: MontadorResumoDTO[];
+  membros: MembroEquipeDTO[];
 }
 
 export interface SalvarEquipeRequest {
