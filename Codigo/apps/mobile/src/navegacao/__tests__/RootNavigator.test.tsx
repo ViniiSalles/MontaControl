@@ -161,7 +161,7 @@ test('sair volta ao Login e limpa os tokens do aparelho', async () => {
   expect(armazenamentoMock.limparTokens).toHaveBeenCalled();
 });
 
-test('a barra inferior traz as 5 abas, com Jornada e Atestados habilitadas', async () => {
+test('a barra inferior traz as 5 abas, com Jornada, Avarias e Atestados habilitadas', async () => {
   armazenamentoMock.lerTokens.mockResolvedValue({ accessToken: 'access', refreshToken: 'refresh' });
   jest.mocked(globalThis.fetch).mockResolvedValueOnce(respostaJson(200, montador));
 

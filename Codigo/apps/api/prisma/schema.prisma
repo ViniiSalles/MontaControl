@@ -12,7 +12,7 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
+  provider = "postgresql"
 }
 
 // ─── Enums ───────────────────────────────────────────────────────────────────
@@ -97,13 +97,15 @@ model Usuario {
   jornadas           Jornada[]
   solicitacoesPonto  SolicitacaoPonto[] @relation("SolicitacaoPontoUsuario")
   pontosAnalisados   SolicitacaoPonto[] @relation("SolicitacaoPontoAnalista")
-  atestados          Atestado[]        @relation("AtestadoUsuario")
-  atestadosValidados Atestado[]        @relation("AtestadoValidador")
+  atestados          Atestado[]         @relation("AtestadoUsuario")
+  atestadosValidados Atestado[]         @relation("AtestadoValidador")
   bancosHoras        BancoHoras[]
   pedidosMontador    PedidoMontador[]
-  pecasTriadas       Peca[]            @relation("PecaTriadaPor")
-  pecasConferidas    Peca[]            @relation("PecaConferidaPor")
-  avariasRegistradas Avaria[]
+  equipes            EquipeMembro[]
+  pecasTriadas       Peca[]             @relation("PecaTriadaPor")
+  pecasConferidas    Peca[]             @relation("PecaConferidaPor")
+  avariasRegistradas Avaria[]           @relation("AvariaRegistrador")
+  avariasAnalisadas  Avaria[]           @relation("AvariaAnalista")
   cautelas           Cautela[]
   epis               Epi[]
   marcacoesPonto     MarcacaoPonto[]
@@ -157,6 +159,33 @@ model PedidoMontador {
 
   @@unique([pedidoId, usuarioId])
   @@map("pedido_montador")
+}
+
+/// Grupo de montadores que costuma ir junto para a mesma obra. É só um atalho
+/// de preenchimento: ao escolher a equipe, o gestor atribui cada membro em
+/// `pedido_montador` e pode tirar ou acrescentar pessoas avulsas. A
+/// atribuição não guarda a equipe de origem.
+model Equipe {
+  id        Int      @id @default(autoincrement())
+  nome      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  membros EquipeMembro[]
+
+  @@map("equipe")
+}
+
+model EquipeMembro {
+  id        Int @id @default(autoincrement())
+  equipeId  Int @map("equipe_id")
+  usuarioId Int @map("usuario_id")
+
+  equipe  Equipe  @relation(fields: [equipeId], references: [id], onDelete: Cascade)
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@unique([equipeId, usuarioId])
+  @@map("equipe_membro")
 }
 
 // ─── Logística: Ambientes e Peças ────────────────────────────────────────────
@@ -214,21 +243,31 @@ model TipoAvaria {
   @@map("tipo_avaria")
 }
 
+/// Qualquer problema com a peça (dano, falta, defeito), reportado pelo
+/// operador (DEPOSITO) ou pelo montador e analisado pelo gestor. A origem
+/// sai do perfil de `registrador` — não precisa de coluna própria.
 model Avaria {
   id            Int          @id @default(autoincrement())
   pecaId        Int          @map("peca_id")
   tipoAvariaId  Int          @map("tipo_avaria_id")
   registradaPor Int          @map("registrada_por")
+  /// UUID do aparelho — idempotência da outbox do mobile, igual ao atestado.
+  idCliente     String?      @unique @map("id_cliente") @db.Uuid
   descricao     String
   status        StatusAvaria @default(REPORTADA)
+  analisadaPor  Int?         @map("analisada_por")
+  analisadaAt   DateTime?    @map("analisada_at")
+  parecer       String?
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @updatedAt @map("updated_at")
 
   peca        Peca         @relation(fields: [pecaId], references: [id])
   tipoAvaria  TipoAvaria   @relation(fields: [tipoAvariaId], references: [id])
-  registrador Usuario      @relation(fields: [registradaPor], references: [id])
+  registrador Usuario      @relation("AvariaRegistrador", fields: [registradaPor], references: [id])
+  analista    Usuario?     @relation("AvariaAnalista", fields: [analisadaPor], references: [id])
   fotos       AvariaFoto[]
 
+  @@index([status])
   @@map("avaria")
 }
 
@@ -271,7 +310,7 @@ model Jornada {
   /// Preenchida quando a jornada nasceu da aprovação de um ponto em atraso.
   /// É o que responde `JornadaDTO.lancadoEmAtraso` sem coluna redundante.
   solicitacaoPonto SolicitacaoPonto?
-  marcacoes MarcacaoPonto[]
+  marcacoes        MarcacaoPonto[]
 
   @@index([usuarioId, checkinAt])
   @@map("jornada")

@@ -15,7 +15,7 @@ interface ItemMenu {
 
 /**
  * Menu da sidebar por perfil, na ordem do Stitch. Itens do mockup sem tela
- * construída (Avarias, Ferramentas, EPIs, Perfil) ficam de fora — não há
+ * construída (Ferramentas, EPIs, Perfil) ficam de fora — não há
  * link morto.
  */
 const ITENS_POR_PERFIL: Record<PerfilWeb, ItemMenu[]> = {
@@ -28,6 +28,9 @@ const ITENS_POR_PERFIL: Record<PerfilWeb, ItemMenu[]> = {
   [Perfil.GESTOR]: [
     { rotulo: 'Dashboard', caminho: '/dashboard', icone: 'dashboard' },
     { rotulo: 'Pedidos', caminho: '/pedidos', icone: 'event_note' },
+    { rotulo: 'Clientes', caminho: '/clientes', icone: 'home_work' },
+    { rotulo: 'Equipes', caminho: '/equipes', icone: 'groups' },
+    { rotulo: 'Avarias', caminho: '/avarias', icone: 'report' },
   ],
   [Perfil.DEPOSITO]: [{ rotulo: 'Triagem de Peças', caminho: '/triagem', icone: 'conveyor_belt' }],
 }

@@ -4,12 +4,14 @@ import { APP_FILTER, APP_GUARD, APP_PIPE } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AfdModule } from './afd/afd.module';
 import { AtestadosModule } from './atestados/atestados.module';
+import { AvariasModule } from './avarias/avarias.module';
 import { AuthModule } from './auth/auth.module';
 import { BancoHorasModule } from './banco-horas/banco-horas.module';
 import { ClientesModule } from './clientes/clientes.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { HealthController } from './common/health.controller';
 import { validate } from './config/env.validation';
+import { EquipesModule } from './equipes/equipes.module';
 import { EspelhoPontoModule } from './espelho-ponto/espelho-ponto.module';
 import { JornadasModule } from './jornadas/jornadas.module';
 import { PecasModule } from './pecas/pecas.module';
@@ -35,6 +37,8 @@ import { PrismaModule } from './prisma/prisma.module';
     ClientesModule,
     PedidosModule,
     PecasModule,
+    AvariasModule,
+    EquipesModule,
   ],
   controllers: [HealthController],
   providers: [

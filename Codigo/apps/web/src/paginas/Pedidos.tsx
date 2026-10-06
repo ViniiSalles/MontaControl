@@ -1,9 +1,24 @@
 import { useEffect, useState } from 'react'
-import type { ClienteResumoDTO, CriarPedidoRequest, PedidoResumoDTO } from '@montacontrol/shared'
+import type {
+  ClienteResumoDTO,
+  CriarPedidoRequest,
+  EquipeDTO,
+  MontadorResumoDTO,
+  PedidoResumoDTO,
+  UsuarioDTO,
+} from '@montacontrol/shared'
 import { ErroApi } from '../api/clienteHttp'
 import { listarClientes } from '../api/clientes'
-import { criarPedido, listarPedidos } from '../api/pedidos'
+import { listarEquipes } from '../api/equipes'
+import {
+  atribuirMontadoresAoPedido,
+  criarPedido,
+  listarMontadoresDoPedido,
+  listarPedidos,
+} from '../api/pedidos'
+import { listarUsuarios } from '../api/usuarios'
 import { useAuth } from '../auth/AuthContext'
+import { montadoresDisponiveis, textoQuantidadeMontadores } from '../formatacao/equipes'
 import { progressoDoPedido } from '../formatacao/pedidos'
 import { Alerta } from '../ui/Alerta'
 import { BadgeStatus } from '../ui/BadgeStatus'
@@ -11,28 +26,40 @@ import { Botao } from '../ui/Botao'
 import { CartaoIndicador } from '../ui/CartaoIndicador'
 import { TabelaDados, type ColunaTabela } from '../ui/TabelaDados'
 import { LayoutAutenticado } from './LayoutAutenticado'
+import { ModalMontadoresPedido } from './pedidos/ModalMontadoresPedido'
 import { ModalNovoPedido } from './pedidos/ModalNovoPedido'
 
 const mensagemDe = (causa: unknown, padrao: string) =>
   causa instanceof ErroApi ? causa.message : padrao
 
-/** Cadastro de pedidos pelo gestor: cliente da obra, ambientes e peças planejadas. */
+interface AtribuicaoAberta {
+  pedido: PedidoResumoDTO
+  atribuidos: MontadorResumoDTO[]
+}
+
+/** Cadastro de pedidos pelo gestor: cliente da obra, ambientes, peças planejadas e montadores da obra. */
 export default function Pedidos() {
   const { sessao } = useAuth()
   const token = sessao?.accessToken ?? ''
   const [pedidos, setPedidos] = useState<PedidoResumoDTO[]>([])
   const [clientes, setClientes] = useState<ClienteResumoDTO[]>([])
   const [modalAberto, setModalAberto] = useState(false)
+  const [equipes, setEquipes] = useState<EquipeDTO[]>([])
+  const [usuarios, setUsuarios] = useState<UsuarioDTO[]>([])
+  const [atribuicao, setAtribuicao] = useState<AtribuicaoAberta | null>(null)
+  const [erroAtribuicao, setErroAtribuicao] = useState<string | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
 
   useEffect(() => {
     let ativo = true
-    Promise.all([listarPedidos(token), listarClientes(token)])
-      .then(([listaPedidos, listaClientes]) => {
+    Promise.all([listarPedidos(token), listarClientes(token), listarEquipes(token), listarUsuarios(token)])
+      .then(([listaPedidos, listaClientes, listaEquipes, listaUsuarios]) => {
         if (!ativo) return
         setPedidos(listaPedidos)
         setClientes(listaClientes)
+        setEquipes(listaEquipes)
+        setUsuarios(listaUsuarios)
       })
       .catch((causa: unknown) => {
         if (ativo) setErro(mensagemDe(causa, 'Falha ao carregar pedidos.'))
@@ -56,6 +83,35 @@ export default function Pedidos() {
     }
   }
 
+  async function abrirAtribuicao(pedido: PedidoResumoDTO) {
+    setErro(null)
+    setAviso(null)
+    setErroAtribuicao(null)
+    try {
+      setAtribuicao({ pedido, atribuidos: await listarMontadoresDoPedido(token, pedido.id) })
+    } catch (causa: unknown) {
+      setErro(mensagemDe(causa, 'Falha ao carregar os montadores do pedido.'))
+    }
+  }
+
+  async function aoSalvarAtribuicao(usuarioIds: number[]) {
+    if (!atribuicao) return
+    setErroAtribuicao(null)
+    try {
+      const atribuidos = await atribuirMontadoresAoPedido(token, atribuicao.pedido.id, usuarioIds)
+      setPedidos((atuais) =>
+        atuais.map((pedido) =>
+          pedido.id === atribuicao.pedido.id ? { ...pedido, quantidadeMontadores: atribuidos.length } : pedido,
+        ),
+      )
+      setAviso(`${atribuicao.pedido.numeroPedido}: ${textoQuantidadeMontadores(atribuidos.length).toLowerCase()} na obra.`)
+      setAtribuicao(null)
+    } catch (causa: unknown) {
+      setErroAtribuicao(mensagemDe(causa, 'Falha ao salvar os montadores.'))
+      throw causa
+    }
+  }
+
   const pecasPlanejadas = pedidos.reduce((total, pedido) => total + pedido.quantidadeTotal, 0)
   const aguardandoTriagem = pedidos.filter((pedido) => pedido.quantidadeTriada === 0).length
 
@@ -73,6 +129,20 @@ export default function Pedidos() {
       titulo: 'Peças bipadas',
       alinhamento: 'direita',
       render: (pedido) => <span className="whitespace-nowrap">{progressoDoPedido(pedido)}</span>,
+    },
+    {
+      titulo: 'Montadores',
+      alinhamento: 'direita',
+      render: (pedido) => (
+        <Botao
+          variante="tonal"
+          tamanho={40}
+          forma="pilula"
+          icone="groups"
+          texto={textoQuantidadeMontadores(pedido.quantidadeMontadores)}
+          aoPressionar={() => void abrirAtribuicao(pedido)}
+        />
+      ),
     },
   ]
 
@@ -140,6 +210,18 @@ export default function Pedidos() {
             setErro(null)
           }}
           aoCadastrar={aoCadastrar}
+        />
+      )}
+
+      {atribuicao && (
+        <ModalMontadoresPedido
+          numeroPedido={atribuicao.pedido.numeroPedido}
+          atribuidos={atribuicao.atribuidos}
+          montadores={montadoresDisponiveis(usuarios)}
+          equipes={equipes}
+          erro={erroAtribuicao}
+          aoFechar={() => setAtribuicao(null)}
+          aoSalvar={aoSalvarAtribuicao}
         />
       )}
     </LayoutAutenticado>

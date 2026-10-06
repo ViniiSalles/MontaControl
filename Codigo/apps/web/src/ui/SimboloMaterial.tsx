@@ -19,7 +19,9 @@ import eventNote from '@material-symbols/svg-400/outlined/event_note.svg?raw';
 import fingerprint from '@material-symbols/svg-400/outlined/fingerprint.svg?raw';
 import groups from '@material-symbols/svg-400/outlined/groups.svg?raw';
 import history from '@material-symbols/svg-400/outlined/history.svg?raw';
+import homeWork from '@material-symbols/svg-400/outlined/home_work.svg?raw';
 import info from '@material-symbols/svg-400/outlined/info.svg?raw';
+import locationOn from '@material-symbols/svg-400/outlined/location_on.svg?raw';
 import lock from '@material-symbols/svg-400/outlined/lock.svg?raw';
 import logout from '@material-symbols/svg-400/outlined/logout.svg?raw';
 import mail from '@material-symbols/svg-400/outlined/mail.svg?raw';
@@ -70,7 +72,9 @@ const svgPorIcone: Record<NomeIcone, string> = {
   fingerprint: comCorAtual(fingerprint),
   groups: comCorAtual(groups),
   history: comCorAtual(history),
+  home_work: comCorAtual(homeWork),
   info: comCorAtual(info),
+  location_on: comCorAtual(locationOn),
   lock: comCorAtual(lock),
   logout: comCorAtual(logout),
   mail: comCorAtual(mail),

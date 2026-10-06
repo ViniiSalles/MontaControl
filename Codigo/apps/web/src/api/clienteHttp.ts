@@ -14,7 +14,7 @@ export class ErroApi extends Error {
 
 interface OpcoesRequisicao {
   token: string
-  metodo?: 'GET' | 'POST' | 'PATCH'
+  metodo?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
   corpo?: unknown
 }
 

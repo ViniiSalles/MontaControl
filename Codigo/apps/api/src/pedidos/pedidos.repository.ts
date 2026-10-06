@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { Injectable } from '@nestjs/common';
 import type {
+  MontadorResumoDTO,
   PedidoComAmbientesDTO,
   PedidoDTO,
   PedidoResumoDTO,
@@ -39,6 +40,13 @@ export type PrismaTransacao = Parameters<Parameters<PrismaService['$transaction'
 /** `PED-000042` — legível para o gestor, derivado do id da linha. */
 function numeroDoPedido(id: number): string {
   return `PED-${String(id).padStart(6, '0')}`;
+}
+
+/** Atribuído ao montador (`pedido_montador`) ou com jornada dele vinculada ao pedido. */
+function vinculoDoMontador(usuarioId: number) {
+  return {
+    OR: [{ montadores: { some: { usuarioId } } }, { jornadas: { some: { usuarioId } } }],
+  };
 }
 
 @Injectable()
@@ -129,6 +137,7 @@ export class PedidosRepository {
         clienteId: true,
         cliente: { select: { nome: true } },
         ambientes: { select: { pecas: { select: { status: true } } } },
+        _count: { select: { montadores: true } },
       },
       orderBy: { id: 'desc' },
     });
@@ -143,6 +152,7 @@ export class PedidosRepository {
         clienteNome: linha.cliente.nome,
         quantidadeTotal: pecas.length,
         quantidadeTriada: pecas.filter((peca) => peca.status !== StatusPecaPrisma.PENDENTE).length,
+        quantidadeMontadores: linha._count.montadores,
       };
     });
   }
@@ -162,6 +172,59 @@ export class PedidosRepository {
       select: SELECAO_PEDIDO_COM_AMBIENTES,
     });
     return linha ? paraPedidoComAmbientesDTO(linha) : null;
+  }
+
+  /**
+   * Montador está trabalhando no pedido: atribuído a ele (`pedido_montador`)
+   * ou com jornada vinculada a ele. Qualquer jornada, não só a aberta — o
+   * reporte pode sincronizar da outbox depois do check-out.
+   */
+  async montadorVinculado(pedidoId: number, usuarioId: number): Promise<boolean> {
+    const total = await this.prisma.pedido.count({
+      where: { id: pedidoId, ...vinculoDoMontador(usuarioId) },
+    });
+    return total > 0;
+  }
+
+  /** Pedidos em que o montador está trabalhando, com as peças — base do reporte de avaria no app. */
+  async listarDoMontador(usuarioId: number): Promise<PedidoComAmbientesDTO[]> {
+    const linhas = await this.prisma.pedido.findMany({
+      where: vinculoDoMontador(usuarioId),
+      orderBy: { id: 'desc' },
+      select: SELECAO_PEDIDO_COM_AMBIENTES,
+    });
+    return linhas.map(paraPedidoComAmbientesDTO);
+  }
+
+  async existe(id: number): Promise<boolean> {
+    return (await this.prisma.pedido.count({ where: { id } })) > 0;
+  }
+
+  /** Montadores atribuídos à obra, em ordem alfabética. */
+  async listarMontadores(pedidoId: number): Promise<MontadorResumoDTO[]> {
+    const linhas = await this.prisma.pedidoMontador.findMany({
+      where: { pedidoId },
+      select: { usuario: { select: { id: true, nome: true, ativo: true } } },
+      orderBy: { usuario: { nome: 'asc' } },
+    });
+    return linhas.map((linha) => linha.usuario);
+  }
+
+  /**
+   * Troca o conjunto inteiro de montadores do pedido numa transação: quem
+   * saiu da lista perde o vínculo, quem entrou ganha, quem ficou não é tocado.
+   */
+  async definirMontadores(pedidoId: number, usuarioIds: number[]): Promise<MontadorResumoDTO[]> {
+    await this.prisma.$transaction([
+      this.prisma.pedidoMontador.deleteMany({
+        where: { pedidoId, usuarioId: { notIn: usuarioIds } },
+      }),
+      this.prisma.pedidoMontador.createMany({
+        data: usuarioIds.map((usuarioId) => ({ pedidoId, usuarioId })),
+        skipDuplicates: true,
+      }),
+    ]);
+    return this.listarMontadores(pedidoId);
   }
 
   /** Primeira triagem do pedido: sai de AGUARDANDO para EM_TRIAGEM. Não-AGUARDANDO fica como está. */

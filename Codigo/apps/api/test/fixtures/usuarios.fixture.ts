@@ -103,13 +103,18 @@ export async function apagarUsuarioFixture(
     const id = fixture.usuarioId;
     const porUsuario = { usuarioId: id };
     // 1) Coleta os caminhos ANTES da transação (depois dela as linhas somem).
-    const coletado: { caminhos?: string[] } = {};
+    const coletado: { caminhos?: string[]; caminhosAvaria?: string[] } = {};
     await tentar('leitura dos caminhos das fotos', async () => {
       const fotos = await prisma.atestadoFoto.findMany({
         where: { atestado: porUsuario },
         select: { storagePath: true },
       });
       coletado.caminhos = fotos.map((f) => f.storagePath);
+      const fotosAvaria = await prisma.avariaFoto.findMany({
+        where: { avaria: { registradaPor: id } },
+        select: { storagePath: true },
+      });
+      coletado.caminhosAvaria = fotosAvaria.map((f) => f.storagePath);
     });
     let bancoLimpo = false;
     const caminhos = coletado.caminhos;
@@ -125,6 +130,10 @@ export async function apagarUsuarioFixture(
             where: { analisadoPor: id },
             data: { analisadoPor: null },
           }),
+          prisma.avaria.updateMany({
+            where: { analisadaPor: id },
+            data: { analisadaPor: null, analisadaAt: null },
+          }),
           prisma.peca.updateMany({ where: { triadaPor: id }, data: { triadaPor: null } }),
           prisma.peca.updateMany({ where: { conferidaPor: id }, data: { conferidaPor: null } }),
           prisma.atestadoFoto.deleteMany({ where: { atestado: porUsuario } }),
@@ -136,6 +145,7 @@ export async function apagarUsuarioFixture(
           prisma.avariaFoto.deleteMany({ where: { avaria: { registradaPor: id } } }),
           prisma.avaria.deleteMany({ where: { registradaPor: id } }),
           prisma.pedidoMontador.deleteMany({ where: porUsuario }),
+          prisma.equipeMembro.deleteMany({ where: porUsuario }),
           prisma.cautela.deleteMany({ where: porUsuario }),
           prisma.epi.deleteMany({ where: porUsuario }),
           prisma.usuario.delete({ where: { id } }),
@@ -155,6 +165,21 @@ export async function apagarUsuarioFixture(
         if (error)
           throw new Error(
             `${error.message}; arquivos órfãos no bucket ${bucket}: ${caminhos?.join(', ')}`,
+          );
+      });
+    }
+    const caminhosAvaria = coletado.caminhosAvaria;
+    if (bancoLimpo && caminhosAvaria && caminhosAvaria.length > 0) {
+      await tentar('arquivos do bucket de avarias', async () => {
+        const bucket = process.env.SUPABASE_BUCKET_AVARIAS;
+        if (!bucket)
+          throw new Error(
+            `SUPABASE_BUCKET_AVARIAS ausente; arquivos órfãos: ${caminhosAvaria.join(', ')}`,
+          );
+        const { error } = await supabase.storage.from(bucket).remove(caminhosAvaria);
+        if (error)
+          throw new Error(
+            `${error.message}; arquivos órfãos no bucket ${bucket}: ${caminhosAvaria.join(', ')}`,
           );
       });
     }

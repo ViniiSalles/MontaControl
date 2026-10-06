@@ -1,38 +1,86 @@
 import { useState } from 'react'
+import type { FotoBase64, TipoAvariaDTO } from '@montacontrol/shared'
 import { CampoAreaTexto } from '../../ui/CampoAreaTexto'
 import { Modal } from '../../ui/Modal'
 
-type TipoProblema = 'FALTANDO' | 'DEFEITO'
+const MAXIMO_FOTOS = 3
 
-const OPCOES: { valor: TipoProblema; rotulo: string }[] = [
-  { valor: 'FALTANDO', rotulo: 'Peça faltando' },
-  { valor: 'DEFEITO', rotulo: 'Peça com defeito' },
-]
+export interface DadosProblemaPeca {
+  tipoAvariaId: number
+  descricao: string
+  fotos: FotoBase64[]
+}
 
 interface PropsModalProblemaPeca {
   visivel: boolean
   descricaoPeca: string
   numeroPedido: string
+  tipos: TipoAvariaDTO[]
+  /** Rejeita com a mensagem a exibir quando o envio falha — o modal continua aberto. */
+  aoEnviar: (dados: DadosProblemaPeca) => Promise<void>
   aoFechar: () => void
 }
 
-/**
- * Aviso de problema na peça para o gestor que criou o pedido. Só a casca visual:
- * o envio da mensagem ainda não existe, então "Enviar" apenas fecha o modal.
- */
+function lerComoBase64(arquivo: File): Promise<FotoBase64> {
+  return new Promise((resolver, rejeitar) => {
+    const leitor = new FileReader()
+    leitor.onload = () => {
+      const dataUrl = String(leitor.result)
+      resolver({
+        conteudoBase64: dataUrl.slice(dataUrl.indexOf(',') + 1),
+        mimeType: arquivo.type as FotoBase64['mimeType'],
+      })
+    }
+    leitor.onerror = () => rejeitar(leitor.error)
+    leitor.readAsDataURL(arquivo)
+  })
+}
+
+/** Reporte de problema na peça (avaria, falta, defeito) — vai para a fila de análise do gestor. */
 export function ModalProblemaPeca({
   visivel,
   descricaoPeca,
   numeroPedido,
+  tipos,
+  aoEnviar,
   aoFechar,
 }: PropsModalProblemaPeca) {
-  const [tipo, setTipo] = useState<TipoProblema>('FALTANDO')
+  const [tipoAvariaId, setTipoAvariaId] = useState<number | null>(null)
   const [mensagem, setMensagem] = useState('')
+  const [arquivos, setArquivos] = useState<File[]>([])
+  const [erro, setErro] = useState<string | null>(null)
+  const [enviando, setEnviando] = useState(false)
 
   function fechar() {
-    setTipo('FALTANDO')
+    if (enviando) return
+    setTipoAvariaId(null)
     setMensagem('')
+    setArquivos([])
+    setErro(null)
     aoFechar()
+  }
+
+  async function enviar() {
+    if (enviando) return
+    if (tipoAvariaId === null) {
+      setErro('Selecione o tipo de problema.')
+      return
+    }
+    if (mensagem.trim().length < 3) {
+      setErro('Descreva o problema.')
+      return
+    }
+    setEnviando(true)
+    setErro(null)
+    try {
+      const fotos = await Promise.all(arquivos.map(lerComoBase64))
+      await aoEnviar({ tipoAvariaId, descricao: mensagem.trim(), fotos })
+      setEnviando(false)
+      fechar()
+    } catch (causa: unknown) {
+      setErro(causa instanceof Error ? causa.message : 'Falha ao enviar o problema.')
+      setEnviando(false)
+    }
   }
 
   return (
@@ -43,26 +91,27 @@ export function ModalProblemaPeca({
       aoFechar={fechar}
       acoes={[
         { texto: 'Cancelar', variante: 'fantasma', aoPressionar: fechar },
-        { texto: 'Enviar', aoPressionar: fechar },
+        { texto: enviando ? 'Enviando…' : 'Enviar', aoPressionar: () => void enviar() },
       ]}
       conteudo={
         <div className="space-y-16">
           <p className="text-body-md text-on-surface-variant">
-            O aviso será enviado ao gestor responsável pelo pedido {numeroPedido}.
+            O problema será enviado para análise do gestor do pedido {numeroPedido}.
           </p>
           <p className="text-title-sm text-on-surface">{descricaoPeca}</p>
           <fieldset className="space-y-8">
             <legend className="px-4 text-label-lg uppercase text-on-surface-variant">Problema</legend>
-            {OPCOES.map((opcao) => (
-              <label key={opcao.valor} className="flex cursor-pointer items-center gap-8 text-body-md text-on-surface">
+            {tipos.map((tipo) => (
+              <label key={tipo.id} className="flex cursor-pointer items-center gap-8 text-body-md text-on-surface">
                 <input
                   type="radio"
                   name="tipo-problema"
-                  checked={tipo === opcao.valor}
-                  onChange={() => setTipo(opcao.valor)}
+                  checked={tipoAvariaId === tipo.id}
+                  onChange={() => setTipoAvariaId(tipo.id)}
                   className="accent-primary"
                 />
-                {opcao.rotulo}
+                {tipo.nome}
+                <span className="text-body-sm text-on-surface-variant">— {tipo.descricao}</span>
               </label>
             ))}
           </fieldset>
@@ -72,6 +121,24 @@ export function ModalProblemaPeca({
             valor={mensagem}
             aoAlterar={setMensagem}
           />
+          <div className="space-y-6">
+            <label htmlFor="fotos-problema" className="block px-4 text-label-lg uppercase text-on-surface-variant">
+              Fotos (opcional, até {MAXIMO_FOTOS})
+            </label>
+            <input
+              id="fotos-problema"
+              type="file"
+              accept="image/jpeg,image/png"
+              multiple
+              onChange={(evento) => setArquivos(Array.from(evento.target.files ?? []).slice(0, MAXIMO_FOTOS))}
+              className="block w-full text-body-md text-on-surface-variant"
+            />
+          </div>
+          {erro && (
+            <p role="alert" className="px-4 text-body-sm text-error">
+              {erro}
+            </p>
+          )}
         </div>
       }
     />

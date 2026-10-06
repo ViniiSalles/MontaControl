@@ -1,5 +1,7 @@
 import type {
+  AtribuirMontadoresRequest,
   CriarPedidoRequest,
+  MontadorResumoDTO,
   PedidoComAmbientesDTO,
   PedidoDTO,
   PedidoResumoDTO,
@@ -23,5 +25,22 @@ export function buscarPedidoComAmbientes(
 ): Promise<PedidoComAmbientesDTO> {
   return requisitar<PedidoComAmbientesDTO>(`/api/pedidos/${encodeURIComponent(numeroPedido)}`, {
     token,
+  })
+}
+
+export function listarMontadoresDoPedido(token: string, pedidoId: number): Promise<MontadorResumoDTO[]> {
+  return requisitar<MontadorResumoDTO[]>(`/api/pedidos/${pedidoId}/montadores`, { token })
+}
+
+/** Substitui a lista inteira de montadores da obra. */
+export function atribuirMontadoresAoPedido(
+  token: string,
+  pedidoId: number,
+  usuarioIds: number[],
+): Promise<MontadorResumoDTO[]> {
+  return requisitar<MontadorResumoDTO[]>(`/api/pedidos/${pedidoId}/montadores`, {
+    token,
+    metodo: 'PUT',
+    corpo: { usuarioIds } satisfies AtribuirMontadoresRequest,
   })
 }

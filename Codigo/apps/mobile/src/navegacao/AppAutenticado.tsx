@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import { cores } from '@montacontrol/design-tokens/native';
 import { BarraNavInferior } from '../ui/BarraNavInferior';
 import { Atestados } from '../telas/Atestados';
+import { Avarias } from '../telas/Avarias';
 import { PilhaJornada } from './PilhaJornada';
 import { ABA_PADRAO, ABAS } from './abas';
 import type { IdAba } from './abas';
@@ -16,6 +17,7 @@ import type { IdAba } from './abas';
  */
 const telaPorAba: Partial<Record<IdAba, ComponentType>> = {
   jornada: PilhaJornada,
+  avarias: Avarias,
   atestados: Atestados,
 };
 

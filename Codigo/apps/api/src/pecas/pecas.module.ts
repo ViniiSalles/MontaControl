@@ -10,5 +10,7 @@ import { PecasService } from './pecas.service';
   imports: [PrismaModule, AmbientesModule, PedidosModule],
   controllers: [PecasController],
   providers: [PecasService, PecasRepository],
+  // O reporte de avaria precisa saber a qual pedido a peça pertence.
+  exports: [PecasRepository],
 })
 export class PecasModule {}

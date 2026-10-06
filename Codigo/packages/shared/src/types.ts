@@ -188,6 +188,32 @@ export interface ClienteResumoDTO {
   estado: string;
 }
 
+/** Cliente = local da obra. As coordenadas são a referência do check-in do montador. */
+export interface ClienteDTO extends ClienteResumoDTO {
+  /** `00000-000`. */
+  cep: string;
+  /** Só dígitos, com DDD (10 ou 11). */
+  telefone: string;
+  latitude: number;
+  longitude: number;
+}
+
+export type SalvarClienteRequest = Omit<ClienteDTO, 'id'>;
+
+export interface GeocodificarEnderecoRequest {
+  endereco: string;
+  cidade: string;
+  estado: string;
+  cep?: string;
+}
+
+export interface CoordenadasEncontradasDTO {
+  latitude: number;
+  longitude: number;
+  /** Como o serviço de mapas entendeu o endereço — o gestor confere antes de salvar. */
+  enderecoEncontrado: string;
+}
+
 export interface ItemPedidoRequest {
   descricao: string;
   quantidade: number;
@@ -228,6 +254,8 @@ export interface PedidoResumoDTO {
   clienteNome: string;
   quantidadeTotal: number;
   quantidadeTriada: number;
+  /** Montadores atribuídos à obra (`pedido_montador`). */
+  quantidadeMontadores: number;
 }
 
 export interface PedidoDetalheDTO extends PedidoResumoDTO {
@@ -289,18 +317,103 @@ export interface PedidoComAmbientesDTO extends PedidoDTO {
   ambientes: AmbienteComPecasDTO[];
 }
 
+/** Montador como aparece em equipe e em atribuição de pedido. */
+export interface MontadorResumoDTO {
+  id: number;
+  nome: string;
+  ativo: boolean;
+}
+
+/** Equipe é atalho de preenchimento: a obra recebe cada membro, não a equipe. */
+export interface EquipeDTO {
+  id: number;
+  nome: string;
+  membros: MontadorResumoDTO[];
+}
+
+export interface SalvarEquipeRequest {
+  nome: string;
+  membrosIds: number[];
+}
+
+/** Substitui o conjunto inteiro de montadores do pedido. */
+export interface AtribuirMontadoresRequest {
+  usuarioIds: number[];
+}
+
+export interface TipoAvariaDTO {
+  id: number;
+  nome: string;
+  descricao: string;
+}
+
+/**
+ * Avaria = qualquer problema com a peça (dano, falta, defeito). Linha da fila
+ * do gestor: já traz peça, pedido e quem reportou para não exigir N chamadas.
+ */
 export interface AvariaDTO {
   id: number;
   pecaId: number;
+  descricaoPeca: string;
+  codigoBarras: string | null;
+  pedidoId: number;
+  numeroPedido: string;
+  ambiente: string;
   tipoAvariaId: number;
+  tipoAvaria: string;
   descricao: string;
   status: StatusAvaria;
+  registradaPor: number;
+  registradaPorNome: string;
+  /** Origem do reporte: operador do depósito ou montador em campo. */
+  registradaPorPerfil: Perfil.DEPOSITO | Perfil.MONTADOR;
+  analisadaPor: number | null;
+  analisadaEm: string | null;
+  parecer: string | null;
+  quantidadeFotos: number;
+  criadoEm: string;
+}
+
+export interface AvariaFotoDTO {
+  id: number;
+  /** URL assinada com expiração — o caminho cru do bucket nunca sai da API. */
+  url: string;
+  expiraEm: string;
+}
+
+export interface AvariaDetalhadaDTO extends AvariaDTO {
+  analisadaPorNome: string | null;
+  fotos: AvariaFotoDTO[];
 }
 
 export interface FotoBase64 {
   /** Conteúdo do arquivo em base64, sem o prefixo `data:`. */
   conteudoBase64: string;
   mimeType: 'image/jpeg' | 'image/png';
+}
+
+export interface ReportarAvariaRequest {
+  /** UUID do aparelho — idempotência da outbox, igual ao atestado. */
+  idCliente: string;
+  pecaId: number;
+  tipoAvariaId: number;
+  /** Texto livre de quem reportou (até 500 caracteres). */
+  descricao: string;
+  /** Opcional: peça faltando não tem o que fotografar. */
+  fotos?: FotoBase64[];
+}
+
+export interface AtualizarStatusAvariaRequest {
+  status: StatusAvaria;
+  /** Obrigatório ao resolver ou solicitar reposição — é o registro da decisão. */
+  parecer?: string;
+}
+
+export interface FiltroAvarias {
+  status?: StatusAvaria;
+  origem?: Perfil.DEPOSITO | Perfil.MONTADOR;
+  tipoAvariaId?: number;
+  pedidoId?: number;
 }
 
 export interface EnviarAtestadoRequest {
