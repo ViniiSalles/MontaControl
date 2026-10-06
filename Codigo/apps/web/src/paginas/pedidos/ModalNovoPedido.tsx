@@ -1,7 +1,9 @@
-import { useId, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import type { ClienteResumoDTO, CriarPedidoRequest } from '@montacontrol/shared'
 import {
+  adicionarItensImportados,
   converterRascunhoPedido,
+  extrairItensDaPlanilha,
   validarRascunhoPedido,
   type RascunhoPedido,
 } from '../../formatacao/pedidos'
@@ -36,6 +38,13 @@ export function ModalNovoPedido({
   const [rascunho, setRascunho] = useState<RascunhoPedido>(VAZIO)
   const [erroValidacao, setErroValidacao] = useState<string | null>(null)
   const [salvando, setSalvando] = useState(false)
+  const [importacao, setImportacao] = useState<{
+    variante: 'sucesso' | 'erro'
+    mensagem: string
+  } | null>(null)
+  const entradaPlanilha = useRef<HTMLInputElement>(null)
+  /** Ambiente que receberá as peças do arquivo escolhido — um único `<input type="file">` serve a todos. */
+  const ambienteDaImportacao = useRef(0)
 
   function alterarAmbiente(indice: number, nome: string) {
     setRascunho((atual) => ({
@@ -92,6 +101,44 @@ export function ModalNovoPedido({
     }))
   }
 
+  function escolherPlanilha(indiceAmbiente: number) {
+    ambienteDaImportacao.current = indiceAmbiente
+    entradaPlanilha.current?.click()
+  }
+
+  async function importarPlanilha(arquivo: File) {
+    const indiceAmbiente = ambienteDaImportacao.current
+    let linhas: unknown[][]
+    try {
+      // Import dinâmico: o leitor de .xlsx só é baixado quando o gestor importa.
+      const { readSheet } = await import('read-excel-file/browser')
+      linhas = await readSheet(arquivo)
+    } catch {
+      setImportacao({
+        variante: 'erro',
+        mensagem: 'Não foi possível ler o arquivo. Envie uma planilha .xlsx.',
+      })
+      return
+    }
+
+    const resultado = extrairItensDaPlanilha(linhas)
+    if ('erro' in resultado) {
+      setImportacao({ variante: 'erro', mensagem: resultado.erro })
+      return
+    }
+
+    setRascunho((atual) => ({
+      ...atual,
+      ambientes: atual.ambientes.map((ambiente, posicao) =>
+        posicao === indiceAmbiente ? adicionarItensImportados(ambiente, resultado.itens) : ambiente,
+      ),
+    }))
+    setImportacao({
+      variante: 'sucesso',
+      mensagem: `${resultado.itens.length} peça(s) importada(s) de ${arquivo.name}.`,
+    })
+  }
+
   function adicionarAmbiente() {
     setRascunho((atual) => ({
       ...atual,
@@ -116,6 +163,7 @@ export function ModalNovoPedido({
     try {
       await aoCadastrar(converterRascunhoPedido(rascunho))
       setRascunho(VAZIO)
+      setImportacao(null)
     } catch {
       // A página já guardou a mensagem em `erro`; aqui só mantemos os dados digitados.
     } finally {
@@ -137,6 +185,20 @@ export function ModalNovoPedido({
         <div className="space-y-24">
           {erro && <Alerta variante="erro" mensagem={erro} />}
           {erroValidacao && <Alerta variante="aviso" mensagem={erroValidacao} />}
+          {importacao && <Alerta variante={importacao.variante} mensagem={importacao.mensagem} />}
+
+          <input
+            ref={entradaPlanilha}
+            type="file"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            hidden
+            onChange={(evento) => {
+              const arquivo = evento.target.files?.[0]
+              // Limpa para que escolher o mesmo arquivo de novo dispare `onChange`.
+              evento.target.value = ''
+              if (arquivo) void importarPlanilha(arquivo)
+            }}
+          />
 
           <div className="space-y-6">
             <label
@@ -229,14 +291,27 @@ export function ModalNovoPedido({
                 </div>
               ))}
 
-              <Botao
-                variante="fantasma"
-                tamanho={40}
-                forma="retangular"
-                icone="add"
-                texto="Adicionar peça"
-                aoPressionar={() => adicionarItem(indiceAmbiente)}
-              />
+              <div className="flex flex-wrap gap-12">
+                <Botao
+                  variante="fantasma"
+                  tamanho={40}
+                  forma="retangular"
+                  icone="add"
+                  texto="Adicionar peça"
+                  aoPressionar={() => adicionarItem(indiceAmbiente)}
+                />
+                <Botao
+                  variante="fantasma"
+                  tamanho={40}
+                  forma="retangular"
+                  icone="description"
+                  texto="Importar Excel"
+                  aoPressionar={() => escolherPlanilha(indiceAmbiente)}
+                />
+              </div>
+              <p className="text-body-sm text-on-surface-variant">
+                Planilha .xlsx com as colunas Descrição e Quantidade (quantidade em branco vale 1).
+              </p>
             </section>
           ))}
 
