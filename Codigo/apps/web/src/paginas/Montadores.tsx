@@ -4,6 +4,7 @@ import type { UsuarioDTO } from '@montacontrol/shared'
 import { useAuth } from '../auth/AuthContext'
 import { alterarAtivoUsuario, cadastrarUsuario, informarCpfUsuario, listarUsuarios } from '../api/usuarios'
 import { contarNovosNoMes, filtrarMontadores, formatarDataCadastro } from '../formatacao/montadores'
+import { ordenarLinhas, type OrdemTabela } from '../formatacao/ordenacao'
 import { ErroApi } from '../api/clienteHttp'
 import { Alerta } from '../ui/Alerta'
 import { Avatar } from '../ui/Avatar'
@@ -28,6 +29,7 @@ export default function Montadores() {
   const [montadores, setMontadores] = useState<UsuarioDTO[]>([])
   const [busca, setBusca] = useState('')
   const [pagina, setPagina] = useState(1)
+  const [ordem, setOrdem] = useState<OrdemTabela | null>(null)
   const [modalAberto, setModalAberto] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
@@ -49,9 +51,6 @@ export default function Montadores() {
   }, [token])
 
   const filtrados = filtrarMontadores(montadores, busca)
-  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA))
-  const paginaAtual = Math.min(pagina, totalPaginas)
-  const visiveis = filtrados.slice((paginaAtual - 1) * POR_PAGINA, paginaAtual * POR_PAGINA)
   const ativos = montadores.filter((montador) => montador.ativo).length
 
   function aoBuscar(valor: string) {
@@ -108,6 +107,7 @@ export default function Montadores() {
   const colunas: ColunaTabela<UsuarioDTO>[] = [
     {
       titulo: 'Montador',
+      ordenacao: { tipo: 'texto', valor: (montador) => montador.nome },
       render: (montador) => (
         <div className="flex items-center gap-12">
           <Avatar nome={montador.nome} fotoUrl={montador.fotoUrl} />
@@ -118,15 +118,17 @@ export default function Montadores() {
         </div>
       ),
     },
-    { titulo: 'Documento (CPF)', render: (montador) => mascararCpf(montador.cpf) },
-    { titulo: 'Telefone', render: (montador) => montador.telefone ?? '—' },
+    { titulo: 'Documento (CPF)', ordenacao: { tipo: 'texto', valor: (montador) => montador.cpf }, render: (montador) => mascararCpf(montador.cpf) },
+    { titulo: 'Telefone', ordenacao: { tipo: 'texto', valor: (montador) => montador.telefone }, render: (montador) => montador.telefone ?? '—' },
     {
       titulo: 'Status',
+      ordenacao: { tipo: 'texto', valor: (montador) => (montador.ativo ? 'Ativo' : 'Inativo') },
       render: (montador) =>
         montador.ativo ? <BadgeStatus variante="sucesso" texto="Ativo" /> : <BadgeStatus variante="neutro" texto="Inativo" />,
     },
     {
       titulo: 'Data cadastro',
+      ordenacao: { tipo: 'data', valor: (montador) => montador.criadoEm },
       render: (montador) => <span className="whitespace-nowrap">{formatarDataCadastro(montador.criadoEm)}</span>,
     },
     {
@@ -158,6 +160,12 @@ export default function Montadores() {
       ),
     },
   ]
+
+  // Ordena a lista inteira antes de paginar — senão a ordem valeria só para a página atual.
+  const ordenados = ordenarLinhas(filtrados, colunas, ordem)
+  const totalPaginas = Math.max(1, Math.ceil(ordenados.length / POR_PAGINA))
+  const paginaAtual = Math.min(pagina, totalPaginas)
+  const visiveis = ordenados.slice((paginaAtual - 1) * POR_PAGINA, paginaAtual * POR_PAGINA)
 
   return (
     <LayoutAutenticado
@@ -207,6 +215,11 @@ export default function Montadores() {
             colunas={colunas}
             linhas={visiveis}
             chave={(montador) => montador.id}
+            ordem={ordem}
+            aoOrdenar={(nova) => {
+              setOrdem(nova)
+              setPagina(1)
+            }}
             vazio={montadores.length === 0 ? 'Nenhum montador cadastrado.' : 'Nenhum montador encontrado para a busca.'}
           />
           <Paginacao

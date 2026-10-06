@@ -15,6 +15,7 @@ export function AbaSolicitacoes({ compensacoes, aoAprovar, aoRejeitar }: PropsAb
   const colunas: ColunaTabela<SolicitacaoPontoDTO>[] = [
     {
       titulo: 'Montador',
+      ordenacao: { tipo: 'texto', valor: (item) => item.usuarioNome },
       render: (item) => (
         <div className="flex items-center gap-12">
           <Avatar nome={item.usuarioNome} />
@@ -22,10 +23,10 @@ export function AbaSolicitacoes({ compensacoes, aoAprovar, aoRejeitar }: PropsAb
         </div>
       ),
     },
-    { titulo: 'Data', render: (item) => formatarDiaCivil(item.data) },
-    { titulo: 'Período', render: (item) => `${formatarHora(item.inicio)} – ${formatarHora(item.fim)}` },
-    { titulo: 'Horas', alinhamento: 'direita', render: (item) => `${formatarMinutos(item.minutosSolicitados)}h` },
-    { titulo: 'Justificativa', render: (item) => <span className="text-on-surface-variant">{item.justificativa}</span> },
+    { titulo: 'Data', ordenacao: { tipo: 'data', valor: (item) => item.data }, render: (item) => formatarDiaCivil(item.data) },
+    { titulo: 'Período', ordenacao: { tipo: 'hora', valor: (item) => formatarHora(item.inicio) }, render: (item) => `${formatarHora(item.inicio)} – ${formatarHora(item.fim)}` },
+    { titulo: 'Horas', alinhamento: 'direita', ordenacao: { tipo: 'numero', valor: (item) => item.minutosSolicitados }, render: (item) => `${formatarMinutos(item.minutosSolicitados)}h` },
+    { titulo: 'Justificativa', ordenacao: { tipo: 'texto', valor: (item) => item.justificativa }, render: (item) => <span className="text-on-surface-variant">{item.justificativa}</span> },
     {
       titulo: 'Ações',
       alinhamento: 'direita',

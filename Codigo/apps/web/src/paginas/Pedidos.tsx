@@ -118,21 +118,29 @@ export default function Pedidos() {
   const colunas: ColunaTabela<PedidoResumoDTO>[] = [
     {
       titulo: 'Pedido',
+      ordenacao: { tipo: 'texto', valor: (pedido) => pedido.numeroPedido },
       render: (pedido) => <span className="text-title-sm text-on-surface">{pedido.numeroPedido}</span>,
     },
-    { titulo: 'Cliente (local da obra)', render: (pedido) => pedido.clienteNome },
+    { titulo: 'Cliente (local da obra)', ordenacao: { tipo: 'texto', valor: (pedido) => pedido.clienteNome }, render: (pedido) => pedido.clienteNome },
     {
       titulo: 'Status',
+      ordenacao: { tipo: 'texto', valor: (pedido) => pedido.status },
       render: (pedido) => <BadgeStatus variante="neutro" texto={pedido.status} />,
     },
     {
       titulo: 'Peças bipadas',
       alinhamento: 'direita',
+      // Pela fração já bipada: pedido sem peças conta como 0.
+      ordenacao: {
+        tipo: 'numero',
+        valor: (pedido) => (pedido.quantidadeTotal ? pedido.quantidadeTriada / pedido.quantidadeTotal : 0),
+      },
       render: (pedido) => <span className="whitespace-nowrap">{progressoDoPedido(pedido)}</span>,
     },
     {
       titulo: 'Montadores',
       alinhamento: 'direita',
+      ordenacao: { tipo: 'numero', valor: (pedido) => pedido.quantidadeMontadores },
       render: (pedido) => (
         <Botao
           variante="tonal"

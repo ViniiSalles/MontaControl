@@ -2,6 +2,8 @@ import type { NomeIcone } from '@montacontrol/design-tokens/icones';
 import accountBalanceWallet from '@material-symbols/svg-400/outlined/account_balance_wallet.svg?raw';
 import add from '@material-symbols/svg-400/outlined/add.svg?raw';
 import addAPhoto from '@material-symbols/svg-400/outlined/add_a_photo.svg?raw';
+import arrowDownward from '@material-symbols/svg-400/outlined/arrow_downward.svg?raw';
+import arrowUpward from '@material-symbols/svg-400/outlined/arrow_upward.svg?raw';
 import barcodeScanner from '@material-symbols/svg-400/outlined/barcode_scanner.svg?raw';
 import calendarMonth from '@material-symbols/svg-400/outlined/calendar_month.svg?raw';
 import cancel from '@material-symbols/svg-400/outlined/cancel.svg?raw';
@@ -33,6 +35,7 @@ import pictureAsPdf from '@material-symbols/svg-400/outlined/picture_as_pdf.svg?
 import report from '@material-symbols/svg-400/outlined/report.svg?raw';
 import schedule from '@material-symbols/svg-400/outlined/schedule.svg?raw';
 import search from '@material-symbols/svg-400/outlined/search.svg?raw';
+import swapVert from '@material-symbols/svg-400/outlined/swap_vert.svg?raw';
 import sync from '@material-symbols/svg-400/outlined/sync.svg?raw';
 import trendingUp from '@material-symbols/svg-400/outlined/trending_up.svg?raw';
 import visibility from '@material-symbols/svg-400/outlined/visibility.svg?raw';
@@ -55,6 +58,8 @@ const svgPorIcone: Record<NomeIcone, string> = {
   account_balance_wallet: comCorAtual(accountBalanceWallet),
   add: comCorAtual(add),
   add_a_photo: comCorAtual(addAPhoto),
+  arrow_downward: comCorAtual(arrowDownward),
+  arrow_upward: comCorAtual(arrowUpward),
   barcode_scanner: comCorAtual(barcodeScanner),
   calendar_month: comCorAtual(calendarMonth),
   cancel: comCorAtual(cancel),
@@ -86,6 +91,7 @@ const svgPorIcone: Record<NomeIcone, string> = {
   report: comCorAtual(report),
   schedule: comCorAtual(schedule),
   search: comCorAtual(search),
+  swap_vert: comCorAtual(swapVert),
   sync: comCorAtual(sync),
   trending_up: comCorAtual(trendingUp),
   visibility: comCorAtual(visibility),

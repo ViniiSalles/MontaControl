@@ -1,6 +1,14 @@
 import { Perfil, StatusAvaria } from '@montacontrol/shared'
 import type { AvariaDTO } from '@montacontrol/shared'
 
+/** Ordem do fluxo de análise — usada para ordenar por status. */
+export const ORDEM_STATUS_AVARIA: StatusAvaria[] = [
+  StatusAvaria.REPORTADA,
+  StatusAvaria.EM_ANALISE,
+  StatusAvaria.REPOSICAO_SOLICITADA,
+  StatusAvaria.RESOLVIDA,
+]
+
 export const ROTULO_STATUS_AVARIA: Record<StatusAvaria, string> = {
   [StatusAvaria.REPORTADA]: 'Reportada',
   [StatusAvaria.EM_ANALISE]: 'Em análise',
