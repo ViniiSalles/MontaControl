@@ -9,6 +9,7 @@ import {
   contarPorStatus,
   FILTRO_VAZIO,
   filtrarAvarias,
+  ORDEM_STATUS_AVARIA,
   ROTULO_ORIGEM,
   ROTULO_STATUS_AVARIA,
   VARIANTE_STATUS_AVARIA,
@@ -30,6 +31,7 @@ const mensagemDe = (causa: unknown, padrao: string) => (causa instanceof ErroApi
 const colunas: ColunaTabela<AvariaDTO>[] = [
   {
     titulo: 'Peça',
+    ordenacao: { tipo: 'texto', valor: (avaria) => avaria.descricaoPeca },
     render: (avaria) => (
       <div>
         <p className="text-title-sm text-on-surface">{avaria.descricaoPeca}</p>
@@ -39,9 +41,10 @@ const colunas: ColunaTabela<AvariaDTO>[] = [
       </div>
     ),
   },
-  { titulo: 'Problema', render: (avaria) => avaria.tipoAvaria },
+  { titulo: 'Problema', ordenacao: { tipo: 'texto', valor: (avaria) => avaria.tipoAvaria }, render: (avaria) => avaria.tipoAvaria },
   {
     titulo: 'Reportada por',
+    ordenacao: { tipo: 'texto', valor: (avaria) => avaria.registradaPorNome },
     render: (avaria) => (
       <div>
         <p className="text-body-md text-on-surface">{avaria.registradaPorNome}</p>
@@ -49,9 +52,11 @@ const colunas: ColunaTabela<AvariaDTO>[] = [
       </div>
     ),
   },
-  { titulo: 'Data', render: (avaria) => formatarDataHoraCurta(avaria.criadoEm) },
+  { titulo: 'Data', ordenacao: { tipo: 'data', valor: (avaria) => avaria.criadoEm }, render: (avaria) => formatarDataHoraCurta(avaria.criadoEm) },
   {
     titulo: 'Status',
+    // Ordem do fluxo de análise, não alfabética.
+    ordenacao: { tipo: 'numero', valor: (avaria) => ORDEM_STATUS_AVARIA.indexOf(avaria.status) },
     render: (avaria) => (
       <BadgeStatus variante={VARIANTE_STATUS_AVARIA[avaria.status]} texto={ROTULO_STATUS_AVARIA[avaria.status]} />
     ),

@@ -7,6 +7,9 @@ import { formatarMinutos } from '../../formatacao/horas'
 import { BadgeStatus } from '../../ui/BadgeStatus'
 import { TabelaDados, type ColunaTabela } from '../../ui/TabelaDados'
 
+/** `HH:MM` do horário para ordenar a coluna; sem marcação vai para o fim. */
+const horaOuNulo = (iso: string | null) => (iso ? formatarHora(iso) : null)
+
 const BADGE_POR_OCORRENCIA: Record<Ocorrencia, { variante: VarianteBadge; texto: string } | null> = {
   ABONADO: { variante: 'info', texto: 'Abonado' },
   EM_ANDAMENTO: { variante: 'info', texto: 'Em andamento' },
@@ -37,14 +40,20 @@ export function TabelaEspelho({ dias, hoje }: PropsTabelaEspelho) {
   }
 
   const colunas: ColunaTabela<DiaEspelhoDTO>[] = [
-    { titulo: 'Data', render: (dia) => formatarDiaCivil(dia.data) },
-    { titulo: 'Dia', render: (dia) => <span className="text-label-lg uppercase">{diaDaSemana(dia.data)}</span> },
-    { titulo: 'Entrada', alinhamento: 'centro', render: (dia) => celulaHora(colunasDoDia(dia).entrada) },
-    { titulo: 'Saída intervalo', alinhamento: 'centro', render: (dia) => celulaHora(colunasDoDia(dia).saidaIntervalo) },
-    { titulo: 'Retorno intervalo', alinhamento: 'centro', render: (dia) => celulaHora(colunasDoDia(dia).retornoIntervalo) },
+    { titulo: 'Data', ordenacao: { tipo: 'data', valor: (dia) => dia.data }, render: (dia) => formatarDiaCivil(dia.data) },
+    {
+      titulo: 'Dia',
+      // Domingo = 0 … sábado = 6, para agrupar os mesmos dias da semana.
+      ordenacao: { tipo: 'numero', valor: (dia) => new Date(`${dia.data}T12:00:00Z`).getUTCDay() },
+      render: (dia) => <span className="text-label-lg uppercase">{diaDaSemana(dia.data)}</span>,
+    },
+    { titulo: 'Entrada', alinhamento: 'centro', ordenacao: { tipo: 'hora', valor: (dia) => horaOuNulo(colunasDoDia(dia).entrada) }, render: (dia) => celulaHora(colunasDoDia(dia).entrada) },
+    { titulo: 'Saída intervalo', alinhamento: 'centro', ordenacao: { tipo: 'hora', valor: (dia) => horaOuNulo(colunasDoDia(dia).saidaIntervalo) }, render: (dia) => celulaHora(colunasDoDia(dia).saidaIntervalo) },
+    { titulo: 'Retorno intervalo', alinhamento: 'centro', ordenacao: { tipo: 'hora', valor: (dia) => horaOuNulo(colunasDoDia(dia).retornoIntervalo) }, render: (dia) => celulaHora(colunasDoDia(dia).retornoIntervalo) },
     {
       titulo: 'Saída',
       alinhamento: 'centro',
+      ordenacao: { tipo: 'hora', valor: (dia) => horaOuNulo(colunasDoDia(dia).saida) },
       render: (dia) =>
         dia.turnos.length > 2 ? (
           <button type="button" onClick={() => alternar(dia.data)} aria-expanded={expandidos.has(dia.data)} className="text-primary underline underline-offset-2">
@@ -57,6 +66,7 @@ export function TabelaEspelho({ dias, hoje }: PropsTabelaEspelho) {
     {
       titulo: 'Total horas',
       alinhamento: 'direita',
+      ordenacao: { tipo: 'numero', valor: (dia) => dia.minutosTrabalhados },
       render: (dia) => {
         const ocorrencia = ocorrenciaDoDia(dia, hoje)
         const cor = ocorrencia === 'FALTA' ? 'text-error' : ocorrencia === 'HE' ? 'text-primary' : 'text-on-surface'
@@ -66,6 +76,14 @@ export function TabelaEspelho({ dias, hoje }: PropsTabelaEspelho) {
     {
       titulo: 'Ocorrência',
       alinhamento: 'centro',
+      ordenacao: {
+        tipo: 'texto',
+        valor: (dia) => {
+          const ocorrencia = ocorrenciaDoDia(dia, hoje)
+          if (ocorrencia === 'NAO_UTIL') return 'Não útil'
+          return ocorrencia ? (BADGE_POR_OCORRENCIA[ocorrencia]?.texto ?? null) : null
+        },
+      },
       render: (dia) => {
         const ocorrencia = ocorrenciaDoDia(dia, hoje)
         const badge = ocorrencia ? BADGE_POR_OCORRENCIA[ocorrencia] : null

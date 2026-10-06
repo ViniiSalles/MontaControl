@@ -123,6 +123,7 @@ export default function Atestados() {
   const colunas: ColunaTabela<AtestadoDTO>[] = [
     {
       titulo: 'Montador',
+      ordenacao: { tipo: 'texto', valor: (atestado) => atestado.usuarioNome },
       render: (atestado) => (
         <div className="flex items-center gap-12">
           <Avatar nome={atestado.usuarioNome} />
@@ -130,10 +131,19 @@ export default function Atestados() {
         </div>
       ),
     },
-    { titulo: 'Data de envio', render: (atestado) => formatarDataHoraCurta(atestado.criadoEm) },
-    { titulo: 'Período', render: (atestado) => textoPeriodo(atestado.dataInicio, atestado.dataFim) },
+    {
+      titulo: 'Data de envio',
+      ordenacao: { tipo: 'data', valor: (atestado) => atestado.criadoEm },
+      render: (atestado) => formatarDataHoraCurta(atestado.criadoEm),
+    },
+    {
+      titulo: 'Período',
+      ordenacao: { tipo: 'data', valor: (atestado) => atestado.dataInicio },
+      render: (atestado) => textoPeriodo(atestado.dataInicio, atestado.dataFim),
+    },
     {
       titulo: 'Status',
+      ordenacao: { tipo: 'texto', valor: (atestado) => ROTULO_STATUS[atestado.status] },
       render: (atestado) => <BadgeStatus variante={VARIANTE_STATUS[atestado.status]} texto={ROTULO_STATUS[atestado.status]} />,
     },
     {

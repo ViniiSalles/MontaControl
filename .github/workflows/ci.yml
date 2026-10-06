@@ -112,6 +112,7 @@ jobs:
           SUPABASE_JWT_ISSUER: ${{ secrets.TEST_SUPABASE_JWT_ISSUER }}
           SUPABASE_BUCKET_ATESTADOS: atestados
           SUPABASE_BUCKET_AVARIAS: avarias
+          SUPABASE_BUCKET_FOTOS_USUARIOS: fotos-usuarios
           PASSWORD_RESET_REDIRECT_URL: ${{ secrets.TEST_PASSWORD_RESET_REDIRECT_URL }}
           EMPRESA_CNPJ: ${{ secrets.EMPRESA_CNPJ }}
           EMPRESA_RAZAO_SOCIAL: ${{ secrets.EMPRESA_RAZAO_SOCIAL }}

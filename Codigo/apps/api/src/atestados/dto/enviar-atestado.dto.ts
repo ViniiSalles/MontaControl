@@ -3,8 +3,6 @@ import {
   ArrayMaxSize,
   ArrayNotEmpty,
   IsArray,
-  IsBase64,
-  IsIn,
   IsISO8601,
   IsOptional,
   IsString,
@@ -12,15 +10,8 @@ import {
   MaxLength,
   ValidateNested,
 } from 'class-validator';
-import type { EnviarAtestadoRequest, FotoBase64 } from '@montacontrol/shared';
-
-export class FotoBase64Dto implements FotoBase64 {
-  @IsBase64()
-  conteudoBase64!: string;
-
-  @IsIn(['image/jpeg', 'image/png'])
-  mimeType!: 'image/jpeg' | 'image/png';
-}
+import type { EnviarAtestadoRequest } from '@montacontrol/shared';
+import { FotoBase64Dto } from '../../common/dto/foto-base64.dto';
 
 export class EnviarAtestadoDto implements EnviarAtestadoRequest {
   @IsUUID()

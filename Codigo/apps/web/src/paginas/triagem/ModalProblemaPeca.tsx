@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { FotoBase64, TipoAvariaDTO } from '@montacontrol/shared'
+import { TIPOS_FOTO_ACEITOS, lerFotoComoBase64 } from '../../formatacao/fotos'
 import { CampoAreaTexto } from '../../ui/CampoAreaTexto'
 import { Modal } from '../../ui/Modal'
 
@@ -19,21 +20,6 @@ interface PropsModalProblemaPeca {
   /** Rejeita com a mensagem a exibir quando o envio falha — o modal continua aberto. */
   aoEnviar: (dados: DadosProblemaPeca) => Promise<void>
   aoFechar: () => void
-}
-
-function lerComoBase64(arquivo: File): Promise<FotoBase64> {
-  return new Promise((resolver, rejeitar) => {
-    const leitor = new FileReader()
-    leitor.onload = () => {
-      const dataUrl = String(leitor.result)
-      resolver({
-        conteudoBase64: dataUrl.slice(dataUrl.indexOf(',') + 1),
-        mimeType: arquivo.type as FotoBase64['mimeType'],
-      })
-    }
-    leitor.onerror = () => rejeitar(leitor.error)
-    leitor.readAsDataURL(arquivo)
-  })
 }
 
 /** Reporte de problema na peça (avaria, falta, defeito) — vai para a fila de análise do gestor. */
@@ -73,7 +59,7 @@ export function ModalProblemaPeca({
     setEnviando(true)
     setErro(null)
     try {
-      const fotos = await Promise.all(arquivos.map(lerComoBase64))
+      const fotos = await Promise.all(arquivos.map(lerFotoComoBase64))
       await aoEnviar({ tipoAvariaId, descricao: mensagem.trim(), fotos })
       setEnviando(false)
       fechar()
@@ -128,7 +114,7 @@ export function ModalProblemaPeca({
             <input
               id="fotos-problema"
               type="file"
-              accept="image/jpeg,image/png"
+              accept={TIPOS_FOTO_ACEITOS}
               multiple
               onChange={(evento) => setArquivos(Array.from(evento.target.files ?? []).slice(0, MAXIMO_FOTOS))}
               className="block w-full text-body-md text-on-surface-variant"

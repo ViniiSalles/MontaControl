@@ -14,6 +14,7 @@ export interface DadosNovoUsuario {
   cpf: string | null;
   perfil: Perfil;
   authUserId: string;
+  fotoPath: string | null;
 }
 
 /**
@@ -84,6 +85,7 @@ const SELECAO_USUARIO_LISTADO = {
   perfil: true,
   ativo: true,
   cpf: true,
+  fotoPath: true,
   createdAt: true,
 } as const;
 

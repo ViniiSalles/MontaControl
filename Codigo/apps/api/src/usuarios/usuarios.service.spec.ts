@@ -1,4 +1,4 @@
-import { ConflictException } from '@nestjs/common';
+import { BadGatewayException, ConflictException } from '@nestjs/common';
 import { Perfil } from '../../generated/prisma';
 import { SupabaseAuthGateway } from '../supabase/supabase-auth.gateway';
 import { CpfJaCadastradoException } from './exceptions/cpf-ja-cadastrado.exception';
@@ -6,6 +6,7 @@ import { CpfJaInformadoException } from './exceptions/cpf-ja-informado.exception
 import { CpfObrigatorioException } from './exceptions/cpf-obrigatorio.exception';
 import { InativacaoDoProprioUsuarioException } from './exceptions/inativacao-do-proprio-usuario.exception';
 import { UsuarioNaoEncontradoException } from './exceptions/usuario-nao-encontrado.exception';
+import { FotosUsuarios } from './fotos-usuarios';
 import { UsuariosRepository } from './usuarios.repository';
 import { UsuariosService } from './usuarios.service';
 
@@ -28,6 +29,7 @@ describe('UsuariosService', () => {
     buscarPorId: jest.Mock;
   };
   let supabase: { criarUsuario: jest.Mock; excluirUsuario: jest.Mock };
+  let fotos: { enviar: jest.Mock; remover: jest.Mock; comUrls: jest.Mock };
   let service: UsuariosService;
 
   beforeEach(() => {
@@ -39,9 +41,16 @@ describe('UsuariosService', () => {
       buscarPorId: jest.fn(),
     };
     supabase = { criarUsuario: jest.fn(), excluirUsuario: jest.fn() };
+    // Sem foto, `comUrls` é transparente: os testes antigos comparam o listado puro.
+    fotos = {
+      enviar: jest.fn().mockResolvedValue('foto.jpg'),
+      remover: jest.fn(),
+      comUrls: jest.fn((itens: unknown[]) => Promise.resolve(itens)),
+    };
     service = new UsuariosService(
       repository as unknown as UsuariosRepository,
       supabase as unknown as SupabaseAuthGateway,
+      fotos as unknown as FotosUsuarios,
     );
   });
 
@@ -60,6 +69,36 @@ describe('UsuariosService', () => {
   });
 
   describe('cadastrar', () => {
+    const foto = { conteudoBase64: 'aGVsbG8=', mimeType: 'image/jpeg' as const };
+
+    it('com foto: envia antes de criar a conta e grava o caminho', async () => {
+      supabase.criarUsuario.mockResolvedValue(authUserId);
+      repository.criar.mockResolvedValue({ id: 9, fotoPath: 'foto.jpg' });
+
+      await service.cadastrar({ ...dadosCadastro, foto });
+
+      expect(fotos.enviar).toHaveBeenCalledWith(foto);
+      expect(fotos.enviar.mock.invocationCallOrder[0]).toBeLessThan(
+        supabase.criarUsuario.mock.invocationCallOrder[0],
+      );
+      expect(repository.criar).toHaveBeenCalledWith(expect.objectContaining({ fotoPath: 'foto.jpg' }));
+      expect(fotos.comUrls).toHaveBeenCalledWith([{ id: 9, fotoPath: 'foto.jpg' }]);
+    });
+
+    it('com foto: falha no Storage recusa o cadastro sem criar conta', async () => {
+      fotos.enviar.mockRejectedValue(new BadGatewayException());
+
+      await expect(service.cadastrar({ ...dadosCadastro, foto })).rejects.toThrow(BadGatewayException);
+      expect(supabase.criarUsuario).not.toHaveBeenCalled();
+    });
+
+    it('com foto: e-mail duplicado remove a foto já enviada', async () => {
+      supabase.criarUsuario.mockResolvedValue(null);
+
+      await expect(service.cadastrar({ ...dadosCadastro, foto })).rejects.toThrow(ConflictException);
+      expect(fotos.remover).toHaveBeenCalledWith('foto.jpg');
+    });
+
     it('cria o usuário no Supabase e no Postgres, nessa ordem', async () => {
       supabase.criarUsuario.mockResolvedValue(authUserId);
       repository.criar.mockResolvedValue({
@@ -89,6 +128,7 @@ describe('UsuariosService', () => {
         perfil: dadosCadastro.perfil,
         cpf: '52998224725',
         authUserId,
+        fotoPath: null,
       });
       expect(supabase.excluirUsuario).not.toHaveBeenCalled();
     });

@@ -60,6 +60,8 @@ export interface UsuarioDTO {
   cpf?: string | null;
   /** Instante ISO do cadastro. Só a listagem projeta. */
   criadoEm?: string;
+  /** URL assinada (expira) da foto de perfil; `null` sem foto. Só a listagem projeta. */
+  fotoUrl?: string | null;
 }
 
 export interface CadastrarUsuarioRequest {
@@ -69,6 +71,8 @@ export interface CadastrarUsuarioRequest {
   telefone?: string;
   perfil: Perfil;
   cpf?: string;
+  /** Foto de perfil opcional (JPEG/PNG, até 5 MB). */
+  foto?: FotoBase64;
 }
 
 export interface InformarCpfRequest {
@@ -324,11 +328,19 @@ export interface MontadorResumoDTO {
   ativo: boolean;
 }
 
+/** Membro como aparece no detalhe da equipe. */
+export interface MembroEquipeDTO extends MontadorResumoDTO {
+  email: string;
+  telefone: string | null;
+  /** URL assinada (expira) da foto de perfil; `null` sem foto. */
+  fotoUrl: string | null;
+}
+
 /** Equipe é atalho de preenchimento: a obra recebe cada membro, não a equipe. */
 export interface EquipeDTO {
   id: number;
   nome: string;
-  membros: MontadorResumoDTO[];
+  membros: MembroEquipeDTO[];
 }
 
 export interface SalvarEquipeRequest {

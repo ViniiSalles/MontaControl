@@ -128,6 +128,7 @@ export default function BancoHoras() {
   const colunas: ColunaTabela<SaldoMontadorDTO>[] = [
     {
       titulo: 'Montador',
+      ordenacao: { tipo: 'texto', valor: (linha) => linha.usuarioNome },
       render: (linha) => (
         <div className="flex items-center gap-12">
           <Avatar nome={linha.usuarioNome} />
@@ -137,6 +138,7 @@ export default function BancoHoras() {
     },
     {
       titulo: 'Saldo atual',
+      ordenacao: { tipo: 'numero', valor: (linha) => linha.saldo },
       render: (linha) => (
         <span className={['text-title-md', linha.saldo < 0 ? 'text-error' : 'text-primary'].join(' ')}>
           {formatarMinutos(horasParaMinutos(linha.saldo), true)}h
@@ -145,6 +147,8 @@ export default function BancoHoras() {
     },
     {
       titulo: 'Situação',
+      // Quem tem compensação pendente pede ação do RH — vem primeiro no decrescente.
+      ordenacao: { tipo: 'numero', valor: (linha) => linha.compensacoesPendentes },
       render: (linha) => (
         <div className="flex flex-wrap items-center gap-8">
           {linha.saldo > 0 && <BadgeStatus variante="info" texto="Crédito" />}

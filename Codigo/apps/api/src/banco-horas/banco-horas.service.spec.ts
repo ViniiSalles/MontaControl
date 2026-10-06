@@ -46,6 +46,7 @@ function usuarioFake(parcial: Partial<UsuarioListado> = {}): UsuarioListado {
     perfil: Perfil.MONTADOR,
     ativo: true,
     cpf: null,
+    fotoPath: null,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     ...parcial,
   };

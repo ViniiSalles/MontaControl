@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import type { EquipeDTO } from '@montacontrol/shared';
 import { PrismaService } from '../prisma/prisma.service';
 
 const CODIGO_PRISMA_VIOLACAO_UNICIDADE = 'P2002';
@@ -16,18 +15,38 @@ const SELECAO_EQUIPE = {
   id: true,
   nome: true,
   membros: {
-    select: { usuario: { select: { id: true, nome: true, ativo: true } } },
+    select: {
+      usuario: {
+        select: { id: true, nome: true, ativo: true, email: true, telefone: true, fotoPath: true },
+      },
+    },
     orderBy: { usuario: { nome: 'asc' as const } },
   },
 } as const;
 
+/** Membro com o caminho cru da foto — o service troca por URL assinada. */
+export interface MembroComFoto {
+  id: number;
+  nome: string;
+  ativo: boolean;
+  email: string;
+  telefone: string | null;
+  fotoPath: string | null;
+}
+
+export interface EquipeComMembros {
+  id: number;
+  nome: string;
+  membros: MembroComFoto[];
+}
+
 interface LinhaEquipe {
   id: number;
   nome: string;
-  membros: Array<{ usuario: { id: number; nome: string; ativo: boolean } }>;
+  membros: Array<{ usuario: MembroComFoto }>;
 }
 
-function paraEquipeDTO(linha: LinhaEquipe): EquipeDTO {
+function paraEquipe(linha: LinhaEquipe): EquipeComMembros {
   return { id: linha.id, nome: linha.nome, membros: linha.membros.map((membro) => membro.usuario) };
 }
 
@@ -37,21 +56,21 @@ export type FalhaEquipe = 'NOME_DUPLICADO' | 'NAO_ENCONTRADA';
 export class EquipesRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listar(): Promise<EquipeDTO[]> {
+  async listar(): Promise<EquipeComMembros[]> {
     const linhas = await this.prisma.equipe.findMany({
       orderBy: { nome: 'asc' },
       select: SELECAO_EQUIPE,
     });
-    return linhas.map(paraEquipeDTO);
+    return linhas.map(paraEquipe);
   }
 
-  async criar(nome: string, membrosIds: number[]): Promise<EquipeDTO | FalhaEquipe> {
+  async criar(nome: string, membrosIds: number[]): Promise<EquipeComMembros | FalhaEquipe> {
     try {
       const linha = await this.prisma.equipe.create({
         data: { nome, membros: { create: membrosIds.map((usuarioId) => ({ usuarioId })) } },
         select: SELECAO_EQUIPE,
       });
-      return paraEquipeDTO(linha);
+      return paraEquipe(linha);
     } catch (erro) {
       if (codigoPrisma(erro) === CODIGO_PRISMA_VIOLACAO_UNICIDADE) return 'NOME_DUPLICADO';
       throw erro;
@@ -59,7 +78,7 @@ export class EquipesRepository {
   }
 
   /** Renomeia e troca os membros de uma vez — a lista enviada é a equipe inteira. */
-  async atualizar(id: number, nome: string, membrosIds: number[]): Promise<EquipeDTO | FalhaEquipe> {
+  async atualizar(id: number, nome: string, membrosIds: number[]): Promise<EquipeComMembros | FalhaEquipe> {
     try {
       const linha = await this.prisma.equipe.update({
         where: { id },
@@ -72,7 +91,7 @@ export class EquipesRepository {
         },
         select: SELECAO_EQUIPE,
       });
-      return paraEquipeDTO(linha);
+      return paraEquipe(linha);
     } catch (erro) {
       const codigo = codigoPrisma(erro);
       if (codigo === CODIGO_PRISMA_VIOLACAO_UNICIDADE) return 'NOME_DUPLICADO';

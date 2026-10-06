@@ -85,9 +85,11 @@ export default function Clientes() {
   }
 
   const colunas: ColunaTabela<ClienteResumoDTO>[] = [
-    { titulo: 'Cliente', render: (cliente) => <span className="text-title-sm text-on-surface">{cliente.nome}</span> },
+    { titulo: 'Cliente', ordenacao: { tipo: 'texto', valor: (cliente) => cliente.nome }, render: (cliente) => <span className="text-title-sm text-on-surface">{cliente.nome}</span> },
     {
       titulo: 'Local da obra',
+      // Agrupa por cidade/UF; dentro dela, pelo endereço.
+      ordenacao: { tipo: 'texto', valor: (cliente) => `${cliente.cidade} ${cliente.estado} ${cliente.endereco}` },
       render: (cliente) => (
         <div>
           <p className="text-body-md text-on-surface">{cliente.endereco}</p>

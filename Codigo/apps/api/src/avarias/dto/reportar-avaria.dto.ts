@@ -12,7 +12,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import type { ReportarAvariaRequest } from '@montacontrol/shared';
-import { FotoBase64Dto } from '../../atestados/dto/enviar-atestado.dto';
+import { FotoBase64Dto } from '../../common/dto/foto-base64.dto';
 
 export class ReportarAvariaDto implements ReportarAvariaRequest {
   @IsUUID()
