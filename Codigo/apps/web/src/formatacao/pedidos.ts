@@ -22,6 +22,26 @@ export function progressoDoPedido(
   return `${pedido.quantidadeTriada}/${pedido.quantidadeTotal}`
 }
 
+function normalizarBusca(texto: string): string {
+  return texto
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/_/g, ' ')
+    .toLowerCase()
+}
+
+/**
+ * Busca da tela de pedidos: número (`42` acha `PED-000042`), cliente ou
+ * status (`em triagem` acha `EM_TRIAGEM`), sem diferenciar acento nem caixa.
+ */
+export function filtrarPedidos(pedidos: PedidoResumoDTO[], busca: string): PedidoResumoDTO[] {
+  const termo = normalizarBusca(busca.trim())
+  if (!termo) return pedidos
+  return pedidos.filter((pedido) =>
+    [pedido.numeroPedido, pedido.clienteNome, pedido.status].some((campo) => normalizarBusca(campo).includes(termo)),
+  )
+}
+
 /** Mensagem do primeiro problema encontrado, ou `null` quando o rascunho está pronto. */
 export function validarRascunhoPedido(rascunho: RascunhoPedido): string | null {
   if (!rascunho.clienteId) return 'Selecione o cliente da obra.'

@@ -19,10 +19,11 @@ import {
 import { listarUsuarios } from '../api/usuarios'
 import { useAuth } from '../auth/AuthContext'
 import { montadoresDisponiveis, textoQuantidadeMontadores } from '../formatacao/equipes'
-import { progressoDoPedido } from '../formatacao/pedidos'
+import { filtrarPedidos, progressoDoPedido } from '../formatacao/pedidos'
 import { Alerta } from '../ui/Alerta'
 import { BadgeStatus } from '../ui/BadgeStatus'
 import { Botao } from '../ui/Botao'
+import { CampoTexto } from '../ui/CampoTexto'
 import { CartaoIndicador } from '../ui/CartaoIndicador'
 import { TabelaDados, type ColunaTabela } from '../ui/TabelaDados'
 import { LayoutAutenticado } from './LayoutAutenticado'
@@ -44,6 +45,7 @@ export default function Pedidos() {
   const [pedidos, setPedidos] = useState<PedidoResumoDTO[]>([])
   const [clientes, setClientes] = useState<ClienteResumoDTO[]>([])
   const [modalAberto, setModalAberto] = useState(false)
+  const [busca, setBusca] = useState('')
   const [equipes, setEquipes] = useState<EquipeDTO[]>([])
   const [usuarios, setUsuarios] = useState<UsuarioDTO[]>([])
   const [atribuicao, setAtribuicao] = useState<AtribuicaoAberta | null>(null)
@@ -112,6 +114,7 @@ export default function Pedidos() {
     }
   }
 
+  const encontrados = filtrarPedidos(pedidos, busca)
   const pecasPlanejadas = pedidos.reduce((total, pedido) => total + pedido.quantidadeTotal, 0)
   const aguardandoTriagem = pedidos.filter((pedido) => pedido.quantidadeTriada === 0).length
 
@@ -165,7 +168,16 @@ export default function Pedidos() {
       }
     >
       <div className="space-y-32">
-        <div className="flex flex-wrap items-center justify-end gap-16">
+        <div className="flex flex-wrap items-end justify-between gap-16">
+          <div className="w-full max-w-sm">
+            <CampoTexto
+              rotulo="Buscar pedido"
+              iconeEsquerda="search"
+              placeholder="Número, cliente ou status…"
+              valor={busca}
+              aoAlterar={setBusca}
+            />
+          </div>
           <Botao
             variante="primario"
             tamanho={48}
@@ -202,9 +214,9 @@ export default function Pedidos() {
         <TabelaDados
           rotulo="Pedidos"
           colunas={colunas}
-          linhas={pedidos}
+          linhas={encontrados}
           chave={(pedido) => pedido.id}
-          vazio="Nenhum pedido cadastrado."
+          vazio={pedidos.length === 0 ? 'Nenhum pedido cadastrado.' : 'Nenhum pedido encontrado para a busca.'}
         />
       </div>
 

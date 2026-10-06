@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   adicionarItensImportados,
   converterRascunhoPedido,
+  filtrarPedidos,
   extrairItensDaPlanilha,
   MAXIMO_ITENS_PLANILHA,
   progressoDoPedido,
@@ -171,4 +172,20 @@ test('importação mantém peças digitadas e descarta linhas em branco do formu
     { descricao: 'Tampo', quantidade: '1' },
     { descricao: 'Porta', quantidade: '2' },
   ])
+})
+
+test('busca de pedidos por número, cliente ou status', () => {
+  const base = { clienteId: 1, quantidadeTotal: 0, quantidadeTriada: 0, quantidadeMontadores: 0 }
+  const pedidos = [
+    { ...base, id: 1, numeroPedido: 'PED-000042', clienteNome: 'José Araújo', status: 'EM_TRIAGEM' },
+    { ...base, id: 2, numeroPedido: 'PED-000007', clienteNome: 'Maria Souza', status: 'AGUARDANDO' },
+  ] as Parameters<typeof filtrarPedidos>[0]
+  const ids = (busca: string) => filtrarPedidos(pedidos, busca).map((pedido) => pedido.id)
+
+  assert.deepEqual(ids(''), [1, 2])
+  assert.deepEqual(ids('42'), [1])
+  assert.deepEqual(ids('jose araujo'), [1])
+  assert.deepEqual(ids('em triagem'), [1])
+  assert.deepEqual(ids('MARIA'), [2])
+  assert.deepEqual(ids('inexistente'), [])
 })
