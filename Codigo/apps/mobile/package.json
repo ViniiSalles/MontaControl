@@ -31,6 +31,7 @@
   "devDependencies": {
     "@lovesworking/watermelondb-expo-plugin-sdk-52-plus": "^1.0.3",
     "@material-symbols/svg-400": "^0.47.0",
+    "@resvg/resvg-js": "^2.6.2",
     "@testing-library/react-native": "^14.0.1",
     "@types/jest": "29.5.14",
     "@types/react": "~19.2.2",
@@ -46,7 +47,8 @@
     "web": "expo start --web",
     "lint": "eslint \"src/**/*.{ts,tsx}\" \"App.tsx\"",
     "test": "jest",
-    "gerar:icones": "tsx scripts/gerar-icones.ts"
+    "gerar:icones": "tsx scripts/gerar-icones.ts",
+    "gerar:splash": "tsx scripts/gerar-splash.ts"
   },
   "private": true
 }

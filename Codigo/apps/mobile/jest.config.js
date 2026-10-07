@@ -44,7 +44,7 @@ module.exports = {
   // tambem os arquivos de apoio que moram em `__tests__/` (fixtures,
   // helpers) e falha com "must contain at least one test". Toda suite do
   // app termina em `.test.ts(x)`.
-  testMatch: ['**/*.test.ts?(x)'],
+  testMatch: ['**/*.test.ts?(x)', '<rootDir>/plugins/__tests__/*.test.js'],
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
   // LokiJSAdapter (WatermelonDB nos testes de tela) deixa handles abertos
   // depois da suíte — o Jest fica esperando workers e o CI do PR timeouta
