@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import type {
   MontadorResumoDTO,
   PedidoComAmbientesDTO,
+  PedidoDoMontadorDTO,
   PedidoDTO,
   PedidoResumoDTO,
   StatusPedido,
@@ -14,9 +15,11 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import {
   paraPedidoComAmbientesDTO,
+  paraPedidoDoMontadorDTO,
   paraPedidoDTO,
   SELECAO_PEDIDO,
   SELECAO_PEDIDO_COM_AMBIENTES,
+  SELECAO_PEDIDO_DO_MONTADOR,
 } from './pedido-mapper';
 
 export interface CoordenadasCliente {
@@ -57,6 +60,23 @@ export class PedidosRepository {
   async buscarCoordenadasCliente(pedidoId: number): Promise<CoordenadasCliente | null> {
     const linha = await this.prisma.pedido.findUnique({
       where: { id: pedidoId },
+      select: { cliente: { select: { latitude: true, longitude: true } } },
+    });
+    if (!linha) return null;
+
+    return {
+      latitude: linha.cliente.latitude.toNumber(),
+      longitude: linha.cliente.longitude.toNumber(),
+    };
+  }
+
+  /** Como `buscarCoordenadasCliente`, mas `null` também quando o pedido não é do montador. */
+  async buscarCoordenadasClienteDoMontador(
+    pedidoId: number,
+    usuarioId: number,
+  ): Promise<CoordenadasCliente | null> {
+    const linha = await this.prisma.pedido.findFirst({
+      where: { id: pedidoId, ...vinculoDoMontador(usuarioId) },
       select: { cliente: { select: { latitude: true, longitude: true } } },
     });
     if (!linha) return null;
@@ -187,13 +207,13 @@ export class PedidosRepository {
   }
 
   /** Pedidos em que o montador está trabalhando, com as peças — base do reporte de avaria no app. */
-  async listarDoMontador(usuarioId: number): Promise<PedidoComAmbientesDTO[]> {
+  async listarDoMontador(usuarioId: number): Promise<PedidoDoMontadorDTO[]> {
     const linhas = await this.prisma.pedido.findMany({
       where: vinculoDoMontador(usuarioId),
       orderBy: { id: 'desc' },
-      select: SELECAO_PEDIDO_COM_AMBIENTES,
+      select: SELECAO_PEDIDO_DO_MONTADOR,
     });
-    return linhas.map(paraPedidoComAmbientesDTO);
+    return linhas.map(paraPedidoDoMontadorDTO);
   }
 
   async existe(id: number): Promise<boolean> {

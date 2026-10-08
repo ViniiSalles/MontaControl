@@ -3,6 +3,12 @@ export interface Coordenada {
   longitude: number;
 }
 
+/**
+ * Distância máxima entre a marcação de ponto e o endereço do cliente do
+ * pedido. A API recusa fora disso; o app checa antes para avisar mesmo sem rede.
+ */
+export const RAIO_TOLERANCIA_PONTO_METROS = 200;
+
 const RAIO_TERRA_METROS = 6_371_000;
 
 function paraRadianos(graus: number): number {

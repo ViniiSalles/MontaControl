@@ -1,4 +1,9 @@
-import type { AmbienteComPecasDTO, PedidoComAmbientesDTO, PedidoDTO } from '@montacontrol/shared';
+import type {
+  AmbienteComPecasDTO,
+  PedidoComAmbientesDTO,
+  PedidoDoMontadorDTO,
+  PedidoDTO,
+} from '@montacontrol/shared';
 import type { StatusAmbiente, StatusPedido } from '../../generated/prisma';
 import { paraPecaDTO, SELECAO_PECA } from '../pecas/peca-mapper';
 
@@ -19,6 +24,13 @@ export const SELECAO_PEDIDO_COM_AMBIENTES = {
       status: true,
       pecas: { orderBy: { id: 'asc' as const }, select: SELECAO_PECA },
     },
+  },
+} as const;
+
+export const SELECAO_PEDIDO_DO_MONTADOR = {
+  ...SELECAO_PEDIDO_COM_AMBIENTES,
+  cliente: {
+    select: { nome: true, endereco: true, cidade: true, estado: true, latitude: true, longitude: true },
   },
 } as const;
 
@@ -62,5 +74,31 @@ export function paraPedidoComAmbientesDTO(linha: LinhaPedidoComAmbientes): Pedid
   return {
     ...paraPedidoDTO(linha),
     ambientes: linha.ambientes.map(paraAmbienteComPecasDTO),
+  };
+}
+
+interface LinhaPedidoDoMontador extends LinhaPedidoComAmbientes {
+  cliente: {
+    nome: string;
+    endereco: string;
+    cidade: string;
+    estado: string;
+    latitude: { toNumber(): number };
+    longitude: { toNumber(): number };
+  };
+}
+
+export function paraPedidoDoMontadorDTO(linha: LinhaPedidoDoMontador): PedidoDoMontadorDTO {
+  const { cliente } = linha;
+  return {
+    ...paraPedidoComAmbientesDTO(linha),
+    cliente: {
+      nome: cliente.nome,
+      endereco: cliente.endereco,
+      cidade: cliente.cidade,
+      estado: cliente.estado,
+      latitude: cliente.latitude.toNumber(),
+      longitude: cliente.longitude.toNumber(),
+    },
   };
 }

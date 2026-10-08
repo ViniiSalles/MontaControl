@@ -61,6 +61,15 @@ export class JornadasRepository {
     return linha ? paraJornadaDTO(linha) : null;
   }
 
+  /** Pedido gravado no check-in; `null` em jornada sem pedido (lançada em atraso ou anterior à regra). */
+  async buscarPedidoIdDaJornada(jornadaId: number): Promise<number | null> {
+    const linha = await this.prisma.jornada.findUnique({
+      where: { id: jornadaId },
+      select: { pedidoId: true },
+    });
+    return linha?.pedidoId ?? null;
+  }
+
   async criarCheckin(dados: DadosCheckin): Promise<JornadaDTO> {
     return this.prisma.$transaction(async (tx) => {
       const linha = await tx.jornada.create({

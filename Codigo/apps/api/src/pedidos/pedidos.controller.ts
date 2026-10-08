@@ -13,6 +13,7 @@ import {
 import type {
   MontadorResumoDTO,
   PedidoComAmbientesDTO,
+  PedidoDoMontadorDTO,
   PedidoDTO,
   PedidoResumoDTO,
   StatusPedido as StatusPedidoCompartilhado,
@@ -50,7 +51,7 @@ export class PedidosController {
    */
   @Roles(Perfil.MONTADOR)
   @Get('meus')
-  async meus(@CurrentUser() usuario: UsuarioAutenticado): Promise<PedidoComAmbientesDTO[]> {
+  async meus(@CurrentUser() usuario: UsuarioAutenticado): Promise<PedidoDoMontadorDTO[]> {
     return this.pedidos.listarDoMontador(usuario.id);
   }
 

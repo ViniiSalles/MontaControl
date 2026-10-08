@@ -4,6 +4,7 @@ import {
   type CriarPedidoRequest,
   type MontadorResumoDTO,
   type PedidoComAmbientesDTO,
+  type PedidoDoMontadorDTO,
   type PedidoDTO,
   type PedidoResumoDTO,
 } from '@montacontrol/shared';
@@ -38,7 +39,7 @@ export class PedidosService {
     return this.pedidos.listar(status);
   }
 
-  async listarDoMontador(usuarioId: number): Promise<PedidoComAmbientesDTO[]> {
+  async listarDoMontador(usuarioId: number): Promise<PedidoDoMontadorDTO[]> {
     return this.pedidos.listarDoMontador(usuarioId);
   }
 

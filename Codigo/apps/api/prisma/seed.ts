@@ -141,6 +141,19 @@ async function seedPedidoDemo(): Promise<void> {
     },
   });
 
+  // O ponto só é aceito em obra atribuída ao montador, perto do cliente.
+  const montador = await prisma.usuario.findUnique({
+    where: { email: 'montador@montacontrol.local' },
+    select: { id: true },
+  });
+  if (montador) {
+    await prisma.pedidoMontador.upsert({
+      where: { pedidoId_usuarioId: { pedidoId: pedido.id, usuarioId: montador.id } },
+      update: {},
+      create: { pedidoId: pedido.id, usuarioId: montador.id },
+    });
+  }
+
   let ambiente = await prisma.ambiente.findFirst({
     where: { pedidoId: pedido.id, nome: 'Sala' },
   });
