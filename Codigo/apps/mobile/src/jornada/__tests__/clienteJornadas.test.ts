@@ -5,6 +5,7 @@ const PEDIDO = {
   latitude: -19.9325,
   longitude: -43.9382,
   registradoEm: '2026-08-26T16:00:00.000Z',
+  pedidoId: 10,
 };
 
 describe('clienteJornadas', () => {

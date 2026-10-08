@@ -24,10 +24,13 @@ import { minutosTrabalhadosHoje, proximaAcao } from '../jornada/ultimoPonto';
 import type { TipoPonto } from '../jornada/ultimoPonto';
 import { useHistoricoPontos } from '../jornada/useHistoricoPontos';
 import { useJornadaAtual } from '../jornada/useJornadaAtual';
+import { lembrarObraDaJornada, lerObraDaJornada } from '../pedidos/obrasLocais';
+import { useObrasDoMontador } from '../pedidos/useObrasDoMontador';
 import { iniciarSincronizacao } from '../sincronizacao/syncManager';
 import { BotaoAcaoPrincipal } from './jornada/BotaoAcaoPrincipal';
 import { CartaoBancoHoras } from './jornada/CartaoBancoHoras';
 import { CartaoUltimoPonto } from './jornada/CartaoUltimoPonto';
+import { descreverObra, SeletorObra } from './jornada/SeletorObra';
 
 const rotuloBotao: Record<TipoPonto, string> = {
   entrada: 'Bater ponto de entrada',
@@ -100,6 +103,26 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
   // depois de um check-out traria `null` (não há mais jornada aberta) e
   // apagaria da tela justamente o ponto que o montador acabou de bater.
   const [jornadaRegistrada, setJornadaRegistrada] = useState<JornadaDTO | null>(null);
+
+  const {
+    obras,
+    carregando: carregandoObras,
+    recarregar: recarregarObras,
+  } = useObrasDoMontador(token, database);
+  const [obraEscolhidaId, setObraEscolhidaId] = useState<number | null>(null);
+  // Com uma obra só, não há o que escolher.
+  const obraEntradaId = obraEscolhidaId ?? (obras.length === 1 ? obras[0].id : null);
+  const obraEntrada = obras.find((obra) => obra.id === obraEntradaId) ?? null;
+
+  // Obra do check-in da jornada aberta, guardada no aparelho para a saída.
+  const [obraDaJornadaId, setObraDaJornadaId] = useState<number | null>(null);
+  const obraDaJornada = obras.find((obra) => obra.id === obraDaJornadaId) ?? null;
+  useEffect(() => {
+    void lerObraDaJornada(database)
+      .then(setObraDaJornadaId)
+      .catch(() => undefined);
+  }, [database]);
+
   const [aviso, setAviso] = useState<AvisoAcao | null>(null);
   const [registrando, setRegistrando] = useState(false);
 
@@ -116,15 +139,28 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
   const trabalhadasMin = minutosTrabalhadosHoje(diaHoje, jornadaExibida, estado, agoraIso);
 
   const baterPonto = useCallback(async () => {
+    const registrar =
+      acao === 'saida'
+        ? () => registrarCheckout(token, database, obraDaJornada)
+        : obraEntrada && (() => registrarCheckin(token, database, obraEntrada));
+    if (!registrar) {
+      setAviso({
+        variante: 'aviso',
+        titulo: 'Escolha a obra',
+        mensagem: 'Selecione em qual obra você está antes de bater o ponto de entrada.',
+      });
+      return;
+    }
     setRegistrando(true);
     setAviso(null);
     try {
-      const resultado =
-        acao === 'saida'
-          ? await registrarCheckout(token, database)
-          : await registrarCheckin(token, database);
+      const resultado = await registrar();
       if (resultado.tipo === 'ok') {
         setJornadaRegistrada(resultado.jornada);
+        if (acao === 'entrada' && obraEntrada) {
+          setObraDaJornadaId(obraEntrada.id);
+          void lembrarObraDaJornada(database, obraEntrada.id).catch(() => undefined);
+        }
         // O turno que acabou de fechar/abrir precisa entrar na soma de hoje
         // assim que o histórico for consultado de novo — sem isto, o próximo
         // turno recalcularia "trabalhadas hoje" com um histórico desatualizado.
@@ -135,15 +171,15 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
     } finally {
       setRegistrando(false);
     }
-  }, [acao, database, recarregarHistorico, recarregarBancoHoras, token]);
+  }, [acao, database, obraDaJornada, obraEntrada, recarregarHistorico, recarregarBancoHoras, token]);
 
   const atualizar = useCallback(async () => {
     // Descartar o registro local é o ponto da atualização: a partir daqui
     // quem manda é o servidor de novo.
     setJornadaRegistrada(null);
     setAviso(null);
-    await Promise.all([recarregar(), recarregarHistorico(), recarregarBancoHoras()]);
-  }, [recarregar, recarregarHistorico, recarregarBancoHoras]);
+    await Promise.all([recarregar(), recarregarHistorico(), recarregarBancoHoras(), recarregarObras()]);
+  }, [recarregar, recarregarHistorico, recarregarBancoHoras, recarregarObras]);
 
   return (
     <Tela rolavel>
@@ -206,6 +242,21 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
             mensagem={mensagem}
           />
         ))}
+
+        {acao === 'entrada' ? (
+          <SeletorObra
+            obras={obras}
+            selecionadaId={obraEntradaId}
+            aoSelecionar={setObraEscolhidaId}
+            carregando={carregandoObras}
+          />
+        ) : (
+          obraDaJornada && (
+            <Texto variante="bodyMd" cor={cores.onSurfaceVariant}>
+              Obra: {obraDaJornada.cliente.nome} · {descreverObra(obraDaJornada)}
+            </Texto>
+          )
+        )}
 
         <BotaoAcaoPrincipal
           texto={rotuloBotao[acao]}

@@ -46,6 +46,7 @@ const PAYLOAD_CHECKIN: CheckinRequest = {
   longitude: -43.9,
   registradoEm: '2026-09-09T12:00:00.000Z',
   endereco: 'Rua Falsa, 123',
+  pedidoId: 10,
 };
 
 describe('executarAcaoJornada', () => {

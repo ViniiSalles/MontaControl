@@ -1,4 +1,5 @@
 import type { VarianteAlerta } from '@montacontrol/ui-contracts/alerta';
+import { RAIO_TOLERANCIA_PONTO_METROS } from '@montacontrol/shared';
 import type { ResultadoAcao } from './acoes';
 import { formatarHora } from './formatacao';
 import { derivarUltimoPonto, rotuloPonto } from './ultimoPonto';
@@ -25,6 +26,9 @@ const mensagemPorCodigo: Record<string, string> = {
     'O relógio do aparelho está atrás do horário da entrada. Ajuste a data e a hora do celular e tente de novo.',
   REGISTRO_FORA_DA_JANELA:
     'Este horário está fora da janela aceita. Peça o lançamento pelo ponto em atraso.',
+  FORA_DO_RAIO_TOLERADO: `Você precisa estar a até ${RAIO_TOLERANCIA_PONTO_METROS} m do endereço da obra para bater o ponto.`,
+  PEDIDO_INVALIDO:
+    'Esta obra não está mais atribuída a você. Atualize a tela e escolha a obra de novo, ou fale com o gestor.',
 };
 
 const MENSAGEM_RECUSA_PADRAO =
@@ -37,6 +41,10 @@ const mensagemPorMotivoDeLocalizacao = {
   indisponivel:
     'Não foi possível obter sua posição. Vá para um lugar mais aberto e tente de novo em instantes.',
 } as const;
+
+function formatarDistancia(metros: number): string {
+  return metros < 1000 ? `${metros} m` : `${(metros / 1000).toFixed(1).replace('.', ',')} km`;
+}
 
 /**
  * Traduz o desfecho de `registrarCheckin`/`registrarCheckout` no aviso que a
@@ -59,6 +67,12 @@ export function avisoDoResultado(resultado: ResultadoAcao): AvisoAcao {
         variante: 'aviso',
         titulo: 'Localização indisponível',
         mensagem: mensagemPorMotivoDeLocalizacao[resultado.motivo],
+      };
+    case 'fora_do_raio':
+      return {
+        variante: 'aviso',
+        titulo: 'Longe da obra',
+        mensagem: `Você está a cerca de ${formatarDistancia(resultado.distanciaMetros)} do endereço da obra. O ponto só pode ser batido a até ${RAIO_TOLERANCIA_PONTO_METROS} m.`,
       };
     case 'recusado':
       return {
