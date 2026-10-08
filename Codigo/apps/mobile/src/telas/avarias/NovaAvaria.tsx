@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { Alert, Image, Pressable, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { randomUUID } from 'expo-crypto';
-import type { FotoBase64, PedidoComAmbientesDTO, TipoAvariaDTO } from '@montacontrol/shared';
+import type { FotoBase64, PedidoDoMontadorDTO, TipoAvariaDTO } from '@montacontrol/shared';
 import { cores, espacamento, raio } from '@montacontrol/design-tokens/native';
 import { Alerta } from '../../ui/Alerta';
 import { Botao } from '../../ui/Botao';
@@ -20,7 +20,7 @@ import { Opcao } from './Opcao';
 
 interface PropsNovaAvaria {
   token: string;
-  pedidos: PedidoComAmbientesDTO[];
+  pedidos: PedidoDoMontadorDTO[];
   tipos: TipoAvariaDTO[];
   /** Reporte aceito (enviado ou na fila) — o pai mostra o aviso e recarrega o histórico. */
   aoEnviado: (aviso: string) => void;
@@ -152,25 +152,28 @@ export function NovaAvaria({ token, pedidos, tipos, aoEnviado, aoIniciarEnvio }:
       tom="padrao"
       conteudo={
         <View style={{ gap: espacamento[20] }}>
-          {pedidos.length > 1 && (
-            <Secao titulo="PEDIDO">
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: espacamento[8] }}>
-                {pedidos.map((candidato) => (
-                  <Opcao
-                    key={candidato.id}
-                    rotulo={candidato.numeroPedido}
-                    selecionada={candidato.id === pedidoId}
-                    aoPressionar={() => escolherPedido(candidato.id)}
-                  />
-                ))}
-              </View>
-            </Secao>
-          )}
+          {/* Sempre visível, mesmo com um pedido só: é como o montador confere a obra. */}
+          <Secao titulo="PEDIDO">
+            {pedidos.map((candidato) => (
+              <Opcao
+                key={candidato.id}
+                forma="linha"
+                rotulo={`${candidato.numeroPedido} · ${candidato.cliente.nome}`}
+                detalhe={`${candidato.cliente.endereco} · ${candidato.cliente.cidade}/${candidato.cliente.estado}`}
+                selecionada={candidato.id === pedidoId}
+                aoPressionar={() => escolherPedido(candidato.id)}
+              />
+            ))}
+          </Secao>
 
           <Secao titulo={pedido ? `PEÇA · ${pedido.numeroPedido}` : 'PEÇA'} erro={erros.peca}>
             {!pedido ? (
               <Texto variante="bodyMd" cor={cores.onSurfaceVariant}>
                 Escolha o pedido para ver as peças.
+              </Texto>
+            ) : pedido.ambientes.length === 0 ? (
+              <Texto variante="bodyMd" cor={cores.onSurfaceVariant}>
+                Este pedido ainda não tem peças cadastradas.
               </Texto>
             ) : (
               pedido.ambientes.map((ambiente) => (

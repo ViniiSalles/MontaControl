@@ -1,6 +1,6 @@
 jest.mock('../../auth/AuthContext');
+jest.mock('../../pedidos/clientePedidos', () => ({ listarMeusPedidos: jest.fn() }));
 jest.mock('../../avarias/clienteAvarias', () => ({
-  listarMeusPedidos: jest.fn(),
   listarTiposAvaria: jest.fn(),
   listarMinhasAvarias: jest.fn(),
   enviarAvaria: jest.fn(),
@@ -18,9 +18,10 @@ jest.mock('expo-image-picker', () => ({
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Perfil, StatusAmbiente, StatusAvaria, StatusPeca, StatusPedido } from '@montacontrol/shared';
-import type { AvariaDTO, PedidoComAmbientesDTO } from '@montacontrol/shared';
+import type { AvariaDTO, PedidoDoMontadorDTO } from '@montacontrol/shared';
 import { useAuth } from '../../auth/AuthContext';
-import { listarMeusPedidos, listarMinhasAvarias, listarTiposAvaria } from '../../avarias/clienteAvarias';
+import { listarMinhasAvarias, listarTiposAvaria } from '../../avarias/clienteAvarias';
+import { listarMeusPedidos } from '../../pedidos/clientePedidos';
 import { executarAcaoAvaria } from '../../sincronizacao/outbox';
 import { montador } from '../../auth/__tests__/apoio';
 import { Avarias } from '../Avarias';
@@ -30,11 +31,19 @@ const tiposMock = jest.mocked(listarTiposAvaria);
 const minhasMock = jest.mocked(listarMinhasAvarias);
 const executarMock = jest.mocked(executarAcaoAvaria);
 
-const PEDIDO: PedidoComAmbientesDTO = {
+const PEDIDO: PedidoDoMontadorDTO = {
   id: 1,
   numeroPedido: 'PED-000001',
   status: StatusPedido.ENTREGUE,
   clienteId: 1,
+  cliente: {
+    nome: 'Maria Souza',
+    endereco: 'Rua da Bahia, 1148',
+    cidade: 'Belo Horizonte',
+    estado: 'MG',
+    latitude: -19.92,
+    longitude: -43.93,
+  },
   ambientes: [
     {
       id: 1,
@@ -106,6 +115,15 @@ test('lista os reportes com situação e parecer do gestor', async () => {
   await waitFor(() => expect(screen.getByText('EM ANÁLISE')).toBeTruthy());
   expect(screen.getByText('RESOLVIDA')).toBeTruthy();
   expect(screen.getByText('Gestor: Peça reposta')).toBeTruthy();
+});
+
+// Regressão: com um pedido só, a lista de pedidos sumia e o montador achava
+// que o vínculo não tinha chegado.
+test('mostra o pedido vinculado com o cliente mesmo quando é o único', async () => {
+  await render(<Avarias />);
+
+  await waitFor(() => expect(screen.getByText('PED-000001 · Maria Souza')).toBeTruthy());
+  expect(screen.getByText('Rua da Bahia, 1148 · Belo Horizonte/MG')).toBeTruthy();
 });
 
 test('sem pedido vinculado não mostra o formulário', async () => {

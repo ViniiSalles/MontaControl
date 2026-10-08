@@ -1,9 +1,4 @@
-import type {
-  AvariaDTO,
-  PedidoComAmbientesDTO,
-  ReportarAvariaRequest,
-  TipoAvariaDTO,
-} from '@montacontrol/shared';
+import type { AvariaDTO, ReportarAvariaRequest, TipoAvariaDTO } from '@montacontrol/shared';
 import { lerErro } from '../jornada/clienteJornadas';
 import { urlBaseApi } from '../config/api';
 
@@ -33,9 +28,4 @@ export function listarMinhasAvarias(token: string): Promise<AvariaDTO[]> {
 
 export function listarTiposAvaria(token: string): Promise<TipoAvariaDTO[]> {
   return buscar<TipoAvariaDTO[]>('/api/avarias/tipos', token);
-}
-
-/** GET /api/pedidos/meus — só os pedidos em que o montador está trabalhando, com as peças. */
-export function listarMeusPedidos(token: string): Promise<PedidoComAmbientesDTO[]> {
-  return buscar<PedidoComAmbientesDTO[]>('/api/pedidos/meus', token);
 }

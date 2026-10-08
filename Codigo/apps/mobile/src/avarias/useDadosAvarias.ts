@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { AvariaDTO, PedidoComAmbientesDTO, TipoAvariaDTO } from '@montacontrol/shared';
-import { listarMeusPedidos, listarMinhasAvarias, listarTiposAvaria } from './clienteAvarias';
+import type { AvariaDTO, PedidoDoMontadorDTO, TipoAvariaDTO } from '@montacontrol/shared';
+import { listarMeusPedidos } from '../pedidos/clientePedidos';
+import { listarMinhasAvarias, listarTiposAvaria } from './clienteAvarias';
 
 export interface EstadoDadosAvarias {
-  pedidos: PedidoComAmbientesDTO[];
+  pedidos: PedidoDoMontadorDTO[];
   tipos: TipoAvariaDTO[];
   avarias: AvariaDTO[];
   carregando: boolean;
@@ -16,7 +17,7 @@ export interface EstadoDadosAvarias {
  * online; só o envio passa pela outbox, que é o que não pode se perder.
  */
 export function useDadosAvarias(token: string): EstadoDadosAvarias {
-  const [pedidos, setPedidos] = useState<PedidoComAmbientesDTO[]>([]);
+  const [pedidos, setPedidos] = useState<PedidoDoMontadorDTO[]>([]);
   const [tipos, setTipos] = useState<TipoAvariaDTO[]>([]);
   const [avarias, setAvarias] = useState<AvariaDTO[]>([]);
   const [carregando, setCarregando] = useState(true);
