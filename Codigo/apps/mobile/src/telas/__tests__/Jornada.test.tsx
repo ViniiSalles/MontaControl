@@ -1,11 +1,12 @@
 jest.mock('../../auth/AuthContext');
 jest.mock('../../jornada/acoes');
 jest.mock('../../sincronizacao/syncManager');
+jest.mock('../../pedidos/clientePedidos');
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { DatabaseProvider } from '@nozbe/watermelondb/react';
 import { StatusJornada } from '@montacontrol/shared';
-import type { JornadaDTO } from '@montacontrol/shared';
+import type { JornadaDTO, PedidoDoMontadorDTO } from '@montacontrol/shared';
 import { criarBancoDeTeste } from '../../db/__tests__/apoio';
 import { AcaoPendente } from '../../db/AcaoPendente';
 import { upsertBancoHoras } from '../../banco-horas/espelhoBancoHoras';
@@ -16,6 +17,8 @@ import { iniciarSincronizacao, puxarBancoHoras, puxarJornadas } from '../../sinc
 import { formatarHora } from '../../jornada/formatacao';
 import { periodoAtual } from '../../banco-horas/periodo';
 import { montador } from '../../auth/__tests__/apoio';
+import { listarMeusPedidos } from '../../pedidos/clientePedidos';
+import { lembrarObraDaJornada } from '../../pedidos/obrasLocais';
 import { Jornada } from '../Jornada';
 
 const abrirHistorico = jest.fn();
@@ -42,6 +45,24 @@ const registrarCheckoutMock = jest.mocked(registrarCheckout);
 const puxarJornadasMock = jest.mocked(puxarJornadas);
 const puxarBancoHorasMock = jest.mocked(puxarBancoHoras);
 const iniciarSincronizacaoMock = jest.mocked(iniciarSincronizacao);
+const listarMeusPedidosMock = jest.mocked(listarMeusPedidos);
+
+const OBRA = {
+  id: 10,
+  numeroPedido: 'PED-000010',
+  status: 'EM_TRIAGEM',
+  clienteId: 3,
+  ambientes: [],
+  cliente: {
+    nome: 'Maria Souza',
+    endereco: 'Av. Afonso Pena, 1000',
+    cidade: 'Belo Horizonte',
+    estado: 'MG',
+    latitude: -19.9325,
+    longitude: -43.9382,
+  },
+} as unknown as PedidoDoMontadorDTO;
+const OUTRA_OBRA = { ...OBRA, id: 11, numeroPedido: 'PED-000011', cliente: { ...OBRA.cliente, nome: 'João Lima' } };
 
 /**
  * Check-in de duas horas atrás, e não uma data fixa: jornada aberta só conta
@@ -111,6 +132,7 @@ beforeEach(async () => {
   puxarJornadasMock.mockResolvedValue(undefined);
   puxarBancoHorasMock.mockResolvedValue(undefined);
   iniciarSincronizacaoMock.mockReturnValue(() => {});
+  listarMeusPedidosMock.mockResolvedValue([OBRA]);
 });
 
 test('sem jornada aberta, a tela oferece o ponto de entrada', async () => {
@@ -140,7 +162,7 @@ test('bater a entrada registra o ponto e a tela passa a pedir a saída', async (
   await fireEvent.press(screen.getByText(ROTULO_ENTRADA));
 
   await waitFor(() => expect(screen.getByText(ROTULO_SAIDA)).toBeTruthy());
-  expect(registrarCheckinMock).toHaveBeenCalledWith('access', database);
+  expect(registrarCheckinMock).toHaveBeenCalledWith('access', database, OBRA);
   expect(screen.getByText(`Ponto de entrada registrado às ${HORA_CHECKIN}.`)).toBeTruthy();
   expect(screen.getByText(HORA_CHECKIN)).toBeTruthy();
 });
@@ -157,7 +179,7 @@ test('bater a saída mantém o check-out na tela em vez de voltar ao estado vazi
   // A jornada da resposta tem precedência sobre a leitura local: o ponto
   // recém-batido continua visível, e o botão volta a oferecer a entrada.
   await waitFor(() => expect(screen.getByText(HORA_CHECKOUT)).toBeTruthy());
-  expect(registrarCheckoutMock).toHaveBeenCalledWith('access', database);
+  expect(registrarCheckoutMock).toHaveBeenCalledWith('access', database, null);
   expect(screen.getByText(ROTULO_ENTRADA)).toBeTruthy();
   expect(screen.queryByText('Nenhum ponto registrado')).toBeNull();
 });
@@ -171,7 +193,7 @@ test('localização negada não registra ponto e instrui o montador', async () =
   await fireEvent.press(screen.getByText(ROTULO_ENTRADA));
 
   await waitFor(() => expect(screen.getByText(/ajustes do aparelho/i)).toBeTruthy());
-  expect(registrarCheckinMock).toHaveBeenCalledWith('access', database);
+  expect(registrarCheckinMock).toHaveBeenCalledWith('access', database, OBRA);
   // Falhou: o botão continua oferecendo a entrada.
   expect(screen.getByText(ROTULO_ENTRADA)).toBeTruthy();
   expect(screen.getByText('Nenhum ponto registrado')).toBeTruthy();
@@ -276,7 +298,7 @@ test('abrir um turno novo no mesmo dia soma com o turno anterior, não reseta "t
   await fireEvent.press(screen.getByText(ROTULO_ENTRADA));
 
   await waitFor(() => expect(screen.getByText(ROTULO_SAIDA)).toBeTruthy());
-  expect(registrarCheckinMock).toHaveBeenCalledWith('access', database);
+  expect(registrarCheckinMock).toHaveBeenCalledWith('access', database, OBRA);
   // Turno 2 acabou de abrir (poucos ms de duração): o total não pode cair
   // abaixo das 2h que o turno 1 já tinha — antes da correção, resetava a
   // "0h 00min" porque a tela só olhava para o turno aberto agora.
@@ -323,7 +345,7 @@ test('bater a saída também refaz a busca do banco de horas', async () => {
   await fireEvent.press(screen.getByText(ROTULO_SAIDA));
 
   await waitFor(() => expect(puxarBancoHorasMock).toHaveBeenCalledTimes(2));
-  expect(registrarCheckoutMock).toHaveBeenCalledWith('access', database);
+  expect(registrarCheckoutMock).toHaveBeenCalledWith('access', database, null);
 });
 
 test('ação descartada na fila aparece como aviso ao abrir a tela', async () => {
@@ -343,4 +365,56 @@ test('ação descartada na fila aparece como aviso ao abrir a tela', async () =>
   await waitFor(() =>
     expect(screen.getByText('Ação recusada: JORNADA_EM_ANDAMENTO.')).toBeTruthy(),
   );
+});
+
+test('com mais de uma obra, a entrada exige escolher a obra', async () => {
+  listarMeusPedidosMock.mockResolvedValue([OBRA, OUTRA_OBRA]);
+  registrarCheckinMock.mockResolvedValue({ tipo: 'ok', jornada: ABERTA });
+
+  await renderizar();
+  await waitFor(() => expect(screen.getByText('João Lima · PED-000011')).toBeTruthy());
+
+  await fireEvent.press(screen.getByText(ROTULO_ENTRADA));
+  expect(screen.getByText('Escolha a obra')).toBeTruthy();
+  expect(registrarCheckinMock).not.toHaveBeenCalled();
+
+  await fireEvent.press(screen.getByText('João Lima · PED-000011'));
+  await fireEvent.press(screen.getByText(ROTULO_ENTRADA));
+
+  await waitFor(() => expect(registrarCheckinMock).toHaveBeenCalledWith('access', database, OUTRA_OBRA));
+});
+
+test('sem obra atribuída avisa e não registra', async () => {
+  listarMeusPedidosMock.mockResolvedValue([]);
+
+  await renderizar();
+
+  await waitFor(() => expect(screen.getByText('Nenhuma obra atribuída')).toBeTruthy());
+  await fireEvent.press(screen.getByText(ROTULO_ENTRADA));
+  expect(registrarCheckinMock).not.toHaveBeenCalled();
+});
+
+test('a saída usa a obra do check-in guardada no aparelho', async () => {
+  await upsertJornadas(database, [ABERTA]);
+  await lembrarObraDaJornada(database, OBRA.id);
+  registrarCheckoutMock.mockResolvedValue({ tipo: 'ok', jornada: ENCERRADA });
+
+  await renderizar();
+  await waitFor(() => expect(screen.getByText(/Obra: Maria Souza/)).toBeTruthy());
+
+  await fireEvent.press(screen.getByText(ROTULO_SAIDA));
+
+  await waitFor(() => expect(registrarCheckoutMock).toHaveBeenCalledWith('access', database, OBRA));
+});
+
+test('longe da obra o aviso mostra a distância', async () => {
+  registrarCheckinMock.mockResolvedValue({ tipo: 'fora_do_raio', distanciaMetros: 1250 });
+
+  await renderizar();
+  await waitFor(() => expect(screen.getByText(ROTULO_ENTRADA)).toBeTruthy());
+
+  await fireEvent.press(screen.getByText(ROTULO_ENTRADA));
+
+  await waitFor(() => expect(screen.getByText(/cerca de 1,3 km/)).toBeTruthy());
+  expect(screen.getByText(ROTULO_ENTRADA)).toBeTruthy();
 });

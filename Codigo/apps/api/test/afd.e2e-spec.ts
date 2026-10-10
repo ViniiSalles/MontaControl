@@ -4,6 +4,7 @@ import request from 'supertest';
 import { Perfil } from '../generated/prisma';
 import { criarApp } from './setup/criar-app';
 import { apagarUsuariosFixture, criarUsuarioFixture, UsuarioFixture } from './fixtures/usuarios.fixture';
+import { apagarObraFixture, criarObraFixture, ObraFixture } from './fixtures/obra.fixture';
 
 async function login(app: INestApplication, usuario: UsuarioFixture): Promise<string> {
   const resposta = await request(app.getHttpServer())
@@ -22,6 +23,7 @@ function competenciaDeHoje(): { ano: number; mes: number } {
 describe('GET /api/afd (e2e)', () => {
   let app: INestApplication;
   const fixturesCriadas: UsuarioFixture[] = [];
+  const obrasCriadas: ObraFixture[] = [];
 
   beforeAll(async () => {
     app = await criarApp();
@@ -30,6 +32,7 @@ describe('GET /api/afd (e2e)', () => {
   afterAll(async () => {
     try {
       await apagarUsuariosFixture(app, fixturesCriadas);
+      for (const obra of obrasCriadas) await apagarObraFixture(app, obra);
     } finally {
       await app.close();
     }
@@ -114,14 +117,17 @@ describe('GET /api/afd (e2e)', () => {
       .expect(200);
 
     const agora = new Date();
+    const obra = await criarObraFixture(app, [montador.usuarioId]);
+    obrasCriadas.push(obra);
     await request(app.getHttpServer())
       .post('/api/jornadas/checkin')
       .set('Authorization', `Bearer ${tokenMontador}`)
       .send({
         idCliente: randomUUID(),
-        latitude: -19.93,
-        longitude: -43.94,
+        latitude: obra.latitude,
+        longitude: obra.longitude,
         registradoEm: new Date(agora.getTime() - 60 * 60_000).toISOString(),
+        pedidoId: obra.pedidoId,
       })
       .expect(201);
     await request(app.getHttpServer())
@@ -129,8 +135,8 @@ describe('GET /api/afd (e2e)', () => {
       .set('Authorization', `Bearer ${tokenMontador}`)
       .send({
         idCliente: randomUUID(),
-        latitude: -19.93,
-        longitude: -43.94,
+        latitude: obra.latitude,
+        longitude: obra.longitude,
         registradoEm: agora.toISOString(),
       })
       .expect(200);
@@ -155,14 +161,17 @@ describe('GET /api/afd (e2e)', () => {
     const tokenSemCpf = await login(app, semCpf);
 
     const agora = new Date();
+    const obra = await criarObraFixture(app, [semCpf.usuarioId]);
+    obrasCriadas.push(obra);
     await request(app.getHttpServer())
       .post('/api/jornadas/checkin')
       .set('Authorization', `Bearer ${tokenSemCpf}`)
       .send({
         idCliente: randomUUID(),
-        latitude: -19.93,
-        longitude: -43.94,
+        latitude: obra.latitude,
+        longitude: obra.longitude,
         registradoEm: agora.toISOString(),
+        pedidoId: obra.pedidoId,
       })
       .expect(201);
 

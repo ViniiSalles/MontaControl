@@ -29,8 +29,7 @@ export class CheckinDto implements CheckinRequest {
   @MaxLength(300)
   endereco?: string;
 
-  @IsOptional()
   @IsInt()
   @IsPositive()
-  pedidoId?: number;
+  pedidoId!: number;
 }

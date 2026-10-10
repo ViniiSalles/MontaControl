@@ -50,7 +50,20 @@ export function Avarias() {
   return (
     <Tela rolavel>
       <View style={{ gap: espacamentoNomeado.gapPilha }}>
-        <Texto variante="headlineMd">Avarias</Texto>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: espacamento[12] }}>
+          <View style={{ flex: 1 }}>
+            <Texto variante="headlineMd">Avarias</Texto>
+          </View>
+          <Botao
+            variante="icone"
+            tamanho={40}
+            forma="pilula"
+            icone="sync"
+            rotuloAcessivel="Atualizar"
+            carregando={carregando}
+            aoPressionar={() => void recarregar()}
+          />
+        </View>
 
         {aviso && <Alerta variante="sucesso" mensagem={aviso} />}
 

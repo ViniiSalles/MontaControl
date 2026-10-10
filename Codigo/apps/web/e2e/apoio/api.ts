@@ -38,30 +38,42 @@ export async function criarAtestadoPendente(
   return corpo.id
 }
 
-/** Bate um turno fechado hoje para o montador seed — insumo do espelho de ponto. */
+/**
+ * Bate um turno fechado hoje para o montador seed — insumo do espelho de
+ * ponto. A marcação é no endereço da obra do seed (PED-SEED-0001), porque a
+ * API só aceita ponto perto do cliente de um pedido do montador.
+ */
 export async function baterPontoDeHoje(
   request: APIRequestContext,
   token: string,
 ): Promise<void> {
   const agora = new Date()
   const entrada = new Date(agora.getTime() - 60 * 60_000).toISOString()
+  const resposta = await request.get('/api/pedidos/meus', {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const [obra] = (await resposta.json()) as Array<{
+    id: number
+    cliente: { latitude: number; longitude: number }
+  }>
+  if (!obra) throw new Error('Montador seed sem pedido atribuído — rode o seed da API.')
+  const local = { latitude: obra.cliente.latitude, longitude: obra.cliente.longitude }
 
   await request.post('/api/jornadas/checkin', {
     headers: { Authorization: `Bearer ${token}` },
     data: {
       idCliente: crypto.randomUUID(),
-      latitude: -19.9227,
-      longitude: -43.9451,
+      ...local,
       registradoEm: entrada,
       endereco: 'Rua de teste, 100',
+      pedidoId: obra.id,
     },
   })
   await request.post('/api/jornadas/checkout', {
     headers: { Authorization: `Bearer ${token}` },
     data: {
       idCliente: crypto.randomUUID(),
-      latitude: -19.9227,
-      longitude: -43.9451,
+      ...local,
       registradoEm: agora.toISOString(),
       endereco: 'Rua de teste, 100',
     },

@@ -92,8 +92,12 @@ export interface CheckinRequest {
   registradoEm: string;
   /** Endereço resolvido pelo Nominatim; ausente quando o check-in foi feito offline. */
   endereco?: string;
-  /** Pedido ao qual a marcação se refere. Quando ausente, a distância não é validada. */
-  pedidoId?: number;
+  /**
+   * Obra em que o montador está batendo o ponto. Precisa estar atribuída a
+   * ele, e a marcação precisa estar a até `RAIO_TOLERANCIA_PONTO_METROS` do
+   * endereço do cliente.
+   */
+  pedidoId: number;
 }
 
 export interface CheckoutRequest {
@@ -102,7 +106,10 @@ export interface CheckoutRequest {
   longitude: number;
   registradoEm: string;
   endereco?: string;
-  /** Pedido ao qual a marcação se refere. Quando ausente, a distância não é validada. */
+  /**
+   * A saída é validada contra o pedido do check-in da jornada aberta. Este
+   * campo só é usado quando a jornada não tem pedido (aberta antes da regra).
+   */
   pedidoId?: number;
 }
 
@@ -319,6 +326,21 @@ export interface AmbienteComPecasDTO {
 /** N7T3 — peças do pedido organizadas por ambiente, para conferência antes do despacho. */
 export interface PedidoComAmbientesDTO extends PedidoDTO {
   ambientes: AmbienteComPecasDTO[];
+}
+
+/** Local da obra como o montador precisa: para reconhecer o pedido e para o raio do ponto. */
+export interface ClienteDoPedidoDTO {
+  nome: string;
+  endereco: string;
+  cidade: string;
+  estado: string;
+  latitude: number;
+  longitude: number;
+}
+
+/** `GET /api/pedidos/meus` — pedido atribuído ao montador, com peças e local da obra. */
+export interface PedidoDoMontadorDTO extends PedidoComAmbientesDTO {
+  cliente: ClienteDoPedidoDTO;
 }
 
 /** Montador como aparece em equipe e em atribuição de pedido. */

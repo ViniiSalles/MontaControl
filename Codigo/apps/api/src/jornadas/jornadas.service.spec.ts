@@ -18,10 +18,11 @@ const USUARIO_ID = 7;
 const CLIENTE_DO_PEDIDO: CoordenadasCliente = { latitude: -19.9325, longitude: -43.9382 };
 
 function pedidosRepositorioDuplo(
-  coordenadas: CoordenadasCliente | null = null,
+  coordenadas: CoordenadasCliente | null = CLIENTE_DO_PEDIDO,
 ): jest.Mocked<PedidosRepository> {
   return {
     buscarCoordenadasCliente: jest.fn().mockResolvedValue(coordenadas),
+    buscarCoordenadasClienteDoMontador: jest.fn().mockResolvedValue(coordenadas),
   } as unknown as jest.Mocked<PedidosRepository>;
 }
 
@@ -53,6 +54,7 @@ function pedido(parcial: Partial<CheckinRequest> = {}): CheckinRequest {
     latitude: -19.9325,
     longitude: -43.9382,
     registradoEm: '2026-08-26T16:00:00.000Z', // 13:00 local, hoje
+    pedidoId: 10,
     ...parcial,
   };
 }
@@ -203,28 +205,17 @@ describe('JornadasService — check-in', () => {
     ).rejects.toBeInstanceOf(RegistroForaDaJanelaException);
   });
 
-  it('sem pedidoId, não consulta o PedidosRepository nem valida distância', async () => {
-    await service.checkin(USUARIO_ID, pedido());
-
-    expect(pedidos.buscarCoordenadasCliente).not.toHaveBeenCalled();
-    expect(repositorio.criarCheckin).toHaveBeenCalledTimes(1);
-  });
-
-  it('com pedidoId, aceita check-in dentro do raio de tolerância do cliente', async () => {
-    pedidos.buscarCoordenadasCliente.mockResolvedValue(CLIENTE_DO_PEDIDO);
-
+  it('aceita check-in dentro do raio de tolerância do cliente de um pedido do montador', async () => {
     await service.checkin(
       USUARIO_ID,
-      pedido({ pedidoId: 10, latitude: CLIENTE_DO_PEDIDO.latitude, longitude: CLIENTE_DO_PEDIDO.longitude }),
+      pedido({ latitude: CLIENTE_DO_PEDIDO.latitude + 0.001, longitude: CLIENTE_DO_PEDIDO.longitude }), // ~110m
     );
 
-    expect(pedidos.buscarCoordenadasCliente).toHaveBeenCalledWith(10);
-    expect(repositorio.criarCheckin).toHaveBeenCalledTimes(1);
+    expect(pedidos.buscarCoordenadasClienteDoMontador).toHaveBeenCalledWith(10, USUARIO_ID);
+    expect(repositorio.criarCheckin).toHaveBeenCalledWith(expect.objectContaining({ pedidoId: 10 }));
   });
 
-  it('com pedidoId, recusa check-in fora do raio de tolerância do cliente', async () => {
-    pedidos.buscarCoordenadasCliente.mockResolvedValue(CLIENTE_DO_PEDIDO);
-
+  it('recusa check-in fora do raio de tolerância do cliente', async () => {
     await expect(
       service.checkin(
         USUARIO_ID,
@@ -238,8 +229,8 @@ describe('JornadasService — check-in', () => {
     expect(repositorio.criarCheckin).not.toHaveBeenCalled();
   });
 
-  it('recusa check-in quando o pedidoId informado não existe', async () => {
-    pedidos.buscarCoordenadasCliente.mockResolvedValue(null);
+  it('recusa check-in quando o pedido não existe ou não é do montador', async () => {
+    pedidos.buscarCoordenadasClienteDoMontador.mockResolvedValue(null);
 
     await expect(service.checkin(USUARIO_ID, pedido({ pedidoId: 999 }))).rejects.toBeInstanceOf(
       PedidoInvalidoException,
@@ -265,6 +256,7 @@ describe('JornadasService — check-out', () => {
     const duplo: Partial<jest.Mocked<JornadasRepository>> = {
       buscarPorCheckoutIdCliente: jest.fn().mockResolvedValue(null),
       buscarAbertaDoUsuario: jest.fn().mockResolvedValue(jornadaFake()),
+      buscarPedidoIdDaJornada: jest.fn().mockResolvedValue(null),
       registrarCheckout: jest.fn().mockResolvedValue(
         jornadaFake({ status: StatusJornada.FINALIZADA, checkoutAt: '2026-08-26T16:30:00.000Z' }),
       ),
@@ -350,7 +342,31 @@ describe('JornadasService — check-out', () => {
     expect(repositorio.registrarCheckout).not.toHaveBeenCalled();
   });
 
-  it('sem pedidoId, não consulta o PedidosRepository nem valida distância', async () => {
+  it('valida contra o pedido do check-in, não contra o enviado', async () => {
+    repositorio.buscarPedidoIdDaJornada.mockResolvedValue(10);
+
+    await service.checkout(
+      USUARIO_ID,
+      pedidoSaida({ pedidoId: 99, latitude: CLIENTE_DO_PEDIDO.latitude, longitude: CLIENTE_DO_PEDIDO.longitude }),
+    );
+
+    expect(pedidos.buscarCoordenadasCliente).toHaveBeenCalledWith(10);
+    expect(repositorio.registrarCheckout).toHaveBeenCalledWith(1, expect.objectContaining({ pedidoId: 10 }));
+  });
+
+  it('recusa check-out longe da obra do check-in', async () => {
+    repositorio.buscarPedidoIdDaJornada.mockResolvedValue(10);
+
+    await expect(
+      service.checkout(
+        USUARIO_ID,
+        pedidoSaida({ latitude: CLIENTE_DO_PEDIDO.latitude + 0.01, longitude: CLIENTE_DO_PEDIDO.longitude }),
+      ),
+    ).rejects.toBeInstanceOf(ForaDoRaioToleradoException);
+    expect(repositorio.registrarCheckout).not.toHaveBeenCalled();
+  });
+
+  it('jornada sem pedido e sem pedidoId enviado não valida distância', async () => {
     await service.checkout(USUARIO_ID, pedidoSaida());
 
     expect(pedidos.buscarCoordenadasCliente).not.toHaveBeenCalled();

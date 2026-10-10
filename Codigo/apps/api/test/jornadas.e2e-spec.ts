@@ -4,6 +4,7 @@ import request from 'supertest';
 import { Perfil } from '../generated/prisma';
 import { criarApp } from './setup/criar-app';
 import { apagarUsuariosFixture, criarUsuarioFixture, UsuarioFixture } from './fixtures/usuarios.fixture';
+import { apagarObraFixture, criarObraFixture, ObraFixture } from './fixtures/obra.fixture';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 async function login(app: INestApplication, usuario: UsuarioFixture): Promise<string> {
@@ -14,18 +15,21 @@ async function login(app: INestApplication, usuario: UsuarioFixture): Promise<st
   return resposta.body.accessToken as string;
 }
 
-function corpoCheckin(): Record<string, unknown> {
+/** Marcação no endereço da obra (sem `obra`, um pedido qualquer — para os testes de borda). */
+function corpoCheckin(obra?: ObraFixture): Record<string, unknown> {
   return {
     idCliente: randomUUID(),
-    latitude: -19.9325,
-    longitude: -43.9382,
+    latitude: obra?.latitude ?? -19.9325,
+    longitude: obra?.longitude ?? -43.9382,
     registradoEm: new Date().toISOString(),
+    pedidoId: obra?.pedidoId ?? 1,
   };
 }
 
 describe('Jornadas (e2e)', () => {
   let app: INestApplication;
   const fixturesCriadas: UsuarioFixture[] = [];
+  const obrasCriadas: ObraFixture[] = [];
 
   beforeAll(async () => {
     app = await criarApp();
@@ -34,6 +38,7 @@ describe('Jornadas (e2e)', () => {
   afterAll(async () => {
     try {
       await apagarUsuariosFixture(app, fixturesCriadas);
+      for (const obra of obrasCriadas) await apagarObraFixture(app, obra);
     } finally {
       await app.close();
     }
@@ -43,6 +48,12 @@ describe('Jornadas (e2e)', () => {
     const fixture = await criarUsuarioFixture(app, { perfil });
     fixturesCriadas.push(fixture);
     return fixture;
+  }
+
+  async function criarObra(...montadores: UsuarioFixture[]): Promise<ObraFixture> {
+    const obra = await criarObraFixture(app, montadores.map((montador) => montador.usuarioId));
+    obrasCriadas.push(obra);
+    return obra;
   }
 
   it('sem token → 401', async () => {
@@ -63,7 +74,7 @@ describe('Jornadas (e2e)', () => {
   it('mesmo idCliente duas vezes devolve a mesma jornada', async () => {
     const montador = await criarFixture(Perfil.MONTADOR);
     const token = await login(app, montador);
-    const corpo = corpoCheckin();
+    const corpo = corpoCheckin(await criarObra(montador));
 
     const primeira = await request(app.getHttpServer())
       .post('/api/jornadas/checkin')
@@ -80,20 +91,36 @@ describe('Jornadas (e2e)', () => {
     expect(segunda.body.id).toBe(primeira.body.id);
   });
 
-  it('segundo check-in com idCliente diferente → 409 JORNADA_EM_ANDAMENTO', async () => {
+  it('check-in exige obra do montador dentro do raio; segundo check-in → 409 JORNADA_EM_ANDAMENTO', async () => {
     const montador = await criarFixture(Perfil.MONTADOR);
+    const outro = await criarFixture(Perfil.MONTADOR);
     const token = await login(app, montador);
+    const obra = await criarObra(montador);
+    const alheia = await criarObra(outro);
+
+    // Sem login do `outro`: o limite de login do e2e é apertado.
+    const recusar = (corpo: Record<string, unknown>) =>
+      request(app.getHttpServer())
+        .post('/api/jornadas/checkin')
+        .set('Authorization', `Bearer ${token}`)
+        .send(corpo)
+        .expect(400);
+    await recusar({ ...corpoCheckin(obra), pedidoId: undefined });
+    expect((await recusar(corpoCheckin(alheia))).body.codigo).toBe('PEDIDO_INVALIDO');
+    expect((await recusar({ ...corpoCheckin(obra), latitude: obra.latitude + 0.01 })).body.codigo).toBe(
+      'FORA_DO_RAIO_TOLERADO',
+    );
 
     await request(app.getHttpServer())
       .post('/api/jornadas/checkin')
       .set('Authorization', `Bearer ${token}`)
-      .send(corpoCheckin())
+      .send(corpoCheckin(obra))
       .expect(201);
 
     const conflito = await request(app.getHttpServer())
       .post('/api/jornadas/checkin')
       .set('Authorization', `Bearer ${token}`)
-      .send(corpoCheckin())
+      .send(corpoCheckin(obra))
       .expect(409);
 
     expect(conflito.body.codigo).toBe('JORNADA_EM_ANDAMENTO');
@@ -102,17 +129,26 @@ describe('Jornadas (e2e)', () => {
   it('check-out encerra a jornada e o histórico passa a contá-la', async () => {
     const montador = await criarFixture(Perfil.MONTADOR);
     const token = await login(app, montador);
+    const obra = await criarObra(montador);
 
     await request(app.getHttpServer())
       .post('/api/jornadas/checkin')
       .set('Authorization', `Bearer ${token}`)
-      .send(corpoCheckin())
+      .send(corpoCheckin(obra))
       .expect(201);
+
+    // Saída longe da obra do check-in é recusada.
+    const longe = await request(app.getHttpServer())
+      .post('/api/jornadas/checkout')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ ...corpoCheckin(obra), latitude: obra.latitude + 0.01, pedidoId: undefined })
+      .expect(400);
+    expect(longe.body.codigo).toBe('FORA_DO_RAIO_TOLERADO');
 
     await request(app.getHttpServer())
       .post('/api/jornadas/checkout')
       .set('Authorization', `Bearer ${token}`)
-      .send({ ...corpoCheckin(), registradoEm: new Date().toISOString() })
+      .send({ ...corpoCheckin(obra), pedidoId: undefined })
       .expect(200);
 
     const historico = await request(app.getHttpServer())
@@ -141,13 +177,14 @@ describe('Jornadas (e2e)', () => {
       Array.from({ length: N }, () => criarFixture(Perfil.MONTADOR)),
     );
     const tokens = await Promise.all(fixturesConcorrentes.map((fixture) => login(app, fixture)));
+    const obra = await criarObra(...fixturesConcorrentes);
 
     const respostas = await Promise.all(
       tokens.map((token) =>
         request(app.getHttpServer())
           .post('/api/jornadas/checkin')
           .set('Authorization', `Bearer ${token}`)
-          .send(corpoCheckin())
+          .send(corpoCheckin(obra))
           .expect(201),
       ),
     );
