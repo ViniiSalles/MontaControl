@@ -6,6 +6,9 @@ packages:
 # configuração vive aqui, não no .npmrc.
 nodeLinker: hoisted
 shamefullyHoist: true
+# Scripts com sintaxe POSIX (ex.: `TZ=... tsx`) rodam também no Windows,
+# onde o pnpm usaria cmd.exe por padrão.
+shellEmulator: true
 allowBuilds:
   '@prisma/client': true
   '@prisma/engines': true
