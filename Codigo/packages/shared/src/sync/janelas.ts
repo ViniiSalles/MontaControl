@@ -5,14 +5,14 @@ import type { PeriodoHistorico } from '../types';
 // saber até onde o histórico offline vai. Pedidos, ambientes e peças (todos os
 // atribuídos) e tipos de avaria (catálogo inteiro) não têm janela.
 
-/** Dias de jornadas: o maior `PeriodoHistorico` do seletor de histórico. */
+/** Dias de jornadas, contados por `checkin_at`: o maior `PeriodoHistorico` do seletor de histórico. */
 export const SYNC_JANELA_JORNADAS_DIAS = 30 satisfies PeriodoHistorico;
 
-/** Meses de banco de horas: o mês atual e os 2 anteriores. */
+/** Meses de banco de horas por (`mes`, `ano`) no fuso de operação (`jornadas/fuso`): o mês atual e os 2 anteriores. */
 export const SYNC_JANELA_BANCO_HORAS_MESES = 3;
 
-/** Dias de avarias registradas pelo montador. */
+/** Dias de avarias registradas pelo montador, contados por `criado_em`. */
 export const SYNC_JANELA_AVARIAS_DIAS = 30;
 
-/** Dias de atestados do montador. */
+/** Dias de atestados do montador, contados por `criado_em`. */
 export const SYNC_JANELA_ATESTADOS_DIAS = 90;

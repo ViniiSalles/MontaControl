@@ -23,7 +23,7 @@ export const syncPullFixture: SyncPullResponse = {
       updated: [
         {
           id: '501',
-          usuario_id: '7',
+          usuario_id: 7,
           pedido_id: '12',
           status: StatusJornada.FINALIZADA,
           checkin_at: '2026-10-15T11:02:10.000Z',
@@ -41,7 +41,7 @@ export const syncPullFixture: SyncPullResponse = {
         },
         {
           id: '502',
-          usuario_id: '7',
+          usuario_id: 7,
           pedido_id: '12',
           status: StatusJornada.EM_ANDAMENTO,
           checkin_at: '2026-10-16T11:00:03.000Z',
@@ -60,7 +60,7 @@ export const syncPullFixture: SyncPullResponse = {
         {
           // Ponto em atraso aprovado: sem coordenada e sem id de aparelho.
           id: '498',
-          usuario_id: '7',
+          usuario_id: 7,
           pedido_id: null,
           status: StatusJornada.FINALIZADA,
           checkin_at: '2026-10-09T11:00:00.000Z',
@@ -84,7 +84,7 @@ export const syncPullFixture: SyncPullResponse = {
       updated: [
         {
           id: '31',
-          usuario_id: '7',
+
           mes: 8,
           ano: 2026,
           horas_trabalhadas: 176.5,
@@ -93,7 +93,7 @@ export const syncPullFixture: SyncPullResponse = {
         },
         {
           id: '32',
-          usuario_id: '7',
+
           mes: 9,
           ano: 2026,
           horas_trabalhadas: 168,
@@ -102,7 +102,7 @@ export const syncPullFixture: SyncPullResponse = {
         },
         {
           id: '33',
-          usuario_id: '7',
+
           mes: 10,
           ano: 2026,
           horas_trabalhadas: 72.25,
@@ -196,6 +196,9 @@ export const syncPullFixture: SyncPullResponse = {
           id: '77',
           id_cliente: '0b6f3c3e-5a0e-4f0b-9d55-1c6f3b0a7a10',
           peca_id: '303',
+          peca_descricao: 'Porta de correr 2,10m',
+          ambiente_nome: 'Quarto casal',
+          numero_pedido: 'PED-2026-0012',
           tipo_avaria_id: '1',
           descricao: 'Canto da porta lascado na descarga.',
           status: StatusAvaria.EM_ANALISE,
@@ -211,7 +214,7 @@ export const syncPullFixture: SyncPullResponse = {
       updated: [
         {
           id: '9',
-          usuario_id: '7',
+
           id_cliente: '0b6f3c3e-5a0e-4f0b-9d55-1c6f3b0a7a20',
           data_inicio: '2026-09-22',
           data_fim: '2026-09-23',
@@ -225,5 +228,6 @@ export const syncPullFixture: SyncPullResponse = {
       deleted: [],
     },
   },
-  timestamp: 1760648400000,
+  // Logo após a última linha do fixture (avaria 77, criada em 2026-10-16T14:20Z).
+  timestamp: Date.parse('2026-10-16T21:00:00.000Z'),
 };

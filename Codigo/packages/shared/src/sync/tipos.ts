@@ -14,7 +14,7 @@ import type {
  *
  * Convenções de toda linha:
  * - colunas em `snake_case`, idênticas às do schema local do WatermelonDB;
- * - `id` e chaves estrangeiras (`pedido_id`, `usuario_id`…) são o id do
+ * - `id` e chaves estrangeiras (`pedido_id`, `peca_id`…) são o id do
  *   servidor **como string** (`"123"`); o id local é o do servidor;
  * - instantes em ISO 8601 (`string`); datas civis (`data_inicio`) em
  *   `YYYY-MM-DD` no fuso de operação; `Decimal` do Prisma como `number`;
@@ -34,7 +34,7 @@ import type {
  */
 export const SYNC_SCHEMA_VERSION = 2;
 
-/** Tabelas replicadas, na ordem em que o servidor as lista na resposta. */
+/** Tabelas replicadas. Fonte única de `TabelaSync`; a ordem aqui não é significativa para o protocolo. */
 export const TABELAS_SYNC = [
   'jornadas',
   'banco_horas',
@@ -55,10 +55,19 @@ export interface SyncPullQuery {
   schemaVersion: number;
 }
 
-/** Jornada do montador logado. Sem `lancado_em_atraso`, a linha tem coordenada. */
+/**
+ * Jornada do montador logado. Só o check-in de uma jornada que não nasceu de
+ * ponto em atraso (`lancado_em_atraso = false`) tem coordenada garantida; o
+ * check-out é nulo enquanto a jornada está aberta.
+ */
 export interface SyncJornadaRow {
   id: string;
-  usuario_id: string;
+  /**
+   * Exceção à regra de ids string: é `number` porque a coluna local v1 de
+   * `jornadas.usuario_id` é numérica (o WatermelonDB sanitiza string em coluna
+   * number para 0) e o schema só cresce de forma aditiva. Sai na v3 da #112.
+   */
+  usuario_id: number;
   /** Obra do check-in; `null` em jornada aberta antes da regra e em ponto em atraso. */
   pedido_id: string | null;
   status: StatusJornada;
@@ -81,7 +90,6 @@ export interface SyncJornadaRow {
 /** Saldo do mês do montador; uma linha por (`mes`, `ano`). Horas decimais. */
 export interface SyncBancoHorasRow {
   id: string;
-  usuario_id: string;
   mes: number;
   ano: number;
   horas_trabalhadas: number;
@@ -134,6 +142,14 @@ export interface SyncAvariaRow {
   /** UUID do aparelho; `null` em avaria criada fora do app. */
   id_cliente: string | null;
   peca_id: string;
+  /**
+   * Rótulos snapshot para exibir "Meus reportes" offline. A peça, o ambiente e
+   * o pedido saem da réplica na desalocação do montador, mas a avaria
+   * permanece na janela de 30 dias; `peca_id` é só o vínculo, não se faz join.
+   */
+  peca_descricao: string;
+  ambiente_nome: string;
+  numero_pedido: string;
   tipo_avaria_id: string;
   descricao: string;
   status: StatusAvaria;
@@ -145,7 +161,6 @@ export interface SyncAvariaRow {
 /** Atestado do montador logado; a análise do RH chega por atualização da linha. */
 export interface SyncAtestadoRow {
   id: string;
-  usuario_id: string;
   id_cliente: string;
   /** `YYYY-MM-DD`. */
   data_inicio: string;
