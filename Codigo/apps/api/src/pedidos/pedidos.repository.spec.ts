@@ -199,6 +199,98 @@ describe('PedidosRepository', () => {
     });
   });
 
+  describe('definirMontadores', () => {
+    /** `saindo`: o que o banco devolveria para "vinculados que não estão na nova lista". */
+    function criarTx(saindo: number[]) {
+      return {
+        pedidoMontador: {
+          findMany: jest.fn().mockResolvedValue(saindo.map((usuarioId) => ({ usuarioId }))),
+          deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+          createMany: jest.fn().mockResolvedValue({ count: 0 }),
+        },
+      };
+    }
+
+    it('devolve os ids de quem saiu e remove só esses vínculos', async () => {
+      const tx = criarTx([9, 10]);
+
+      const removidos = await repository.definirMontadores(3, [7, 8], tx as never);
+
+      expect(removidos).toEqual([9, 10]);
+      expect(tx.pedidoMontador.findMany).toHaveBeenCalledWith({
+        where: { pedidoId: 3, usuarioId: { notIn: [7, 8] } },
+        select: { usuarioId: true },
+      });
+      expect(tx.pedidoMontador.deleteMany).toHaveBeenCalledWith({
+        where: { pedidoId: 3, usuarioId: { in: [9, 10] } },
+      });
+      expect(tx.pedidoMontador.createMany).toHaveBeenCalledWith({
+        data: [
+          { pedidoId: 3, usuarioId: 7 },
+          { pedidoId: 3, usuarioId: 8 },
+        ],
+        skipDuplicates: true,
+      });
+    });
+
+    it('sem ninguém para remover não chama deleteMany', async () => {
+      const tx = criarTx([]);
+
+      const removidos = await repository.definirMontadores(3, [7], tx as never);
+
+      expect(removidos).toEqual([]);
+      expect(tx.pedidoMontador.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('sem transação informada abre uma própria para consulta, remoção e inclusão', async () => {
+      const tx = criarTx([9]);
+      const prismaComTransacao = {
+        $transaction: jest.fn((fn: (t: unknown) => unknown) => fn(tx)),
+      };
+      const repositorio = new PedidosRepository(prismaComTransacao as unknown as PrismaService);
+
+      const removidos = await repositorio.definirMontadores(3, [7]);
+
+      expect(removidos).toEqual([9]);
+      expect(prismaComTransacao.$transaction).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('listarIdsAmbientesEPecas', () => {
+    it('devolve os ids dos ambientes e das peças do pedido', async () => {
+      const tx = {
+        ambiente: { findMany: jest.fn().mockResolvedValue([{ id: 11 }, { id: 12 }]) },
+        peca: { findMany: jest.fn().mockResolvedValue([{ id: 21 }]) },
+      };
+
+      const ids = await repository.listarIdsAmbientesEPecas(3, tx as never);
+
+      expect(ids).toEqual({ ambienteIds: [11, 12], pecaIds: [21] });
+      expect(tx.ambiente.findMany).toHaveBeenCalledWith({
+        where: { pedidoId: 3 },
+        select: { id: true },
+      });
+      expect(tx.peca.findMany).toHaveBeenCalledWith({
+        where: { ambiente: { pedidoId: 3 } },
+        select: { id: true },
+      });
+    });
+  });
+
+  describe('emTransacao', () => {
+    it('executa o callback com o cliente da transação do Prisma', async () => {
+      const tx = { marcador: true };
+      const prismaComTransacao = {
+        $transaction: jest.fn((fn: (t: unknown) => unknown) => fn(tx)),
+      };
+      const repositorio = new PedidosRepository(prismaComTransacao as unknown as PrismaService);
+
+      const recebido = await repositorio.emTransacao((cliente) => Promise.resolve(cliente));
+
+      expect(recebido).toBe(tx);
+    });
+  });
+
   describe('marcarEmTriagem', () => {
     it('atualiza só pedidos AGUARDANDO para EM_TRIAGEM', async () => {
       prisma.pedido.updateMany.mockResolvedValue({ count: 1 });

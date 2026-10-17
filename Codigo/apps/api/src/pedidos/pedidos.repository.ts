@@ -12,6 +12,7 @@ import {
   StatusPeca as StatusPecaPrisma,
   StatusPedido as StatusPedidoPrisma,
 } from '../../generated/prisma';
+import { PrismaTransacao } from '../prisma/prisma-transacao';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   paraPedidoComAmbientesDTO,
@@ -36,9 +37,6 @@ export interface DadosAmbienteNovo {
   nome: string;
   itens: DadosItemNovo[];
 }
-
-/** Cliente do Prisma dentro de uma `$transaction` interativa. */
-export type PrismaTransacao = Parameters<Parameters<PrismaService['$transaction']>[0]>[0];
 
 /** `PED-000042` — legível para o gestor, derivado do id da linha. */
 function numeroDoPedido(id: number): string {
@@ -231,20 +229,62 @@ export class PedidosRepository {
   }
 
   /**
-   * Troca o conjunto inteiro de montadores do pedido numa transação: quem
-   * saiu da lista perde o vínculo, quem entrou ganha, quem ficou não é tocado.
+   * Roda `fn` numa transação do banco. O `tx` recebido deve ser repassado aos
+   * métodos de repositório que aceitam `tx?` — assim o service coordena várias
+   * escritas atômicas sem importar o Prisma.
    */
-  async definirMontadores(pedidoId: number, usuarioIds: number[]): Promise<MontadorResumoDTO[]> {
-    await this.prisma.$transaction([
-      this.prisma.pedidoMontador.deleteMany({
+  emTransacao<T>(fn: (tx: PrismaTransacao) => Promise<T>): Promise<T> {
+    return this.prisma.$transaction(fn);
+  }
+
+  /**
+   * Troca o conjunto inteiro de montadores do pedido: quem saiu da lista perde
+   * o vínculo, quem entrou ganha, quem ficou não é tocado. Devolve os ids de
+   * quem saiu, para o chamador registrar a exclusão na mesma transação. Sem
+   * `tx`, abre uma transação própria.
+   */
+  async definirMontadores(
+    pedidoId: number,
+    usuarioIds: number[],
+    tx?: PrismaTransacao,
+  ): Promise<number[]> {
+    const executar = async (cliente: PrismaTransacao): Promise<number[]> => {
+      const saindo = await cliente.pedidoMontador.findMany({
         where: { pedidoId, usuarioId: { notIn: usuarioIds } },
-      }),
-      this.prisma.pedidoMontador.createMany({
+        select: { usuarioId: true },
+      });
+      const removidos = saindo.map((linha) => linha.usuarioId);
+
+      if (removidos.length > 0) {
+        await cliente.pedidoMontador.deleteMany({
+          where: { pedidoId, usuarioId: { in: removidos } },
+        });
+      }
+      await cliente.pedidoMontador.createMany({
         data: usuarioIds.map((usuarioId) => ({ pedidoId, usuarioId })),
         skipDuplicates: true,
-      }),
+      });
+      return removidos;
+    };
+
+    if (tx) return executar(tx);
+    return this.prisma.$transaction(executar);
+  }
+
+  /** Ids dos ambientes e das peças do pedido — o que some da réplica junto com ele. */
+  async listarIdsAmbientesEPecas(
+    pedidoId: number,
+    tx?: PrismaTransacao,
+  ): Promise<{ ambienteIds: number[]; pecaIds: number[] }> {
+    const cliente = tx ?? this.prisma;
+    const [ambientes, pecas] = await Promise.all([
+      cliente.ambiente.findMany({ where: { pedidoId }, select: { id: true } }),
+      cliente.peca.findMany({ where: { ambiente: { pedidoId } }, select: { id: true } }),
     ]);
-    return this.listarMontadores(pedidoId);
+    return {
+      ambienteIds: ambientes.map((ambiente) => ambiente.id),
+      pecaIds: pecas.map((peca) => peca.id),
+    };
   }
 
   /** Primeira triagem do pedido: sai de AGUARDANDO para EM_TRIAGEM. Não-AGUARDANDO fica como está. */

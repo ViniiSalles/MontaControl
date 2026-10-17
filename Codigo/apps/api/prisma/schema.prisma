@@ -152,9 +152,12 @@ model Pedido {
 }
 
 model PedidoMontador {
-  id        Int @id @default(autoincrement())
-  pedidoId  Int @map("pedido_id")
-  usuarioId Int @map("usuario_id")
+  id        Int      @id @default(autoincrement())
+  pedidoId  Int      @map("pedido_id")
+  usuarioId Int      @map("usuario_id")
+  /// Data da atribuição: um pedido antigo só fica visível ao montador a partir
+  /// dela, então o pull incremental olha esta coluna, e não só `pedido.updated_at`.
+  createdAt DateTime @default(now()) @map("created_at")
 
   pedido  Pedido  @relation(fields: [pedidoId], references: [id])
   usuario Usuario @relation(fields: [usuarioId], references: [id])
@@ -193,10 +196,11 @@ model EquipeMembro {
 // ─── Logística: Ambientes e Peças ────────────────────────────────────────────
 
 model Ambiente {
-  id       Int            @id @default(autoincrement())
-  pedidoId Int            @map("pedido_id")
-  nome     String
-  status   StatusAmbiente @default(PENDENTE)
+  id        Int            @id @default(autoincrement())
+  pedidoId  Int            @map("pedido_id")
+  nome      String
+  status    StatusAmbiente @default(PENDENTE)
+  updatedAt DateTime       @updatedAt @map("updated_at")
 
   pedido Pedido @relation(fields: [pedidoId], references: [id])
   pecas  Peca[]
@@ -236,9 +240,11 @@ model Peca {
 // ─── Avarias ─────────────────────────────────────────────────────────────────
 
 model TipoAvaria {
-  id        Int    @id @default(autoincrement())
+  id        Int      @id @default(autoincrement())
   nome      String
   descricao String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   avarias Avaria[]
 
@@ -270,6 +276,7 @@ model Avaria {
   fotos       AvariaFoto[]
 
   @@index([status])
+  @@index([registradaPor, updatedAt])
   @@map("avaria")
 }
 
@@ -315,6 +322,7 @@ model Jornada {
   marcacoes        MarcacaoPonto[]
 
   @@index([usuarioId, checkinAt])
+  @@index([usuarioId, updatedAt])
   @@map("jornada")
 }
 
@@ -389,10 +397,12 @@ model BancoHoras {
   horasPrevistas   Decimal  @map("horas_previstas") @db.Decimal(7, 2)
   saldo            Decimal  @db.Decimal(7, 2)
   calculadoAt      DateTime @default(now()) @map("calculado_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
   usuario Usuario @relation(fields: [usuarioId], references: [id])
 
   @@unique([usuarioId, mes, ano])
+  @@index([usuarioId, updatedAt])
   @@map("banco_horas")
 }
 
@@ -411,11 +421,13 @@ model Atestado {
   validadoPor    Int?           @map("validado_por")
   validadoAt     DateTime?      @map("validado_at")
   createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
 
   usuario   Usuario        @relation("AtestadoUsuario", fields: [usuarioId], references: [id])
   validador Usuario?       @relation("AtestadoValidador", fields: [validadoPor], references: [id])
   fotos     AtestadoFoto[]
 
+  @@index([usuarioId, updatedAt])
   @@map("atestado")
 }
 
@@ -510,4 +522,23 @@ model Norma {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("norma")
+}
+
+// ─── Sincronização (offline-first) ───────────────────────────────────────────
+
+/// Registro de exclusões físicas ("tombstones") para o pull incremental do
+/// mobile: o aparelho só consegue apagar da réplica local o que o servidor
+/// avisa que deixou de existir para ele. `entidade` é o nome da tabela da
+/// réplica (`pedidos`, `ambientes`, `pecas`) e `registroId` o id da linha,
+/// como texto. `usuarioId` nulo vale para todos os usuários. Sem FK de
+/// propósito: o registro deve sobreviver à linha (e ao usuário) que ele descreve.
+model SyncExclusao {
+  id         Int      @id @default(autoincrement())
+  entidade   String
+  registroId String   @map("registro_id")
+  usuarioId  Int?     @map("usuario_id")
+  excluidoEm DateTime @default(now()) @map("excluido_em")
+
+  @@index([usuarioId, excluidoEm])
+  @@map("sync_exclusao")
 }

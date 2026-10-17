@@ -1,5 +1,7 @@
+import { Test } from '@nestjs/testing';
 import { StatusPedido } from '@montacontrol/shared';
 import { StatusAmbiente } from '../../generated/prisma';
+import { SyncExclusaoRepository } from '../sync/sync-exclusao.repository';
 import { ClientesRepository } from '../clientes/clientes.repository';
 import { ClienteNaoEncontradoException } from '../clientes/exceptions/cliente-nao-encontrado.exception';
 import { PedidoNaoEncontradoException } from './exceptions/pedido-nao-encontrado.exception';
@@ -29,27 +31,42 @@ describe('PedidosService', () => {
     existe: jest.Mock;
     listarMontadores: jest.Mock;
     definirMontadores: jest.Mock;
+    emTransacao: jest.Mock;
+    listarIdsAmbientesEPecas: jest.Mock;
   };
+  let sync: { registrarVarios: jest.Mock };
   let clientes: { existe: jest.Mock };
   let usuarios: { filtrarMontadoresAtivos: jest.Mock };
   let service: PedidosService;
 
-  beforeEach(() => {
+  /** Cliente de transação fictício: o repositório real entrega o do Prisma. */
+  const tx = { id: 'transacao-fake' };
+
+  beforeEach(async () => {
     pedidos = {
       criar: jest.fn(),
       listar: jest.fn(),
       buscarComAmbientes: jest.fn(),
       existe: jest.fn().mockResolvedValue(true),
-      listarMontadores: jest.fn(),
+      listarMontadores: jest.fn().mockResolvedValue([]),
       definirMontadores: jest.fn().mockResolvedValue([]),
+      emTransacao: jest.fn((fn: (t: unknown) => Promise<unknown>) => fn(tx)),
+      listarIdsAmbientesEPecas: jest.fn().mockResolvedValue({ ambienteIds: [], pecaIds: [] }),
     };
+    sync = { registrarVarios: jest.fn().mockResolvedValue(undefined) };
     clientes = { existe: jest.fn().mockResolvedValue(true) };
     usuarios = { filtrarMontadoresAtivos: jest.fn((ids: number[]) => Promise.resolve(ids)) };
-    service = new PedidosService(
-      pedidos as unknown as PedidosRepository,
-      clientes as unknown as ClientesRepository,
-      usuarios as unknown as UsuariosRepository,
-    );
+
+    const modulo = await Test.createTestingModule({
+      providers: [
+        PedidosService,
+        { provide: PedidosRepository, useValue: pedidos },
+        { provide: ClientesRepository, useValue: clientes },
+        { provide: UsuariosRepository, useValue: usuarios },
+        { provide: SyncExclusaoRepository, useValue: sync },
+      ],
+    }).compile();
+    service = modulo.get(PedidosService);
   });
 
   describe('atribuirMontadores', () => {
@@ -57,13 +74,64 @@ describe('PedidosService', () => {
       await service.atribuirMontadores(3, [7, 8, 7]);
 
       expect(usuarios.filtrarMontadoresAtivos).toHaveBeenCalledWith([7, 8]);
-      expect(pedidos.definirMontadores).toHaveBeenCalledWith(3, [7, 8]);
+      expect(pedidos.definirMontadores).toHaveBeenCalledWith(3, [7, 8], tx);
     });
 
     it('lista vazia tira todos da obra', async () => {
       await service.atribuirMontadores(3, []);
 
-      expect(pedidos.definirMontadores).toHaveBeenCalledWith(3, []);
+      expect(pedidos.definirMontadores).toHaveBeenCalledWith(3, [], tx);
+    });
+
+    describe('registro de exclusões para o pull incremental', () => {
+      beforeEach(() => {
+        pedidos.listarIdsAmbientesEPecas.mockResolvedValue({ ambienteIds: [11, 12], pecaIds: [21] });
+      });
+
+      it('desalocar um montador grava pedido, ambientes e peças só para ele, na mesma transação', async () => {
+        pedidos.definirMontadores.mockResolvedValue([9]);
+
+        await service.atribuirMontadores(3, [7, 8]);
+
+        expect(pedidos.listarIdsAmbientesEPecas).toHaveBeenCalledWith(3, tx);
+        expect(sync.registrarVarios).toHaveBeenCalledTimes(1);
+        expect(sync.registrarVarios).toHaveBeenCalledWith(
+          [
+            { entidade: 'pedidos', registroId: '3', usuarioId: 9 },
+            { entidade: 'ambientes', registroId: '11', usuarioId: 9 },
+            { entidade: 'ambientes', registroId: '12', usuarioId: 9 },
+            { entidade: 'pecas', registroId: '21', usuarioId: 9 },
+          ],
+          tx,
+        );
+      });
+
+      it('vários montadores removidos geram exclusões separadas por usuário', async () => {
+        pedidos.definirMontadores.mockResolvedValue([9, 10]);
+
+        await service.atribuirMontadores(3, []);
+
+        const [exclusoes] = sync.registrarVarios.mock.calls[0] as [{ usuarioId: number }[]];
+        expect(exclusoes.filter((e) => e.usuarioId === 9)).toHaveLength(4);
+        expect(exclusoes.filter((e) => e.usuarioId === 10)).toHaveLength(4);
+        expect(exclusoes.every((e) => [9, 10].includes(e.usuarioId))).toBe(true);
+      });
+
+      it('quem continua atribuído não ganha exclusão', async () => {
+        pedidos.definirMontadores.mockResolvedValue([]);
+
+        await service.atribuirMontadores(3, [7, 8]);
+
+        expect(sync.registrarVarios).not.toHaveBeenCalled();
+      });
+
+      it('falha ao gravar a exclusão propaga o erro (a transação desfaz a desalocação)', async () => {
+        pedidos.definirMontadores.mockResolvedValue([9]);
+        sync.registrarVarios.mockRejectedValue(new Error('falha'));
+
+        await expect(service.atribuirMontadores(3, [7])).rejects.toThrow('falha');
+        expect(pedidos.listarMontadores).not.toHaveBeenCalled();
+      });
     });
 
     it('recusa quem não é montador ativo (422) sem gravar nada', async () => {

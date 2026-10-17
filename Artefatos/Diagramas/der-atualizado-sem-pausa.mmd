@@ -44,6 +44,7 @@ erDiagram
       int id PK
       int pedido_id FK
       int usuario_id FK
+      timestamp created_at "data da atribuicao"
   }
 
   EQUIPE {
@@ -64,6 +65,7 @@ erDiagram
       int pedido_id FK
       string nome
       enum status "PENDENTE<br>EM_PROGRESSO<br>COMPLETO"
+      timestamp updated_at
   }
 
   PECA {
@@ -84,6 +86,8 @@ erDiagram
       int id PK
       string nome
       text descricao
+      timestamp created_at
+      timestamp updated_at
   }
 
   AVARIA {
@@ -133,6 +137,7 @@ erDiagram
       decimal horas_previstas
       decimal saldo
       timestamp calculado_at
+      timestamp updated_at
   }
 
   ATESTADO {
@@ -145,6 +150,7 @@ erDiagram
       int validado_por FK
       timestamp validado_at
       timestamp created_at
+      timestamp updated_at
   }
 
   ATESTADO_FOTO {
@@ -205,6 +211,14 @@ erDiagram
       boolean ativo
       timestamp created_at
       timestamp updated_at
+  }
+
+  SYNC_EXCLUSAO {
+      int id PK
+      string entidade "tabela da replica: pedidos, ambientes, pecas"
+      string registro_id "id da linha excluida, como texto"
+      int usuario_id "opcional; nulo vale para todos (sem FK)"
+      timestamp excluido_em
   }
 
   CLIENTE ||--o{ PEDIDO : "possui"

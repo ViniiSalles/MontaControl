@@ -10,6 +10,7 @@ import {
 } from '@montacontrol/shared';
 import { ClientesRepository } from '../clientes/clientes.repository';
 import { ClienteNaoEncontradoException } from '../clientes/exceptions/cliente-nao-encontrado.exception';
+import { NovaExclusao, SyncExclusaoRepository } from '../sync/sync-exclusao.repository';
 import { MontadoresInvalidosException } from '../usuarios/exceptions/montadores-invalidos.exception';
 import { UsuariosRepository } from '../usuarios/usuarios.repository';
 import { PedidoNaoEncontradoException } from './exceptions/pedido-nao-encontrado.exception';
@@ -21,6 +22,7 @@ export class PedidosService {
     private readonly pedidos: PedidosRepository,
     private readonly clientes: ClientesRepository,
     private readonly usuarios: UsuariosRepository,
+    private readonly syncExclusoes: SyncExclusaoRepository,
   ) {}
 
   async criar(dados: CriarPedidoRequest): Promise<PedidoDTO> {
@@ -57,7 +59,9 @@ export class PedidosService {
 
   /**
    * Atribuição é sempre por pessoa: a equipe só pré-preenche a lista na tela.
-   * Lista vazia é válida — tira todos da obra.
+   * Lista vazia é válida — tira todos da obra. Quem sai deixa de enxergar o
+   * pedido (e seus ambientes e peças), então a exclusão é registrada para ele,
+   * só para ele, na mesma transação da desalocação.
    */
   async atribuirMontadores(pedidoId: number, usuarioIds: number[]): Promise<MontadorResumoDTO[]> {
     if (!(await this.pedidos.existe(pedidoId))) throw new PedidoNaoEncontradoException();
@@ -66,6 +70,19 @@ export class PedidosService {
     const validos = await this.usuarios.filtrarMontadoresAtivos(unicos);
     if (validos.length !== unicos.length) throw new MontadoresInvalidosException();
 
-    return this.pedidos.definirMontadores(pedidoId, unicos);
+    await this.pedidos.emTransacao(async (tx) => {
+      const removidos = await this.pedidos.definirMontadores(pedidoId, unicos, tx);
+      if (removidos.length === 0) return;
+
+      const { ambienteIds, pecaIds } = await this.pedidos.listarIdsAmbientesEPecas(pedidoId, tx);
+      const exclusoes = removidos.flatMap((usuarioId): NovaExclusao[] => [
+        { entidade: 'pedidos', registroId: String(pedidoId), usuarioId },
+        ...ambienteIds.map((id) => ({ entidade: 'ambientes', registroId: String(id), usuarioId })),
+        ...pecaIds.map((id) => ({ entidade: 'pecas', registroId: String(id), usuarioId })),
+      ]);
+      await this.syncExclusoes.registrarVarios(exclusoes, tx);
+    });
+
+    return this.pedidos.listarMontadores(pedidoId);
   }
 }

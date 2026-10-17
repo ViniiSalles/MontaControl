@@ -1,13 +1,14 @@
 import { Module } from '@nestjs/common';
 import { ClientesModule } from '../clientes/clientes.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { SyncModule } from '../sync/sync.module';
 import { UsuariosModule } from '../usuarios/usuarios.module';
 import { PedidosController } from './pedidos.controller';
 import { PedidosRepository } from './pedidos.repository';
 import { PedidosService } from './pedidos.service';
 
 @Module({
-  imports: [PrismaModule, ClientesModule, UsuariosModule],
+  imports: [PrismaModule, ClientesModule, UsuariosModule, SyncModule],
   controllers: [PedidosController],
   providers: [PedidosRepository, PedidosService],
   // A validação de distância tolerada da jornada (coordenadas do cliente) e a
