@@ -555,14 +555,3 @@ export interface BancoHorasDTO {
   horasPrevistas: number;
   saldo: number;
 }
-
-/** Protocolo de sincronização (WatermelonDB pull/push). */
-export interface SyncPullResponse {
-  changes: Record<string, { created: unknown[]; updated: unknown[]; deleted: string[] }>;
-  timestamp: number;
-}
-
-export interface SyncPushRequest {
-  changes: Record<string, { created: unknown[]; updated: unknown[]; deleted: string[] }>;
-  lastPulledAt: number | null;
-}

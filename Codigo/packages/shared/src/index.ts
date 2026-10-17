@@ -8,3 +8,6 @@ export * from './jornadas/distancia';
 export * from './rh/calendario';
 export * from './rh/cpf';
 export * from './clientes/uf';
+export * from './sync/tipos';
+export * from './sync/janelas';
+export * from './sync/fixture';
