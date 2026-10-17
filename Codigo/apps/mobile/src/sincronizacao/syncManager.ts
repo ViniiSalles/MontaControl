@@ -7,7 +7,6 @@ import { buscarBancoHoras } from '../banco-horas/clienteBancoHoras';
 import { upsertBancoHoras } from '../banco-horas/espelhoBancoHoras';
 import { periodoAtual } from '../banco-horas/periodo';
 import {
-  ErroApi,
   buscarHistorico,
   buscarJornadaAtual,
   enviarCheckin,
@@ -16,6 +15,7 @@ import {
 } from '../jornada/clienteJornadas';
 import { reconciliarJornadaOtimista, upsertJornadas } from '../jornada/espelhoJornada';
 import { AcaoPendente } from '../db/AcaoPendente';
+import { ehRecusaDoServidor } from './outbox';
 import type { JornadaDTO, PeriodoHistorico } from '@montacontrol/shared';
 
 /**
@@ -28,13 +28,9 @@ import type { JornadaDTO, PeriodoHistorico } from '@montacontrol/shared';
  */
 export async function puxarJornadas(
   database: Database,
-  token: string,
   periodo: PeriodoHistorico = 5,
 ): Promise<void> {
-  const [atual, historico] = await Promise.all([
-    buscarJornadaAtual(token),
-    buscarHistorico(token, periodo),
-  ]);
+  const [atual, historico] = await Promise.all([buscarJornadaAtual(), buscarHistorico(periodo)]);
   const jornadasParaEspelhar = [
     ...(atual ? [atual] : []),
     ...historico.dias.flatMap((dia) => dia.jornadas),
@@ -43,18 +39,16 @@ export async function puxarJornadas(
 }
 
 /** Refaz o GET de banco de horas do mes/ano pedido e grava no espelho local. Propaga erro de rede. */
-export async function puxarBancoHoras(
-  database: Database,
-  token: string,
-  mes: number,
-  ano: number,
-): Promise<void> {
-  const bancoHoras = await buscarBancoHoras(token, mes, ano);
+export async function puxarBancoHoras(database: Database, mes: number, ano: number): Promise<void> {
+  const bancoHoras = await buscarBancoHoras(mes, ano);
   await upsertBancoHoras(database, bancoHoras);
 }
 
+/**
+ * `sem_rede` cobre tudo o que não é uma decisão do servidor sobre a ação:
+ * falha de rede, 5xx e também 401 (token expirado, ver `ehRecusaDoServidor`).
+ */
 async function reenviar(
-  token: string,
   acao: AcaoPendente,
 ): Promise<
   | { tipo: 'ok'; jornada: JornadaDTO | null }
@@ -63,16 +57,16 @@ async function reenviar(
 > {
   const payload = JSON.parse(acao.payload);
   try {
-    if (acao.tipo === 'checkin') return { tipo: 'ok', jornada: await enviarCheckin(token, payload) };
-    if (acao.tipo === 'checkout') return { tipo: 'ok', jornada: await enviarCheckout(token, payload) };
+    if (acao.tipo === 'checkin') return { tipo: 'ok', jornada: await enviarCheckin(payload) };
+    if (acao.tipo === 'checkout') return { tipo: 'ok', jornada: await enviarCheckout(payload) };
     if (acao.tipo === 'avaria') {
-      await enviarAvaria(token, payload);
+      await enviarAvaria(payload);
       return { tipo: 'ok', jornada: null };
     }
-    await enviarSolicitacaoPonto(token, payload);
+    await enviarSolicitacaoPonto(payload);
     return { tipo: 'ok', jornada: null };
   } catch (erro) {
-    if (erro instanceof ErroApi && erro.status >= 400 && erro.status < 500) {
+    if (ehRecusaDoServidor(erro)) {
       return { tipo: 'recusado', codigo: erro.codigo };
     }
     return { tipo: 'sem_rede' };
@@ -81,21 +75,23 @@ async function reenviar(
 
 /**
  * Processa a fila em ordem (FIFO) — importante porque um check-out depende
- * do check-in já ter sido aplicado no servidor. Recusa (4xx) vira
- * `descartada` e segue para o próximo; falha de rede para a drenagem
- * inteira, para não pular à frente na ordem. Check-in/check-out bem
+ * do check-in já ter sido aplicado no servidor. Recusa de regra de negócio
+ * (4xx exceto 401/408/429) vira `descartada` e segue para o próximo; falha de
+ * rede ou 401 (sessão a renovar) para a drenagem inteira, para não pular à
+ * frente na ordem — a ação segue `pendente`. O token vem da fonte única
+ * (`auth/tokenSessao`), buscado a cada chamada. Check-in/check-out bem
  * sucedidos reconciliam o registro otimista que `outbox.ts` (Task 5)
  * gravou ao enfileirar — sem isto, o `puxarJornadas` seguinte duplicaria a
  * jornada (o registro otimista tem `remoteId: null`, e o upsert por
  * `remote_id` não o encontraria).
  */
-export async function drenarFila(database: Database, token: string): Promise<void> {
+export async function drenarFila(database: Database): Promise<void> {
   const colecao = database.get<AcaoPendente>('acoes_pendentes');
   const pendentes = await colecao.query(Q.where('status', 'pendente')).fetch();
   const emOrdem = [...pendentes].sort((a, b) => (a.criadoEm < b.criadoEm ? -1 : 1));
 
   for (const acao of emOrdem) {
-    const resultado = await reenviar(token, acao);
+    const resultado = await reenviar(acao);
 
     if (resultado.tipo === 'ok') {
       if (resultado.jornada) {
@@ -117,15 +113,15 @@ export async function drenarFila(database: Database, token: string): Promise<voi
 
 let emSincronizacao = false;
 
-async function sincronizarUmaVez(database: Database, token: string): Promise<void> {
+async function sincronizarUmaVez(database: Database): Promise<void> {
   if (emSincronizacao) return;
   emSincronizacao = true;
   try {
-    await drenarFila(database, token);
+    await drenarFila(database);
     const { mes, ano } = periodoAtual(new Date().toISOString());
     await Promise.allSettled([
-      puxarJornadas(database, token),
-      puxarBancoHoras(database, token, mes, ano),
+      puxarJornadas(database),
+      puxarBancoHoras(database, mes, ano),
     ]);
   } finally {
     emSincronizacao = false;
@@ -137,17 +133,17 @@ async function sincronizarUmaVez(database: Database, token: string): Promise<voi
  * conectividade, retorno ao primeiro plano). Chamado uma vez em `App.tsx`;
  * devolve uma função de limpeza.
  */
-export function iniciarSincronizacao(database: Database, token: string): () => void {
-  void sincronizarUmaVez(database, token);
+export function iniciarSincronizacao(database: Database): () => void {
+  void sincronizarUmaVez(database);
 
   const removerListenerRede = NetInfo.addEventListener((estado) => {
     if (estado.isConnected && estado.isInternetReachable !== false) {
-      void sincronizarUmaVez(database, token);
+      void sincronizarUmaVez(database);
     }
   });
 
   const assinaturaAppState = AppState.addEventListener('change', (proximoEstado) => {
-    if (proximoEstado === 'active') void sincronizarUmaVez(database, token);
+    if (proximoEstado === 'active') void sincronizarUmaVez(database);
   });
 
   return () => {

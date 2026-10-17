@@ -13,7 +13,6 @@ import { Icone } from '../ui/Icone';
 import { Carregando } from '../ui/Carregando';
 import { Tela } from '../ui/Tela';
 import { Texto } from '../ui/Texto';
-import { useAuth } from '../auth/AuthContext';
 import { textoPeriodo } from '../atestados/formatarPeriodo';
 import { atestadosRecentes } from '../atestados/recentes';
 import { useMeusAtestados } from '../atestados/useMeusAtestados';
@@ -69,9 +68,7 @@ function ItemHistorico({ atestado }: { atestado: AtestadoDTO }) {
 
 /** US13/UC18 — envio de atestado pelo montador, com foto e acompanhamento da análise. */
 export function Atestados() {
-  const { sessao } = useAuth();
-  const token = sessao?.accessToken ?? '';
-  const { atestados, carregando, erro, recarregar } = useMeusAtestados(token);
+  const { atestados, carregando, erro, recarregar } = useMeusAtestados();
   const [aviso, setAviso] = useState<string | null>(null);
   const [mostrarTodos, setMostrarTodos] = useState<boolean>(false);
   const { visiveis, ocultos } = atestadosRecentes(atestados, LIMITE_HISTORICO, mostrarTodos);
@@ -88,7 +85,7 @@ export function Atestados() {
 
         {aviso && <Alerta variante="sucesso" mensagem={aviso} />}
 
-        <NovoAtestado token={token} aoEnviado={aoEnviado} aoIniciarEnvio={() => setAviso(null)} />
+        <NovoAtestado aoEnviado={aoEnviado} aoIniciarEnvio={() => setAviso(null)} />
 
         <Texto variante="labelMd" cor={cores.onSurfaceVariant}>
           HISTÓRICO RECENTE

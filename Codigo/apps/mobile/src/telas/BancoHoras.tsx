@@ -8,7 +8,6 @@ import { Cartao } from '../ui/Cartao';
 import { Carregando } from '../ui/Carregando';
 import { Tela } from '../ui/Tela';
 import { Texto } from '../ui/Texto';
-import { useAuth } from '../auth/AuthContext';
 import { formatarHoras, formatarMesAno, formatarSaldoHoras } from '../banco-horas/formatacao';
 import { ehMesCorrente, mesAnterior, mesSeguinte, periodoAtual } from '../banco-horas/periodo';
 import type { Periodo } from '../banco-horas/periodo';
@@ -27,12 +26,9 @@ function SeloSaldo({ saldo }: { saldo: number }) {
 
 /** Consulta do banco de horas por mês (issue #19). Não deixa navegar além do mês corrente. */
 export function BancoHoras({ aoVoltar }: PropsBancoHoras) {
-  const { sessao } = useAuth();
-  const token = sessao?.accessToken ?? '';
-
   const agoraIso = new Date().toISOString();
   const [periodo, setPeriodo] = useState<Periodo>(() => periodoAtual(agoraIso));
-  const { bancoHoras, carregando, erro, recarregar } = useBancoHoras(token, periodo.mes, periodo.ano);
+  const { bancoHoras, carregando, erro, recarregar } = useBancoHoras(periodo.mes, periodo.ano);
   const noMesCorrente = ehMesCorrente(periodo, agoraIso);
 
   return (

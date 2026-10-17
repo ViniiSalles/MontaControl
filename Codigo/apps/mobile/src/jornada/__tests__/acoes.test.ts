@@ -14,7 +14,6 @@ import { executarAcaoJornada } from '../../sincronizacao/outbox';
 import type { ObraDoPonto } from '../../pedidos/obrasLocais';
 import { registrarCheckin, registrarCheckout } from '../acoes';
 
-const TOKEN = 'token-de-teste';
 
 const JORNADA_FALSA: JornadaDTO = {
   id: 1,
@@ -65,13 +64,12 @@ describe('registrarCheckin / registrarCheckout', () => {
   });
 
   it('sucesso: chama a outbox com tipo checkin e o payload com localização', async () => {
-    const resultado = await registrarCheckin(TOKEN, database, OBRA);
+    const resultado = await registrarCheckin(database, OBRA);
 
     expect(resultado).toEqual({ tipo: 'ok', jornada: JORNADA_FALSA });
     expect(executarAcaoJornada).toHaveBeenCalledWith(
       database,
       'checkin',
-      TOKEN,
       expect.objectContaining({
         idCliente: 'id-cliente-falso',
         latitude: -19.9325,
@@ -90,7 +88,7 @@ describe('registrarCheckin / registrarCheckout', () => {
       precisaoM: 10,
     });
 
-    const resultado = await registrarCheckin(TOKEN, database, OBRA);
+    const resultado = await registrarCheckin(database, OBRA);
 
     expect(resultado).toEqual({ tipo: 'fora_do_raio', distanciaMetros: expect.any(Number) });
     expect((resultado as { distanciaMetros: number }).distanciaMetros).toBeGreaterThan(1000);
@@ -105,7 +103,7 @@ describe('registrarCheckin / registrarCheckout', () => {
       precisaoM: 10,
     });
 
-    const resultado = await registrarCheckin(TOKEN, database, OBRA);
+    const resultado = await registrarCheckin(database, OBRA);
 
     expect(resultado.tipo).toBe('ok');
   });
@@ -113,7 +111,7 @@ describe('registrarCheckin / registrarCheckout', () => {
   it('permissão negada: não chama a outbox e devolve o motivo', async () => {
     (capturarLocalizacao as jest.Mock).mockResolvedValue({ tipo: 'permissao_negada' });
 
-    const resultado = await registrarCheckin(TOKEN, database, OBRA);
+    const resultado = await registrarCheckin(database, OBRA);
 
     expect(resultado).toEqual({ tipo: 'sem_localizacao', motivo: 'permissao_negada' });
     expect(executarAcaoJornada).not.toHaveBeenCalled();
@@ -122,9 +120,9 @@ describe('registrarCheckin / registrarCheckout', () => {
   it('Nominatim sem resposta: o payload vai sem endereço', async () => {
     (resolverEndereco as jest.Mock).mockResolvedValue(null);
 
-    await registrarCheckin(TOKEN, database, OBRA);
+    await registrarCheckin(database, OBRA);
 
-    const [, , , payload] = (executarAcaoJornada as jest.Mock).mock.calls[0];
+    const [, , payload] = (executarAcaoJornada as jest.Mock).mock.calls[0];
     expect(payload.endereco).toBeUndefined();
   });
 
@@ -134,7 +132,7 @@ describe('registrarCheckin / registrarCheckout', () => {
       codigo: 'JORNADA_EM_ANDAMENTO',
     });
 
-    const resultado = await registrarCheckin(TOKEN, database, OBRA);
+    const resultado = await registrarCheckin(database, OBRA);
 
     expect(resultado).toEqual({ tipo: 'recusado', codigo: 'JORNADA_EM_ANDAMENTO' });
   });
@@ -147,21 +145,20 @@ describe('registrarCheckin / registrarCheckout', () => {
       precisaoM: 10,
     });
 
-    const resultado = await registrarCheckout(TOKEN, database, null);
+    const resultado = await registrarCheckout(database, null);
 
     expect(resultado.tipo).toBe('ok');
-    const [, , , payload] = (executarAcaoJornada as jest.Mock).mock.calls[0];
+    const [, , payload] = (executarAcaoJornada as jest.Mock).mock.calls[0];
     expect(payload.pedidoId).toBeUndefined();
   });
 
   it('registrarCheckout chama a outbox com tipo checkout', async () => {
-    const resultado = await registrarCheckout(TOKEN, database, OBRA);
+    const resultado = await registrarCheckout(database, OBRA);
 
     expect(resultado).toEqual({ tipo: 'ok', jornada: JORNADA_FALSA });
     expect(executarAcaoJornada).toHaveBeenCalledWith(
       database,
       'checkout',
-      TOKEN,
       expect.anything(),
     );
   });

@@ -1,7 +1,12 @@
+import { definirTokens } from '../../auth/tokenSessao';
 import { ErroApi } from '../../jornada/clienteJornadas';
 import { buscarBancoHoras } from '../clienteBancoHoras';
 
 describe('clienteBancoHoras', () => {
+  beforeEach(() => {
+    definirTokens({ accessToken: 'token-abc', refreshToken: 'refresh-abc' });
+  });
+
   afterEach(() => {
     jest.restoreAllMocks();
   });
@@ -14,7 +19,7 @@ describe('clienteBancoHoras', () => {
     });
     global.fetch = fetchFalso as unknown as typeof fetch;
 
-    const bancoHoras = await buscarBancoHoras('token-abc', 8, 2026);
+    const bancoHoras = await buscarBancoHoras(8, 2026);
 
     expect(bancoHoras.saldo).toBe(-8);
     const [url, opcoes] = fetchFalso.mock.calls[0];
@@ -29,7 +34,7 @@ describe('clienteBancoHoras', () => {
       json: async () => ({ codigo: 'ERRO_VALIDACAO', message: 'mes inválido' }),
     }) as unknown as typeof fetch;
 
-    const erro = await buscarBancoHoras('token-abc', 13, 2026).catch((e: unknown) => e);
+    const erro = await buscarBancoHoras(13, 2026).catch((e: unknown) => e);
 
     expect(erro).toBeInstanceOf(ErroApi);
     expect(erro).toMatchObject({ codigo: 'ERRO_VALIDACAO', status: 400 });

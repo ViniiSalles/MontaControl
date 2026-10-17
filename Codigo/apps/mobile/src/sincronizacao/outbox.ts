@@ -11,12 +11,8 @@ import type {
 import { enviarAvaria } from '../avarias/clienteAvarias';
 import { AcaoPendente } from '../db/AcaoPendente';
 import { Jornada } from '../db/Jornada';
-import {
-  ErroApi,
-  enviarCheckin,
-  enviarCheckout,
-  enviarSolicitacaoPonto,
-} from '../jornada/clienteJornadas';
+import { ErroApi } from '../http/erroApi';
+import { enviarCheckin, enviarCheckout, enviarSolicitacaoPonto } from '../jornada/clienteJornadas';
 import { paraJornadaDTO } from '../jornada/espelhoJornada';
 
 export type ResultadoEnvio<T> = { tipo: 'ok'; dado: T } | { tipo: 'recusado'; codigo: string };
@@ -27,8 +23,21 @@ export type ResultadoAvaria =
   | { tipo: 'pendente' }
   | { tipo: 'recusado'; codigo: string; mensagem: string };
 
-function ehRecusaDoServidor(erro: unknown): erro is ErroApi {
-  return erro instanceof ErroApi && erro.status >= 400 && erro.status < 500;
+/**
+ * Só 4xx de **regra de negócio** (400, 403, 404, 409, 422…) é recusa: o
+ * servidor avaliou a ação e disse não, retentar não muda nada. Fora disso a
+ * ação continua na fila:
+ * - 401: o token expirou (dura 1h; o montador pode ficar horas sem sinal) —
+ *   a sessão é renovada e a ação sobe depois, nunca é apagada por isso;
+ * - 408/429: o servidor nem chegou a decidir (timeout / limite de taxa).
+ */
+export function ehRecusaDoServidor(erro: unknown): erro is ErroApi {
+  return (
+    erro instanceof ErroApi &&
+    erro.status >= 400 &&
+    erro.status < 500 &&
+    ![401, 408, 429].includes(erro.status)
+  );
 }
 
 async function enfileirar(
@@ -123,7 +132,6 @@ async function aplicarJornadaOtimista(
 export async function executarAcaoJornada(
   database: Database,
   tipo: 'checkin' | 'checkout',
-  token: string,
   payload: CheckinRequest | CheckoutRequest,
 ): Promise<ResultadoEnvio<JornadaDTO>> {
   const acao = await enfileirar(database, tipo, payload.idCliente, payload);
@@ -136,8 +144,8 @@ export async function executarAcaoJornada(
   try {
     const jornadaServidor =
       tipo === 'checkin'
-        ? await enviarCheckin(token, payload as CheckinRequest)
-        : await enviarCheckout(token, payload as CheckoutRequest);
+        ? await enviarCheckin(payload as CheckinRequest)
+        : await enviarCheckout(payload as CheckoutRequest);
 
     await database.write(async () => {
       await acao.destroyPermanently();
@@ -180,8 +188,9 @@ export async function executarAcaoJornada(
       });
       return { tipo: 'recusado', codigo: erro.codigo };
     }
-    // Falha de rede: a linha da fila e o registro otimista ficam como estão
-    // — a drenagem em segundo plano tenta de novo depois.
+    // Falha de rede ou sessão expirada (401): a linha da fila e o registro
+    // otimista ficam como estão — a drenagem em segundo plano tenta de novo
+    // depois, já com a sessão renovada.
     return { tipo: 'ok', dado: paraJornadaDTO(registroLocal) };
   }
 }
@@ -189,13 +198,12 @@ export async function executarAcaoJornada(
 /** Ponto em atraso: mesma fila, sem espelho otimista (a tela já mostra "enviada" incondicionalmente). */
 export async function executarAcaoPontoEmAtraso(
   database: Database,
-  token: string,
   payload: SolicitarPontoEmAtrasoRequest,
 ): Promise<ResultadoPontoEmAtraso> {
   const acao = await enfileirar(database, 'ponto_em_atraso', payload.idCliente, payload);
 
   try {
-    await enviarSolicitacaoPonto(token, payload);
+    await enviarSolicitacaoPonto(payload);
     await database.write(() => acao.destroyPermanently());
     return { tipo: 'ok' };
   } catch (erro) {
@@ -214,13 +222,12 @@ export async function executarAcaoPontoEmAtraso(
  */
 export async function executarAcaoAvaria(
   database: Database,
-  token: string,
   payload: ReportarAvariaRequest,
 ): Promise<ResultadoAvaria> {
   const acao = await enfileirar(database, 'avaria', payload.idCliente, payload);
 
   try {
-    await enviarAvaria(token, payload);
+    await enviarAvaria(payload);
     await database.write(() => acao.destroyPermanently());
     return { tipo: 'enviada' };
   } catch (erro) {

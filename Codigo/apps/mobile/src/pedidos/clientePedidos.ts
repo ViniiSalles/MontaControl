@@ -1,12 +1,8 @@
 import type { PedidoDoMontadorDTO } from '@montacontrol/shared';
-import { lerErro } from '../jornada/clienteJornadas';
-import { urlBaseApi } from '../config/api';
+import { requisitarAutenticado } from '../http/requisicao';
 
 /** GET /api/pedidos/meus — obras atribuídas ao montador, com peças e local do cliente. */
-export async function listarMeusPedidos(token: string): Promise<PedidoDoMontadorDTO[]> {
-  const resposta = await fetch(`${urlBaseApi}/api/pedidos/meus`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!resposta.ok) throw await lerErro(resposta);
+export async function listarMeusPedidos(): Promise<PedidoDoMontadorDTO[]> {
+  const resposta = await requisitarAutenticado('/api/pedidos/meus');
   return (await resposta.json()) as PedidoDoMontadorDTO[];
 }

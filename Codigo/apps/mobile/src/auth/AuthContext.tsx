@@ -7,11 +7,15 @@ import {
   encerrarSessaoNoServidor,
   entrarComCredenciais,
   ErroAutenticacao,
-  ErroNaoAutorizado,
-  renovarSessao,
 } from './clienteAuth';
-import { limparTokens, lerTokens, salvarTokens } from './armazenamentoSessao';
-import type { TokensPersistidos } from './armazenamentoSessao';
+import { lerSessao, limparSessao, salvarSessao } from './armazenamentoSessao';
+import {
+  aoSessaoExpirar,
+  atualizarUsuarioDaSessao,
+  comTokenRenovado,
+  definirTokens,
+  lerTokenAtual,
+} from './tokenSessao';
 import { limparBancoLocal } from '../db/database';
 
 export const CODIGO_PERFIL_EXCLUSIVO_WEB = 'PERFIL_EXCLUSIVO_WEB';
@@ -19,14 +23,19 @@ export const CODIGO_PERFIL_EXCLUSIVO_WEB = 'PERFIL_EXCLUSIVO_WEB';
 const MENSAGEM_PERFIL_EXCLUSIVO_WEB =
   'Este perfil acessa o MontaControl pelo sistema web. O aplicativo é exclusivo do Montador.';
 
-export interface SessaoAutenticada extends TokensPersistidos {
+/**
+ * Quem está logado. Os tokens não passam por aqui: vivem em `tokenSessao`
+ * (`obterTokenValido` / `comTokenRenovado`), que renova sozinho — a tela
+ * nunca segura um token que pode ter expirado.
+ */
+export interface SessaoAutenticada {
   usuario: UsuarioDTO;
 }
 
 interface ContextoAuth {
   /** `null` = sem sessão. Durante a restauração de boot é `null` com `restaurando = true`. */
   sessao: SessaoAutenticada | null;
-  /** Verdadeiro enquanto o boot ainda decide entre Login e app autenticado — segura a splash. */
+  /** Verdadeiro só até a sessão guardada ser lida — segura a splash. Nunca espera a rede. */
   restaurando: boolean;
   entrar: (email: string, senha: string) => Promise<void>;
   sair: () => Promise<void>;
@@ -50,76 +59,99 @@ export function ProvedorAuth({ children }: { children: ReactNode }) {
   const [sessao, setSessao] = useState<SessaoAutenticada | null>(null);
   const [restaurando, setRestaurando] = useState(true);
 
+  /**
+   * Fim da sessão local — refresh recusado, perfil recusado. Limpa o espelho
+   * do banco para que o próximo montador a logar neste aparelho não veja a
+   * jornada do anterior.
+   */
+  const encerrarLocalmente = useCallback(async () => {
+    definirTokens(null);
+    setSessao(null);
+    await limparSessao();
+    await limparBancoLocal().catch(() => undefined);
+  }, []);
+
   useEffect(() => {
     // `cancelado` evita `setState` depois do unmount caso o app seja fechado
     // no meio da restauração (a splash ainda está na tela aqui).
     let cancelado = false;
 
-    async function restaurar(): Promise<void> {
-      const tokens = await lerTokens();
-      if (!tokens) return;
+    // Refresh recusado durante a sessão (em qualquer chamada, não só no boot).
+    const cancelarAviso = aoSessaoExpirar(encerrarLocalmente);
 
+    /** Lê a sessão guardada e entra com ela na hora — sem rede, sem Login. */
+    async function restaurar(): Promise<boolean> {
+      const salva = await lerSessao();
+      if (!salva) return false;
+
+      if (salva.usuario.perfil !== Perfil.MONTADOR) {
+        await encerrarLocalmente();
+        return false;
+      }
+
+      definirTokens({ accessToken: salva.accessToken, refreshToken: salva.refreshToken });
+      if (!cancelado) setSessao({ usuario: salva.usuario });
+      return true;
+    }
+
+    /**
+     * Segundo plano, depois de entrar: confere em `GET /auth/me` se a sessão
+     * ainda vale (montador desativado, perfil trocado). 401 renova o token
+     * (`comTokenRenovado`); refresh recusado encerra a sessão pelo aviso
+     * registrado acima. Qualquer falha de rede mantém a sessão — é o caso
+     * normal de quem abre o app numa obra sem sinal.
+     */
+    async function revalidar(): Promise<void> {
       try {
-        const usuario = await buscarUsuarioAtual(tokens.accessToken);
+        const usuario = await comTokenRenovado((token) => buscarUsuarioAtual(token));
+        if (cancelado) return;
+
         if (usuario.perfil !== Perfil.MONTADOR) {
-          await limparTokens();
-          // Sem isto, o espelho de jornada do usuário anterior fica no
-          // aparelho até a primeira sincronização de quem logar depois.
-          await limparBancoLocal().catch(() => undefined);
+          await encerrarLocalmente();
           return;
         }
-        if (!cancelado) setSessao({ ...tokens, usuario });
-      } catch (excecao) {
-        // Só um 401 justifica gastar o refresh token. Falha de rede mantém
-        // os tokens guardados para a próxima abertura do app.
-        if (!(excecao instanceof ErroNaoAutorizado)) return;
-
-        try {
-          // TI02: access token expirado renova em silêncio; se o refresh
-          // também morreu, a sessão acabou e o app volta ao Login.
-          const renovada = await renovarSessao(tokens.refreshToken);
-          exigirMontador(renovada);
-
-          const novosTokens = {
-            accessToken: renovada.accessToken,
-            refreshToken: renovada.refreshToken,
-          };
-          await salvarTokens(novosTokens);
-          if (!cancelado) setSessao({ ...novosTokens, usuario: renovada.usuario });
-        } catch {
-          await limparTokens();
-          // Idem: refresh falhou, a sessão acabou — não deixar o espelho do
-          // usuário anterior vazar para o próximo que logar no aparelho.
-          await limparBancoLocal().catch(() => undefined);
-        }
+        // Funcional: se o montador saiu enquanto a rede respondia, não ressuscita a sessão.
+        setSessao((atual) => (atual ? { usuario } : atual));
+        await atualizarUsuarioDaSessao(usuario);
+      } catch {
+        // Rede fora, servidor instável ou sessão já encerrada pelo aviso: nada a fazer aqui.
       }
     }
 
-    void restaurar().finally(() => {
-      if (!cancelado) setRestaurando(false);
-    });
+    void (async () => {
+      let entrou: boolean;
+      try {
+        entrou = await restaurar();
+      } finally {
+        if (!cancelado) setRestaurando(false);
+      }
+      if (entrou) await revalidar();
+    })().catch(() => undefined);
 
     return () => {
       cancelado = true;
+      cancelarAviso();
     };
-  }, []);
+  }, [encerrarLocalmente]);
 
   const entrar = useCallback(async (email: string, senha: string) => {
     const resposta = await entrarComCredenciais(email, senha);
     exigirMontador(resposta);
 
     const tokens = { accessToken: resposta.accessToken, refreshToken: resposta.refreshToken };
-    await salvarTokens(tokens);
-    setSessao({ ...tokens, usuario: resposta.usuario });
+    definirTokens(tokens);
+    await salvarSessao({ ...tokens, usuario: resposta.usuario });
+    setSessao({ usuario: resposta.usuario });
   }, []);
 
   const sair = useCallback(async () => {
     // Ordem deliberada: derruba a sessão local primeiro, para que a rede
     // lenta (ou ausente — o app é offline-first) nunca prenda o montador
     // numa tela da qual ele pediu para sair.
-    const encerrando = sessao;
+    const tokenDaSessao = lerTokenAtual();
+    definirTokens(null);
     setSessao(null);
-    await limparTokens();
+    await limparSessao();
     // Sem isto, um segundo montador que logar neste aparelho veria o
     // espelho de jornada do anterior até a primeira sincronização. `.catch`
     // porque uma falha aqui (ex.: adapter SQLite indisponível) não pode
@@ -127,10 +159,10 @@ export function ProvedorAuth({ children }: { children: ReactNode }) {
     // é chamado como `void sair()` em `Jornada.tsx`, e uma rejeição não
     // tratada aqui viraria unhandled rejection.
     await limparBancoLocal().catch(() => undefined);
-    if (encerrando) {
-      await encerrarSessaoNoServidor(encerrando.accessToken).catch(() => undefined);
+    if (tokenDaSessao) {
+      await encerrarSessaoNoServidor(tokenDaSessao).catch(() => undefined);
     }
-  }, [sessao]);
+  }, []);
 
   const valor = useMemo(
     () => ({ sessao, restaurando, entrar, sair }),

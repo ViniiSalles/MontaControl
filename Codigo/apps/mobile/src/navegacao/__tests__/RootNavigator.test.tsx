@@ -3,6 +3,7 @@ import { DatabaseProvider } from '@nozbe/watermelondb/react';
 import { ProvedorAuth } from '../../auth/AuthContext';
 import { RootNavigator } from '../RootNavigator';
 import * as armazenamento from '../../auth/armazenamentoSessao';
+import { definirTokens } from '../../auth/tokenSessao';
 import { criarBancoDeTeste } from '../../db/__tests__/apoio';
 import { gestor, montador, respostaJson, sessaoDe } from '../../auth/__tests__/apoio';
 
@@ -16,6 +17,8 @@ jest.mock('../../auth/armazenamentoSessao');
 jest.mock('../../db/database', () => ({ limparBancoLocal: jest.fn().mockResolvedValue(undefined) }));
 
 const armazenamentoMock = jest.mocked(armazenamento);
+
+const SESSAO_SALVA = { accessToken: 'access', refreshToken: 'refresh', usuario: montador };
 
 const PLACEHOLDER_EMAIL = 'nome@empresa.com.br';
 const PLACEHOLDER_SENHA = '••••••••';
@@ -62,9 +65,10 @@ beforeEach(() => {
   // implementacoes, que e o que estes testes precisam.
   jest.clearAllMocks();
   database = criarBancoDeTeste();
-  armazenamentoMock.lerTokens.mockResolvedValue(null);
-  armazenamentoMock.salvarTokens.mockResolvedValue(undefined);
-  armazenamentoMock.limparTokens.mockResolvedValue(undefined);
+  definirTokens(null);
+  armazenamentoMock.lerSessao.mockResolvedValue(null);
+  armazenamentoMock.salvarSessao.mockResolvedValue(undefined);
+  armazenamentoMock.limparSessao.mockResolvedValue(undefined);
   // Default rejeitando: a aba Jornada busca `GET /api/jornadas/atual` assim
   // que monta, e um `jest.fn()` cru devolveria `undefined` para esse `await`.
   // Cada teste ainda enfileira suas respostas com `mockResolvedValueOnce`.
@@ -88,9 +92,10 @@ test('N1T1/TI01 — MONTADOR válido vai para a aba Jornada e o token é guardad
 
   await waitFor(() => expect(screen.getByText('Jornada de Trabalho')).toBeTruthy());
   expect(screen.getByText('Jornada')).toBeTruthy();
-  expect(armazenamentoMock.salvarTokens).toHaveBeenCalledWith({
+  expect(armazenamentoMock.salvarSessao).toHaveBeenCalledWith({
     accessToken: 'access',
     refreshToken: 'refresh',
+    usuario: montador,
   });
 });
 
@@ -108,7 +113,7 @@ test('N1T2 — senha incorreta mostra credenciais inválidas e não autentica', 
 
   await waitFor(() => expect(screen.getByText('Credenciais inválidas')).toBeTruthy());
   expect(screen.queryByText('Jornada')).toBeNull();
-  expect(armazenamentoMock.salvarTokens).not.toHaveBeenCalled();
+  expect(armazenamentoMock.salvarSessao).not.toHaveBeenCalled();
 });
 
 // Plano, "Destinos de N1T1": perfis administrativos são recusados no mobile
@@ -123,7 +128,7 @@ test('GESTOR com credencial válida é recusado e o token não é persistido', a
     expect(screen.getByText(/aplicativo é exclusivo do Montador/i)).toBeTruthy(),
   );
   expect(screen.queryByText('Jornada')).toBeNull();
-  expect(armazenamentoMock.salvarTokens).not.toHaveBeenCalled();
+  expect(armazenamentoMock.salvarSessao).not.toHaveBeenCalled();
 });
 
 test('falha de rede mostra mensagem de conexão em vez de credenciais inválidas', async () => {
@@ -136,7 +141,7 @@ test('falha de rede mostra mensagem de conexão em vez de credenciais inválidas
 });
 
 test('sessão restaurada do aparelho abre direto na Jornada, sem passar pelo Login', async () => {
-  armazenamentoMock.lerTokens.mockResolvedValue({ accessToken: 'access', refreshToken: 'refresh' });
+  armazenamentoMock.lerSessao.mockResolvedValue(SESSAO_SALVA);
   jest.mocked(globalThis.fetch).mockResolvedValueOnce(respostaJson(200, montador));
 
   await render(arvore());
@@ -145,8 +150,20 @@ test('sessão restaurada do aparelho abre direto na Jornada, sem passar pelo Log
   expect(screen.queryByText('Entrar')).toBeNull();
 });
 
+// #106: o montador que fechou o app numa obra sem sinal precisa conseguir bater ponto.
+test('sessão guardada e aparelho sem rede abre direto na Jornada, sem passar pelo Login', async () => {
+  armazenamentoMock.lerSessao.mockResolvedValue(SESSAO_SALVA);
+  jest.mocked(globalThis.fetch).mockRejectedValue(new TypeError('Network request failed'));
+
+  await render(arvore());
+
+  await waitFor(() => expect(screen.getByText('Jornada de Trabalho')).toBeTruthy());
+  expect(screen.queryByText('Entrar')).toBeNull();
+  expect(armazenamentoMock.limparSessao).not.toHaveBeenCalled();
+});
+
 test('sair volta ao Login e limpa os tokens do aparelho', async () => {
-  armazenamentoMock.lerTokens.mockResolvedValue({ accessToken: 'access', refreshToken: 'refresh' });
+  armazenamentoMock.lerSessao.mockResolvedValue(SESSAO_SALVA);
   jest
     .mocked(globalThis.fetch)
     .mockResolvedValueOnce(respostaJson(200, montador))
@@ -158,11 +175,11 @@ test('sair volta ao Login e limpa os tokens do aparelho', async () => {
   await fireEvent.press(screen.getByText('Sair'));
 
   await waitFor(() => expect(screen.getByText('Entrar')).toBeTruthy());
-  expect(armazenamentoMock.limparTokens).toHaveBeenCalled();
+  expect(armazenamentoMock.limparSessao).toHaveBeenCalled();
 });
 
 test('a barra inferior traz as 5 abas, com Jornada, Avarias e Atestados habilitadas', async () => {
-  armazenamentoMock.lerTokens.mockResolvedValue({ accessToken: 'access', refreshToken: 'refresh' });
+  armazenamentoMock.lerSessao.mockResolvedValue(SESSAO_SALVA);
   jest.mocked(globalThis.fetch).mockResolvedValueOnce(respostaJson(200, montador));
 
   await render(arvore());

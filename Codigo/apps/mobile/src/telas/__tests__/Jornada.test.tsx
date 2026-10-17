@@ -124,7 +124,7 @@ beforeEach(async () => {
   database = criarBancoDeTeste();
   await upsertBancoHoras(database, BANCO_HORAS_PADRAO);
   useAuthMock.mockReturnValue({
-    sessao: { accessToken: 'access', refreshToken: 'refresh', usuario: montador },
+    sessao: { usuario: montador },
     restaurando: false,
     entrar: jest.fn(),
     sair: jest.fn(),
@@ -162,7 +162,7 @@ test('bater a entrada registra o ponto e a tela passa a pedir a saída', async (
   await fireEvent.press(screen.getByText(ROTULO_ENTRADA));
 
   await waitFor(() => expect(screen.getByText(ROTULO_SAIDA)).toBeTruthy());
-  expect(registrarCheckinMock).toHaveBeenCalledWith('access', database, OBRA);
+  expect(registrarCheckinMock).toHaveBeenCalledWith(database, OBRA);
   expect(screen.getByText(`Ponto de entrada registrado às ${HORA_CHECKIN}.`)).toBeTruthy();
   expect(screen.getByText(HORA_CHECKIN)).toBeTruthy();
 });
@@ -179,7 +179,7 @@ test('bater a saída mantém o check-out na tela em vez de voltar ao estado vazi
   // A jornada da resposta tem precedência sobre a leitura local: o ponto
   // recém-batido continua visível, e o botão volta a oferecer a entrada.
   await waitFor(() => expect(screen.getByText(HORA_CHECKOUT)).toBeTruthy());
-  expect(registrarCheckoutMock).toHaveBeenCalledWith('access', database, null);
+  expect(registrarCheckoutMock).toHaveBeenCalledWith(database, null);
   expect(screen.getByText(ROTULO_ENTRADA)).toBeTruthy();
   expect(screen.queryByText('Nenhum ponto registrado')).toBeNull();
 });
@@ -193,7 +193,7 @@ test('localização negada não registra ponto e instrui o montador', async () =
   await fireEvent.press(screen.getByText(ROTULO_ENTRADA));
 
   await waitFor(() => expect(screen.getByText(/ajustes do aparelho/i)).toBeTruthy());
-  expect(registrarCheckinMock).toHaveBeenCalledWith('access', database, OBRA);
+  expect(registrarCheckinMock).toHaveBeenCalledWith(database, OBRA);
   // Falhou: o botão continua oferecendo a entrada.
   expect(screen.getByText(ROTULO_ENTRADA)).toBeTruthy();
   expect(screen.getByText('Nenhum ponto registrado')).toBeTruthy();
@@ -298,7 +298,7 @@ test('abrir um turno novo no mesmo dia soma com o turno anterior, não reseta "t
   await fireEvent.press(screen.getByText(ROTULO_ENTRADA));
 
   await waitFor(() => expect(screen.getByText(ROTULO_SAIDA)).toBeTruthy());
-  expect(registrarCheckinMock).toHaveBeenCalledWith('access', database, OBRA);
+  expect(registrarCheckinMock).toHaveBeenCalledWith(database, OBRA);
   // Turno 2 acabou de abrir (poucos ms de duração): o total não pode cair
   // abaixo das 2h que o turno 1 já tinha — antes da correção, resetava a
   // "0h 00min" porque a tela só olhava para o turno aberto agora.
@@ -327,10 +327,10 @@ test('Atualizar também refaz a busca do banco de horas', async () => {
   await waitFor(() => expect(puxarBancoHorasMock).toHaveBeenCalledTimes(2));
 });
 
-test('a sincronização automática liga ao montar a tela, com o banco e o token certos', async () => {
+test('a sincronização automática liga ao montar a tela, com o banco certo', async () => {
   await renderizar();
 
-  await waitFor(() => expect(iniciarSincronizacaoMock).toHaveBeenCalledWith(database, 'access'));
+  await waitFor(() => expect(iniciarSincronizacaoMock).toHaveBeenCalledWith(database));
 });
 
 test('bater a saída também refaz a busca do banco de horas', async () => {
@@ -345,7 +345,7 @@ test('bater a saída também refaz a busca do banco de horas', async () => {
   await fireEvent.press(screen.getByText(ROTULO_SAIDA));
 
   await waitFor(() => expect(puxarBancoHorasMock).toHaveBeenCalledTimes(2));
-  expect(registrarCheckoutMock).toHaveBeenCalledWith('access', database, null);
+  expect(registrarCheckoutMock).toHaveBeenCalledWith(database, null);
 });
 
 test('ação descartada na fila aparece como aviso ao abrir a tela', async () => {
@@ -381,7 +381,7 @@ test('com mais de uma obra, a entrada exige escolher a obra', async () => {
   await fireEvent.press(screen.getByText('João Lima · PED-000011'));
   await fireEvent.press(screen.getByText(ROTULO_ENTRADA));
 
-  await waitFor(() => expect(registrarCheckinMock).toHaveBeenCalledWith('access', database, OUTRA_OBRA));
+  await waitFor(() => expect(registrarCheckinMock).toHaveBeenCalledWith(database, OUTRA_OBRA));
 });
 
 test('sem obra atribuída avisa e não registra', async () => {
@@ -404,7 +404,7 @@ test('a saída usa a obra do check-in guardada no aparelho', async () => {
 
   await fireEvent.press(screen.getByText(ROTULO_SAIDA));
 
-  await waitFor(() => expect(registrarCheckoutMock).toHaveBeenCalledWith('access', database, OBRA));
+  await waitFor(() => expect(registrarCheckoutMock).toHaveBeenCalledWith(database, OBRA));
 });
 
 test('longe da obra o aviso mostra a distância', async () => {

@@ -16,7 +16,7 @@ let database: ReturnType<typeof criarBancoDeTeste>;
 function renderizar(dataInicial: string | null = null) {
   return render(
     <DatabaseProvider database={database}>
-      <ModalPontoEmAtraso token="access" dataInicial={dataInicial} aoFechar={fechar} />
+      <ModalPontoEmAtraso dataInicial={dataInicial} aoFechar={fechar} />
     </DatabaseProvider>,
   );
 }
@@ -53,7 +53,6 @@ test('envia a solicitação com a data em ISO e o id do aparelho', async () => {
   await waitFor(() =>
     expect(executarMock).toHaveBeenCalledWith(
       expect.anything(), // database
-      'access',
       {
         idCliente: '11111111-1111-4111-8111-111111111111',
         data: '2026-08-26',

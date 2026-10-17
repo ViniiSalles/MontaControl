@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useAuth } from '../auth/AuthContext';
 import { BancoHoras } from '../telas/BancoHoras';
 import { Historico } from '../telas/Historico';
 import { Jornada } from '../telas/Jornada';
@@ -17,9 +16,6 @@ type Vista = 'jornada' | 'historico' | 'bancoHoras';
  * `BarraNavInferior` já resolve o nível de cima.
  */
 export function PilhaJornada() {
-  const { sessao } = useAuth();
-  const token = sessao?.accessToken ?? '';
-
   const [vista, setVista] = useState<Vista>('jornada');
   // `null` = folha fechada. Aberta, `data` é o dia que o card do histórico
   // mandou, ou `null` quando veio do botão solto da tela de jornada.
@@ -43,11 +39,7 @@ export function PilhaJornada() {
       )}
 
       {pontoEmAtraso && (
-        <ModalPontoEmAtraso
-          token={token}
-          dataInicial={pontoEmAtraso.data}
-          aoFechar={() => setPontoEmAtraso(null)}
-        />
+        <ModalPontoEmAtraso dataInicial={pontoEmAtraso.data} aoFechar={() => setPontoEmAtraso(null)} />
       )}
     </>
   );

@@ -1,3 +1,4 @@
+import { definirTokens } from '../../auth/tokenSessao';
 import { ErroApi } from '../../jornada/clienteJornadas';
 import { enviarAtestado, listarMeusAtestados } from '../clienteAtestados';
 
@@ -9,6 +10,10 @@ const DADOS = {
 };
 
 describe('clienteAtestados', () => {
+  beforeEach(() => {
+    definirTokens({ accessToken: 'token-abc', refreshToken: 'refresh-abc' });
+  });
+
   afterEach(() => {
     jest.restoreAllMocks();
   });
@@ -21,7 +26,7 @@ describe('clienteAtestados', () => {
     });
     global.fetch = fetchFalso as unknown as typeof fetch;
 
-    const atestado = await enviarAtestado('token-abc', DADOS);
+    const atestado = await enviarAtestado(DADOS);
 
     expect(atestado).toEqual({ id: 5, status: 'PENDENTE' });
     const [url, opcoes] = fetchFalso.mock.calls[0];
@@ -38,7 +43,7 @@ describe('clienteAtestados', () => {
       json: async () => ({ codigo: 'PERIODO_ATESTADO_INVALIDO', message: 'Período inválido.' }),
     }) as unknown as typeof fetch;
 
-    await expect(enviarAtestado('token-abc', DADOS)).rejects.toMatchObject({
+    await expect(enviarAtestado(DADOS)).rejects.toMatchObject({
       codigo: 'PERIODO_ATESTADO_INVALIDO',
       status: 422,
     });
@@ -52,7 +57,7 @@ describe('clienteAtestados', () => {
     });
     global.fetch = fetchFalso as unknown as typeof fetch;
 
-    const atestados = await listarMeusAtestados('token-abc');
+    const atestados = await listarMeusAtestados();
 
     expect(atestados).toEqual([{ id: 1, status: 'PENDENTE' }]);
     const [url, opcoes] = fetchFalso.mock.calls[0];
@@ -67,7 +72,7 @@ describe('clienteAtestados', () => {
       json: async () => ({ codigo: 'ERRO_INTERNO', message: 'Falha ao listar.' }),
     }) as unknown as typeof fetch;
 
-    const erro = await listarMeusAtestados('token-abc').catch((e: unknown) => e);
+    const erro = await listarMeusAtestados().catch((e: unknown) => e);
 
     expect(erro).toBeInstanceOf(ErroApi);
     expect((erro as ErroApi).status).toBe(500);

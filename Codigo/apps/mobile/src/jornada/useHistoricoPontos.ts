@@ -13,7 +13,7 @@ export interface EstadoHistorico {
 }
 
 /** Histórico de pontos do período escolhido, lido do espelho local. Recarrega ao trocar de período. */
-export function useHistoricoPontos(token: string, periodo: PeriodoHistorico): EstadoHistorico {
+export function useHistoricoPontos(periodo: PeriodoHistorico): EstadoHistorico {
   const database = useDatabaseOuFalha();
   const [dias, setDias] = useState<DiaJornadaDTO[]>([]);
   const [totalMinutos, setTotalMinutos] = useState(0);
@@ -22,12 +22,12 @@ export function useHistoricoPontos(token: string, periodo: PeriodoHistorico): Es
 
   const recarregar = useCallback(async () => {
     try {
-      await puxarJornadas(database, token, periodo);
+      await puxarJornadas(database, periodo);
       setFalhaRede(false);
     } catch {
       setFalhaRede(true);
     }
-  }, [database, token, periodo]);
+  }, [database, periodo]);
 
   useEffect(() => {
     const agoraIso = new Date().toISOString();

@@ -1,3 +1,4 @@
+import { definirTokens } from '../../auth/tokenSessao';
 import { ErroApi, buscarHistorico, buscarJornadaAtual, enviarCheckin } from '../clienteJornadas';
 
 const PEDIDO = {
@@ -9,6 +10,10 @@ const PEDIDO = {
 };
 
 describe('clienteJornadas', () => {
+  beforeEach(() => {
+    definirTokens({ accessToken: 'token-abc', refreshToken: 'refresh-abc' });
+  });
+
   afterEach(() => {
     jest.restoreAllMocks();
   });
@@ -21,7 +26,7 @@ describe('clienteJornadas', () => {
     });
     global.fetch = fetchFalso as unknown as typeof fetch;
 
-    const jornada = await enviarCheckin('token-abc', PEDIDO);
+    const jornada = await enviarCheckin(PEDIDO);
 
     expect(jornada.id).toBe(1);
     const [, opcoes] = fetchFalso.mock.calls[0];
@@ -35,7 +40,7 @@ describe('clienteJornadas', () => {
       json: async () => ({ codigo: 'JORNADA_EM_ANDAMENTO', message: 'Já existe uma jornada.' }),
     }) as unknown as typeof fetch;
 
-    await expect(enviarCheckin('token-abc', PEDIDO)).rejects.toMatchObject({
+    await expect(enviarCheckin(PEDIDO)).rejects.toMatchObject({
       codigo: 'JORNADA_EM_ANDAMENTO',
       status: 409,
     });
@@ -50,7 +55,7 @@ describe('clienteJornadas', () => {
       },
     }) as unknown as typeof fetch;
 
-    const erro = await enviarCheckin('token-abc', PEDIDO).catch((e: unknown) => e);
+    const erro = await enviarCheckin(PEDIDO).catch((e: unknown) => e);
 
     expect(erro).toBeInstanceOf(ErroApi);
     expect((erro as ErroApi).status).toBe(500);
@@ -64,7 +69,7 @@ describe('clienteJornadas', () => {
     });
     global.fetch = fetchFalso as unknown as typeof fetch;
 
-    const jornada = await buscarJornadaAtual('token-abc');
+    const jornada = await buscarJornadaAtual();
 
     expect(jornada).toEqual({ id: 7 });
     const [url, opcoes] = fetchFalso.mock.calls[0];
@@ -82,7 +87,7 @@ describe('clienteJornadas', () => {
       text: async () => '',
     }) as unknown as typeof fetch;
 
-    await expect(buscarJornadaAtual('token-abc')).resolves.toBeNull();
+    await expect(buscarJornadaAtual()).resolves.toBeNull();
   });
 
   it('buscarJornadaAtual: erro da API vira ErroApi com o código do corpo preservado', async () => {
@@ -92,7 +97,7 @@ describe('clienteJornadas', () => {
       json: async () => ({ codigo: 'PERFIL_NAO_PERMITIDO', message: 'Perfil sem acesso.' }),
     }) as unknown as typeof fetch;
 
-    await expect(buscarJornadaAtual('token-abc')).rejects.toMatchObject({
+    await expect(buscarJornadaAtual()).rejects.toMatchObject({
       codigo: 'PERFIL_NAO_PERMITIDO',
       status: 403,
     });
@@ -106,7 +111,7 @@ describe('clienteJornadas', () => {
     });
     global.fetch = fetchFalso as unknown as typeof fetch;
 
-    const historico = await buscarHistorico('token-abc', 15);
+    const historico = await buscarHistorico(15);
 
     expect(historico.periodoDias).toBe(15);
     const [url, opcoes] = fetchFalso.mock.calls[0];
@@ -121,7 +126,7 @@ describe('clienteJornadas', () => {
       json: async () => ({ codigo: 'ERRO_INTERNO', message: 'Falha ao montar o histórico.' }),
     }) as unknown as typeof fetch;
 
-    await expect(buscarHistorico('token-abc', 30)).rejects.toMatchObject({
+    await expect(buscarHistorico(30)).rejects.toMatchObject({
       codigo: 'ERRO_INTERNO',
       status: 500,
     });

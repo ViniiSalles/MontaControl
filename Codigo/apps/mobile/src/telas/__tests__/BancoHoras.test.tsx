@@ -1,4 +1,3 @@
-jest.mock('../../auth/AuthContext');
 jest.mock('../../sincronizacao/syncManager');
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
@@ -6,12 +5,10 @@ import { DatabaseProvider } from '@nozbe/watermelondb/react';
 import type { BancoHorasDTO } from '@montacontrol/shared';
 import { criarBancoDeTeste } from '../../db/__tests__/apoio';
 import { upsertBancoHoras } from '../../banco-horas/espelhoBancoHoras';
-import { useAuth } from '../../auth/AuthContext';
 import { puxarBancoHoras } from '../../sincronizacao/syncManager';
 import { montador } from '../../auth/__tests__/apoio';
 import { BancoHoras } from '../BancoHoras';
 
-const useAuthMock = jest.mocked(useAuth);
 const puxarBancoHorasMock = jest.mocked(puxarBancoHoras);
 
 const voltar = jest.fn();
@@ -45,12 +42,6 @@ beforeEach(() => {
   // `advanceTimers: true` é obrigatório com `waitFor`: sem isso o polling do
   // Testing Library nunca avança e a suíte trava (CI do PR fica em loop).
   jest.useFakeTimers({ advanceTimers: true }).setSystemTime(new Date('2026-08-26T17:00:00.000Z')); // 14:00 local
-  useAuthMock.mockReturnValue({
-    sessao: { accessToken: 'access', refreshToken: 'refresh', usuario: montador },
-    restaurando: false,
-    entrar: jest.fn(),
-    sair: jest.fn(),
-  });
   puxarBancoHorasMock.mockResolvedValue(undefined);
 });
 
@@ -64,7 +55,7 @@ test('abre no mês corrente e mostra o saldo', async () => {
   await renderizar();
 
   await waitFor(() => expect(screen.getByText('-8h 00min')).toBeTruthy());
-  expect(puxarBancoHorasMock).toHaveBeenCalledWith(database, 'access', 8, 2026);
+  expect(puxarBancoHorasMock).toHaveBeenCalledWith(database, 8, 2026);
   expect(screen.getByText('Agosto de 2026')).toBeTruthy();
   expect(screen.getByText('160h 00min')).toBeTruthy();
   expect(screen.getByText('168h 00min')).toBeTruthy();
@@ -90,14 +81,14 @@ test('mês anterior refaz a busca e volta a permitir avançar', async () => {
   await fireEvent.press(screen.getByLabelText('Mês anterior'));
 
   await waitFor(() =>
-    expect(puxarBancoHorasMock).toHaveBeenLastCalledWith(database, 'access', 7, 2026),
+    expect(puxarBancoHorasMock).toHaveBeenLastCalledWith(database, 7, 2026),
   );
   await waitFor(() => expect(screen.getByText('Julho de 2026')).toBeTruthy());
 
   await fireEvent.press(screen.getByLabelText('Próximo mês'));
 
   await waitFor(() =>
-    expect(puxarBancoHorasMock).toHaveBeenLastCalledWith(database, 'access', 8, 2026),
+    expect(puxarBancoHorasMock).toHaveBeenLastCalledWith(database, 8, 2026),
   );
   await waitFor(() => expect(screen.getByText('Agosto de 2026')).toBeTruthy());
 });

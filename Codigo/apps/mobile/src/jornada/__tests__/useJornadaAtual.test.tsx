@@ -9,7 +9,6 @@ import { criarBancoDeTeste } from '../../db/__tests__/apoio';
 import { upsertJornadas } from '../espelhoJornada';
 import { useJornadaAtual } from '../useJornadaAtual';
 
-const TOKEN = 'token-de-teste';
 
 function jornadaFalsa(parcial: Partial<JornadaDTO> = {}): JornadaDTO {
   return {
@@ -42,7 +41,7 @@ describe('useJornadaAtual', () => {
       <DatabaseProvider database={database}>{children}</DatabaseProvider>
     );
 
-    const { result } = await renderHook(() => useJornadaAtual(TOKEN), { wrapper });
+    const { result } = await renderHook(() => useJornadaAtual(), { wrapper });
 
     await waitFor(() => expect(result.current.carregando).toBe(false));
     expect(result.current.jornada?.checkinEndereco).toBe('Rua Falsa, 123');
@@ -57,7 +56,7 @@ describe('useJornadaAtual', () => {
       <DatabaseProvider database={database}>{children}</DatabaseProvider>
     );
 
-    const { result } = await renderHook(() => useJornadaAtual(TOKEN), { wrapper });
+    const { result } = await renderHook(() => useJornadaAtual(), { wrapper });
 
     await waitFor(() => expect(result.current.erro).toBe(true));
     expect(result.current.jornada).toBeNull();

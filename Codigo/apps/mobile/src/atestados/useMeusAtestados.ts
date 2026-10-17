@@ -10,7 +10,7 @@ export interface EstadoMeusAtestados {
 }
 
 /** Online-only, sem espelho local: enviar atestado não é ação de campo sem sinal. */
-export function useMeusAtestados(token: string): EstadoMeusAtestados {
+export function useMeusAtestados(): EstadoMeusAtestados {
   const [atestados, setAtestados] = useState<AtestadoDTO[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState(false);
@@ -18,13 +18,13 @@ export function useMeusAtestados(token: string): EstadoMeusAtestados {
   const recarregar = useCallback(async () => {
     setErro(false);
     try {
-      setAtestados(await listarMeusAtestados(token));
+      setAtestados(await listarMeusAtestados());
     } catch {
       setErro(true);
     } finally {
       setCarregando(false);
     }
-  }, [token]);
+  }, []);
 
   useEffect(() => {
     void recarregar();

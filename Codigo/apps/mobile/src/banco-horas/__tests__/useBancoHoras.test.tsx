@@ -9,7 +9,6 @@ import { criarBancoDeTeste } from '../../db/__tests__/apoio';
 import { upsertBancoHoras } from '../espelhoBancoHoras';
 import { useBancoHoras } from '../useBancoHoras';
 
-const TOKEN = 'token-de-teste';
 
 function bancoHorasFake(parcial: Partial<BancoHorasDTO> = {}): BancoHorasDTO {
   return {
@@ -36,7 +35,7 @@ describe('useBancoHoras', () => {
       <DatabaseProvider database={database}>{children}</DatabaseProvider>
     );
 
-    const { result } = await renderHook(() => useBancoHoras(TOKEN, 8, 2026), { wrapper });
+    const { result } = await renderHook(() => useBancoHoras(8, 2026), { wrapper });
 
     await waitFor(() => expect(result.current.carregando).toBe(false));
     // `paraBancoHorasDTO` sempre devolve `id`/`usuarioId` sentinela (-1) — o
@@ -53,7 +52,7 @@ describe('useBancoHoras', () => {
       <DatabaseProvider database={database}>{children}</DatabaseProvider>
     );
 
-    const { result } = await renderHook(() => useBancoHoras(TOKEN, 8, 2026), { wrapper });
+    const { result } = await renderHook(() => useBancoHoras(8, 2026), { wrapper });
 
     await waitFor(() => expect(result.current.erro).toBe(true));
     expect(result.current.bancoHoras).toBeNull();
@@ -70,7 +69,7 @@ describe('useBancoHoras', () => {
     );
 
     const { result, rerender } = await renderHook(
-      ({ mes, ano }: { mes: number; ano: number }) => useBancoHoras(TOKEN, mes, ano),
+      ({ mes, ano }: { mes: number; ano: number }) => useBancoHoras(mes, ano),
       { wrapper, initialProps: { mes: 8, ano: 2026 } },
     );
 
@@ -80,7 +79,7 @@ describe('useBancoHoras', () => {
     await rerender({ mes: 7, ano: 2026 });
 
     await waitFor(() =>
-      expect(puxarBancoHoras).toHaveBeenLastCalledWith(database, TOKEN, 7, 2026),
+      expect(puxarBancoHoras).toHaveBeenLastCalledWith(database, 7, 2026),
     );
     await waitFor(() => expect(result.current.bancoHoras?.mes).toBe(7));
   });

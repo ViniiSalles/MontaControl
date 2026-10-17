@@ -27,7 +27,6 @@ export type ResultadoAcao =
 
 async function baterPonto(
   tipo: 'checkin' | 'checkout',
-  token: string,
   database: Database,
   obra: ObraDoPonto | null,
 ): Promise<ResultadoAcao> {
@@ -54,18 +53,14 @@ async function baterPonto(
   };
   const payload: CheckinRequest | CheckoutRequest = obra ? { ...base, pedidoId: obra.id } : base;
 
-  const resultado = await executarAcaoJornada(database, tipo, token, payload);
+  const resultado = await executarAcaoJornada(database, tipo, payload);
   if (resultado.tipo === 'recusado') return resultado;
   return { tipo: 'ok', jornada: resultado.dado };
 }
 
 /** A entrada é sempre numa obra: a API recusa check-in sem pedido. */
-export async function registrarCheckin(
-  token: string,
-  database: Database,
-  obra: ObraDoPonto,
-): Promise<ResultadoAcao> {
-  return baterPonto('checkin', token, database, obra);
+export async function registrarCheckin(database: Database, obra: ObraDoPonto): Promise<ResultadoAcao> {
+  return baterPonto('checkin', database, obra);
 }
 
 /**
@@ -74,9 +69,8 @@ export async function registrarCheckin(
  * contra o pedido gravado na jornada.
  */
 export async function registrarCheckout(
-  token: string,
   database: Database,
   obra: ObraDoPonto | null,
 ): Promise<ResultadoAcao> {
-  return baterPonto('checkout', token, database, obra);
+  return baterPonto('checkout', database, obra);
 }

@@ -18,7 +18,6 @@ import {
 import type { CamposPontoEmAtraso, ErrosPontoEmAtraso } from '../../jornada/pontoEmAtraso';
 
 interface PropsModalPontoEmAtraso {
-  token: string;
   /** Dia (`YYYY-MM-DD`) do card que abriu o formulário; vazio quando aberto pelo botão solto. */
   dataInicial?: string | null;
   aoFechar: () => void;
@@ -38,7 +37,7 @@ function paraCampoData(data: string | null | undefined): string {
  * assim os campos nascem do `dataInicial` no próprio `useState` e não é
  * preciso um `useEffect` para ressincronizar a cada reabertura.
  */
-export function ModalPontoEmAtraso({ token, dataInicial, aoFechar }: PropsModalPontoEmAtraso) {
+export function ModalPontoEmAtraso({ dataInicial, aoFechar }: PropsModalPontoEmAtraso) {
   const database = useDatabaseOuFalha();
   const [campos, setCampos] = useState<CamposPontoEmAtraso>({
     data: paraCampoData(dataInicial),
@@ -69,7 +68,7 @@ export function ModalPontoEmAtraso({ token, dataInicial, aoFechar }: PropsModalP
     setEnviando(true);
     setFalha(null);
     try {
-      const resultado = await executarAcaoPontoEmAtraso(database, token, {
+      const resultado = await executarAcaoPontoEmAtraso(database, {
         idCliente: randomUUID(),
         ...dados,
       });

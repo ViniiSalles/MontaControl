@@ -1,64 +1,35 @@
 import type {
   CheckinRequest,
   CheckoutRequest,
-  CorpoErroPadrao,
   HistoricoJornadasDTO,
   JornadaDTO,
   PeriodoHistorico,
   SolicitacaoPontoDTO,
   SolicitarPontoEmAtrasoRequest,
 } from '@montacontrol/shared';
-import { urlBaseApi } from '../config/api';
+import { requisitarAutenticado } from '../http/requisicao';
 
-/**
- * Erro de resposta da API com o `codigo` do corpo padrão e o `status` HTTP
- * preservados. O `status` é o que a outbox usa para decidir entre descartar
- * (4xx: a regra recusou, retentar não muda nada) e retentar (5xx).
- */
-export class ErroApi extends Error {
-  readonly codigo: string;
-  readonly status: number;
+// `ErroApi`/`lerErro` moram em `http/erroApi` (a camada de token precisa deles
+// sem importar um cliente de domínio); reexportados aqui por compatibilidade.
+export { ErroApi, lerErro } from '../http/erroApi';
 
-  constructor(codigo: string, mensagem: string, status: number) {
-    super(mensagem);
-    this.codigo = codigo;
-    this.status = status;
-  }
-}
-
-export async function lerErro(resposta: Response): Promise<ErroApi> {
-  const corpo = (await resposta.json().catch(() => null)) as CorpoErroPadrao | null;
-  return new ErroApi(
-    corpo?.codigo ?? 'ERRO_DESCONHECIDO',
-    corpo?.message ?? 'Não foi possível concluir a operação.',
-    resposta.status,
-  );
-}
-
-async function postar<T>(caminho: string, token: string, corpo: unknown): Promise<T> {
-  const resposta = await fetch(`${urlBaseApi}${caminho}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify(corpo),
-  });
-
-  if (!resposta.ok) throw await lerErro(resposta);
+async function postar<T>(caminho: string, corpo: unknown): Promise<T> {
+  const resposta = await requisitarAutenticado(caminho, { metodo: 'POST', corpo });
   return (await resposta.json()) as T;
 }
 
-export async function enviarCheckin(token: string, dados: CheckinRequest): Promise<JornadaDTO> {
-  return postar<JornadaDTO>('/api/jornadas/checkin', token, dados);
+export async function enviarCheckin(dados: CheckinRequest): Promise<JornadaDTO> {
+  return postar<JornadaDTO>('/api/jornadas/checkin', dados);
 }
 
-export async function enviarCheckout(token: string, dados: CheckoutRequest): Promise<JornadaDTO> {
-  return postar<JornadaDTO>('/api/jornadas/checkout', token, dados);
+export async function enviarCheckout(dados: CheckoutRequest): Promise<JornadaDTO> {
+  return postar<JornadaDTO>('/api/jornadas/checkout', dados);
 }
 
 export async function enviarSolicitacaoPonto(
-  token: string,
   dados: SolicitarPontoEmAtrasoRequest,
 ): Promise<SolicitacaoPontoDTO> {
-  return postar<SolicitacaoPontoDTO>('/api/pontos-em-atraso', token, dados);
+  return postar<SolicitacaoPontoDTO>('/api/pontos-em-atraso', dados);
 }
 
 /**
@@ -70,12 +41,8 @@ export async function enviarSolicitacaoPonto(
  * ponto do dia), e `resposta.json()` estoura em corpo vazio. Sem isto, o "sem
  * jornada" chegaria à tela como falha de carregamento.
  */
-export async function buscarJornadaAtual(token: string): Promise<JornadaDTO | null> {
-  const resposta = await fetch(`${urlBaseApi}/api/jornadas/atual`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-  if (!resposta.ok) throw await lerErro(resposta);
+export async function buscarJornadaAtual(): Promise<JornadaDTO | null> {
+  const resposta = await requisitarAutenticado('/api/jornadas/atual');
 
   const corpo = await resposta.text();
   if (!corpo) return null;
@@ -83,14 +50,7 @@ export async function buscarJornadaAtual(token: string): Promise<JornadaDTO | nu
 }
 
 /** GET /api/jornadas/historico — dias agrupados do período (5, 15 ou 30 dias). */
-export async function buscarHistorico(
-  token: string,
-  dias: PeriodoHistorico,
-): Promise<HistoricoJornadasDTO> {
-  const resposta = await fetch(`${urlBaseApi}/api/jornadas/historico?dias=${dias}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-  if (!resposta.ok) throw await lerErro(resposta);
+export async function buscarHistorico(dias: PeriodoHistorico): Promise<HistoricoJornadasDTO> {
+  const resposta = await requisitarAutenticado(`/api/jornadas/historico?dias=${dias}`);
   return (await resposta.json()) as HistoricoJornadasDTO;
 }

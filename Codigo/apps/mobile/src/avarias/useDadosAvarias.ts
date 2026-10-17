@@ -16,7 +16,7 @@ export interface EstadoDadosAvarias {
  * Pedidos do montador, tipos de problema e histórico de reportes. Leitura
  * online; só o envio passa pela outbox, que é o que não pode se perder.
  */
-export function useDadosAvarias(token: string): EstadoDadosAvarias {
+export function useDadosAvarias(): EstadoDadosAvarias {
   const [pedidos, setPedidos] = useState<PedidoDoMontadorDTO[]>([]);
   const [tipos, setTipos] = useState<TipoAvariaDTO[]>([]);
   const [avarias, setAvarias] = useState<AvariaDTO[]>([]);
@@ -27,9 +27,9 @@ export function useDadosAvarias(token: string): EstadoDadosAvarias {
     setErro(false);
     try {
       const [meusPedidos, listaTipos, minhas] = await Promise.all([
-        listarMeusPedidos(token),
-        listarTiposAvaria(token),
-        listarMinhasAvarias(token),
+        listarMeusPedidos(),
+        listarTiposAvaria(),
+        listarMinhasAvarias(),
       ]);
       setPedidos(meusPedidos);
       setTipos(listaTipos);
@@ -39,7 +39,7 @@ export function useDadosAvarias(token: string): EstadoDadosAvarias {
     } finally {
       setCarregando(false);
     }
-  }, [token]);
+  }, []);
 
   useEffect(() => {
     void recarregar();

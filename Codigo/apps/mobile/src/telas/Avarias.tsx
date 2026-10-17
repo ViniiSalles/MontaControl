@@ -9,7 +9,6 @@ import { Cartao } from '../ui/Cartao';
 import { Carregando } from '../ui/Carregando';
 import { Tela } from '../ui/Tela';
 import { Texto } from '../ui/Texto';
-import { useAuth } from '../auth/AuthContext';
 import { ROTULO_STATUS_AVARIA, VARIANTE_STATUS_AVARIA } from '../avarias/rotulos';
 import { useDadosAvarias } from '../avarias/useDadosAvarias';
 import { NovaAvaria } from './avarias/NovaAvaria';
@@ -37,9 +36,7 @@ function ItemHistorico({ avaria }: { avaria: AvariaDTO }) {
 
 /** Reporte de problemas com peças pelo montador em campo e acompanhamento da análise do gestor. */
 export function Avarias() {
-  const { sessao } = useAuth();
-  const token = sessao?.accessToken ?? '';
-  const { pedidos, tipos, avarias, carregando, erro, recarregar } = useDadosAvarias(token);
+  const { pedidos, tipos, avarias, carregando, erro, recarregar } = useDadosAvarias();
   const [aviso, setAviso] = useState<string | null>(null);
 
   function aoEnviado(mensagem: string) {
@@ -97,7 +94,6 @@ export function Avarias() {
               />
             ) : (
               <NovaAvaria
-                token={token}
                 pedidos={pedidos}
                 tipos={tipos}
                 aoEnviado={aoEnviado}

@@ -30,18 +30,18 @@ describe('useMeusAtestados', () => {
   it('carrega os atestados do montador ao montar', async () => {
     listarMock.mockResolvedValue([ATESTADO]);
 
-    const { result } = await renderHook(() => useMeusAtestados('token-abc'));
+    const { result } = await renderHook(() => useMeusAtestados());
 
     await waitFor(() => expect(result.current.carregando).toBe(false));
     expect(result.current.atestados).toEqual([ATESTADO]);
     expect(result.current.erro).toBe(false);
-    expect(listarMock).toHaveBeenCalledWith('token-abc');
+    expect(listarMock).toHaveBeenCalledWith();
   });
 
   it('falha na busca marca erro e mantém a lista vazia', async () => {
     listarMock.mockRejectedValue(new Error('offline'));
 
-    const { result } = await renderHook(() => useMeusAtestados('token-abc'));
+    const { result } = await renderHook(() => useMeusAtestados());
 
     await waitFor(() => expect(result.current.carregando).toBe(false));
     expect(result.current.erro).toBe(true);
@@ -51,7 +51,7 @@ describe('useMeusAtestados', () => {
   it('recarregar refaz a busca', async () => {
     listarMock.mockResolvedValueOnce([]).mockResolvedValueOnce([ATESTADO]);
 
-    const { result } = await renderHook(() => useMeusAtestados('token-abc'));
+    const { result } = await renderHook(() => useMeusAtestados());
     await waitFor(() => expect(result.current.carregando).toBe(false));
 
     await result.current.recarregar();

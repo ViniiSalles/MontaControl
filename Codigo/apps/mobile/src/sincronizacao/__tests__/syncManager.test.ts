@@ -1,7 +1,5 @@
 jest.mock('../../jornada/clienteJornadas', () => {
-  const real = jest.requireActual('../../jornada/clienteJornadas');
   return {
-    ErroApi: real.ErroApi,
     buscarJornadaAtual: jest.fn(),
     buscarHistorico: jest.fn(),
     enviarCheckin: jest.fn(),
@@ -13,12 +11,12 @@ jest.mock('../../banco-horas/clienteBancoHoras', () => ({ buscarBancoHoras: jest
 
 import { Q } from '@nozbe/watermelondb';
 import { StatusJornada, type JornadaDTO } from '@montacontrol/shared';
+import { ErroApi } from '../../http/erroApi';
 import { criarBancoDeTeste } from '../../db/__tests__/apoio';
 import { AcaoPendente } from '../../db/AcaoPendente';
 import { Jornada } from '../../db/Jornada';
 import { buscarBancoHoras } from '../../banco-horas/clienteBancoHoras';
 import {
-  ErroApi,
   buscarHistorico,
   buscarJornadaAtual,
   enviarCheckin,
@@ -27,7 +25,6 @@ import {
 import { paraJornadaDTO, queryJornadaAtual } from '../../jornada/espelhoJornada';
 import { drenarFila, puxarBancoHoras, puxarJornadas } from '../syncManager';
 
-const TOKEN = 'token-de-teste';
 
 function jornadaFalsa(parcial: Partial<JornadaDTO> = {}): JornadaDTO {
   return {
@@ -69,7 +66,7 @@ describe('puxarJornadas', () => {
       ],
     });
 
-    await puxarJornadas(database, TOKEN);
+    await puxarJornadas(database);
 
     const registros = await database.get('jornadas').query().fetch();
     expect(registros).toHaveLength(2);
@@ -86,7 +83,7 @@ describe('puxarJornadas', () => {
       dias: [],
     });
 
-    await expect(puxarJornadas(database, TOKEN)).rejects.toThrow();
+    await expect(puxarJornadas(database)).rejects.toThrow();
   });
 });
 
@@ -103,7 +100,7 @@ describe('puxarBancoHoras', () => {
       saldo: -166,
     });
 
-    await puxarBancoHoras(database, TOKEN, 9, 2026);
+    await puxarBancoHoras(database, 9, 2026);
 
     const registros = await database.get('banco_horas').query().fetch();
     expect(registros).toHaveLength(1);
@@ -147,7 +144,7 @@ describe('drenarFila', () => {
       });
     });
 
-    await drenarFila(database, TOKEN);
+    await drenarFila(database);
 
     const pendentes = await database
       .get<AcaoPendente>('acoes_pendentes')
@@ -176,7 +173,7 @@ describe('drenarFila', () => {
       }),
     );
 
-    await drenarFila(database, TOKEN);
+    await drenarFila(database);
 
     const descartadas = await database
       .get<AcaoPendente>('acoes_pendentes')
@@ -216,7 +213,7 @@ describe('drenarFila', () => {
       });
     });
 
-    await drenarFila(database, TOKEN);
+    await drenarFila(database);
 
     expect(ordem).toEqual(['checkin', 'checkout']);
   });
@@ -235,7 +232,7 @@ describe('drenarFila', () => {
       }),
     );
 
-    await drenarFila(database, TOKEN);
+    await drenarFila(database);
 
     const pendentes = await database
       .get<AcaoPendente>('acoes_pendentes')
