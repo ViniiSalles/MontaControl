@@ -52,18 +52,13 @@ interface PropsJornada {
  * manda no layout.
  */
 export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso }: PropsJornada) {
-  const { sessao, sair } = useAuth();
-
-  // `RootNavigator` só monta esta tela com sessão presente; os fallbacks
-  // existem para o tipo, não para um estado alcançável.
-  const token = sessao?.accessToken ?? '';
+  const { sair } = useAuth();
 
   const database = useDatabaseOuFalha();
 
-  useEffect(() => {
-    if (!token) return;
-    return iniciarSincronizacao(database, token);
-  }, [database, token]);
+  // `RootNavigator` só monta esta tela com sessão presente; o token vem da
+  // fonte única (`auth/tokenSessao`), buscado a cada sincronização.
+  useEffect(() => iniciarSincronizacao(database), [database]);
 
   const [pendentes, setPendentes] = useState(0);
   const [avisosDescartados, setAvisosDescartados] = useState<string[]>([]);
@@ -93,10 +88,10 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
     };
   }, [database]);
 
-  const { jornada, carregando, erro, recarregar } = useJornadaAtual(token);
+  const { jornada, carregando, erro, recarregar } = useJornadaAtual();
   // Menor período válido (`PeriodoHistorico`): só precisa alcançar hoje, o
   // resto da janela não é usado aqui — quem quer mais dias vai pro Histórico.
-  const { dias: diasHistorico, recarregar: recarregarHistorico } = useHistoricoPontos(token, 5);
+  const { dias: diasHistorico, recarregar: recarregarHistorico } = useHistoricoPontos(5);
 
   // A jornada devolvida pelo próprio check-in/check-out é mais nova que a do
   // GET e tem precedência até a próxima atualização manual: recarregar logo
@@ -108,7 +103,7 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
     obras,
     carregando: carregandoObras,
     recarregar: recarregarObras,
-  } = useObrasDoMontador(token, database);
+  } = useObrasDoMontador(database);
   const [obraEscolhidaId, setObraEscolhidaId] = useState<number | null>(null);
   // Com uma obra só, não há o que escolher.
   const obraEntradaId = obraEscolhidaId ?? (obras.length === 1 ? obras[0].id : null);
@@ -132,7 +127,7 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
   const agoraIso = new Date().toISOString();
   const hojeCivil = diaCivilDe(agoraIso);
   const { mes: mesAtual, ano: anoAtual } = periodoAtual(agoraIso);
-  const { bancoHoras, recarregar: recarregarBancoHoras } = useBancoHoras(token, mesAtual, anoAtual);
+  const { bancoHoras, recarregar: recarregarBancoHoras } = useBancoHoras(mesAtual, anoAtual);
   const diaHoje = diasHistorico.find((dia) => dia.data === hojeCivil) ?? null;
   const estado = jornadaExibida ? estadoJornada(jornadaExibida, agoraIso) : 'finalizada';
   const acao = proximaAcao(jornadaExibida, agoraIso);
@@ -141,8 +136,8 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
   const baterPonto = useCallback(async () => {
     const registrar =
       acao === 'saida'
-        ? () => registrarCheckout(token, database, obraDaJornada)
-        : obraEntrada && (() => registrarCheckin(token, database, obraEntrada));
+        ? () => registrarCheckout(database, obraDaJornada)
+        : obraEntrada && (() => registrarCheckin(database, obraEntrada));
     if (!registrar) {
       setAviso({
         variante: 'aviso',
@@ -171,7 +166,7 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
     } finally {
       setRegistrando(false);
     }
-  }, [acao, database, obraDaJornada, obraEntrada, recarregarHistorico, recarregarBancoHoras, token]);
+  }, [acao, database, obraDaJornada, obraEntrada, recarregarHistorico, recarregarBancoHoras]);
 
   const atualizar = useCallback(async () => {
     // Descartar o registro local é o ponto da atualização: a partir daqui

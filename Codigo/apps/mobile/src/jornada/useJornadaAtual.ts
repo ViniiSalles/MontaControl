@@ -12,7 +12,7 @@ export interface EstadoJornadaAtual {
 }
 
 /** Jornada aberta do montador, lida do espelho local — atualiza sozinha quando o espelho muda. */
-export function useJornadaAtual(token: string): EstadoJornadaAtual {
+export function useJornadaAtual(): EstadoJornadaAtual {
   const database = useDatabaseOuFalha();
   const [jornada, setJornada] = useState<JornadaDTO | null>(null);
   const [carregandoLocal, setCarregandoLocal] = useState(true);
@@ -20,12 +20,12 @@ export function useJornadaAtual(token: string): EstadoJornadaAtual {
 
   const recarregar = useCallback(async () => {
     try {
-      await puxarJornadas(database, token);
+      await puxarJornadas(database);
       setFalhaRede(false);
     } catch {
       setFalhaRede(true);
     }
-  }, [database, token]);
+  }, [database]);
 
   useEffect(() => {
     const assinatura = queryJornadaAtual(database)

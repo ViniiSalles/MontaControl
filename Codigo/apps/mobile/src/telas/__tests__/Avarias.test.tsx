@@ -1,4 +1,3 @@
-jest.mock('../../auth/AuthContext');
 jest.mock('../../pedidos/clientePedidos', () => ({ listarMeusPedidos: jest.fn() }));
 jest.mock('../../avarias/clienteAvarias', () => ({
   listarTiposAvaria: jest.fn(),
@@ -19,7 +18,6 @@ jest.mock('expo-image-picker', () => ({
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Perfil, StatusAmbiente, StatusAvaria, StatusPeca, StatusPedido } from '@montacontrol/shared';
 import type { AvariaDTO, PedidoDoMontadorDTO } from '@montacontrol/shared';
-import { useAuth } from '../../auth/AuthContext';
 import { listarMinhasAvarias, listarTiposAvaria } from '../../avarias/clienteAvarias';
 import { listarMeusPedidos } from '../../pedidos/clientePedidos';
 import { executarAcaoAvaria } from '../../sincronizacao/outbox';
@@ -90,12 +88,6 @@ function avariaFake(parcial: Partial<AvariaDTO> = {}): AvariaDTO {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  jest.mocked(useAuth).mockReturnValue({
-    sessao: { accessToken: 'access', refreshToken: 'refresh', usuario: montador },
-    restaurando: false,
-    entrar: jest.fn(),
-    sair: jest.fn(),
-  });
   pedidosMock.mockResolvedValue([PEDIDO]);
   tiposMock.mockResolvedValue([
     { id: 2, nome: 'Risco', descricao: 'Marca no acabamento' },
@@ -157,7 +149,7 @@ test('com pedido único, escolhe peça e tipo e envia pela outbox', async () => 
   await fireEvent.press(screen.getByText('Enviar problema'));
 
   await waitFor(() => expect(screen.getByText('Problema enviado. O gestor vai analisar.')).toBeTruthy());
-  expect(executarMock).toHaveBeenCalledWith({}, 'access', {
+  expect(executarMock).toHaveBeenCalledWith({}, {
     idCliente: '11111111-1111-4111-8111-111111111111',
     pecaId: 10,
     tipoAvariaId: 5,

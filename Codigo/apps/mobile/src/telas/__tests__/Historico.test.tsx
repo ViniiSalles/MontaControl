@@ -1,4 +1,3 @@
-jest.mock('../../auth/AuthContext');
 jest.mock('../../sincronizacao/syncManager');
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
@@ -7,12 +6,10 @@ import { StatusJornada } from '@montacontrol/shared';
 import type { JornadaDTO } from '@montacontrol/shared';
 import { criarBancoDeTeste } from '../../db/__tests__/apoio';
 import { upsertJornadas } from '../../jornada/espelhoJornada';
-import { useAuth } from '../../auth/AuthContext';
 import { puxarJornadas } from '../../sincronizacao/syncManager';
 import { montador } from '../../auth/__tests__/apoio';
 import { Historico } from '../Historico';
 
-const useAuthMock = jest.mocked(useAuth);
 const puxarJornadasMock = jest.mocked(puxarJornadas);
 
 const voltar = jest.fn();
@@ -71,12 +68,6 @@ beforeEach(() => {
   // `advanceTimers: true` é obrigatório com `waitFor`: sem isso o polling do
   // Testing Library nunca avança e a suíte trava (CI do PR fica em loop).
   jest.useFakeTimers({ advanceTimers: true }).setSystemTime(new Date('2026-08-27T15:00:00.000Z')); // 12:00 local, dia seguinte
-  useAuthMock.mockReturnValue({
-    sessao: { accessToken: 'access', refreshToken: 'refresh', usuario: montador },
-    restaurando: false,
-    entrar: jest.fn(),
-    sair: jest.fn(),
-  });
   puxarJornadasMock.mockResolvedValue(undefined);
 });
 
@@ -93,7 +84,7 @@ test('abre em 15 dias e lista os dias do período com o total', async () => {
   // Período padrão da tela é 15 dias — a busca de rede precisa repassar
   // esse período, senão o espelho local nunca é abastecido além de 5 dias
   // (heartbeat das chamadas em segundo plano) e o total fica incompleto.
-  expect(puxarJornadasMock).toHaveBeenCalledWith(database, 'access', 15);
+  expect(puxarJornadasMock).toHaveBeenCalledWith(database, 15);
   expect(screen.getByText('9h 00min')).toBeTruthy();
   expect(screen.getByText('08:00')).toBeTruthy();
 });

@@ -1,8 +1,6 @@
 jest.mock('../../avarias/clienteAvarias', () => ({ enviarAvaria: jest.fn() }));
 jest.mock('../../jornada/clienteJornadas', () => {
-  const real = jest.requireActual('../../jornada/clienteJornadas');
   return {
-    ErroApi: real.ErroApi,
     buscarJornadaAtual: jest.fn(),
     buscarHistorico: jest.fn(),
     enviarCheckin: jest.fn(),
@@ -14,14 +12,14 @@ jest.mock('../../banco-horas/clienteBancoHoras', () => ({ buscarBancoHoras: jest
 
 import { Q } from '@nozbe/watermelondb';
 import type { ReportarAvariaRequest } from '@montacontrol/shared';
+import { ErroApi } from '../../http/erroApi';
 import { criarBancoDeTeste } from '../../db/__tests__/apoio';
 import { AcaoPendente } from '../../db/AcaoPendente';
 import { enviarAvaria } from '../../avarias/clienteAvarias';
-import { ErroApi, enviarSolicitacaoPonto } from '../../jornada/clienteJornadas';
+import { enviarSolicitacaoPonto } from '../../jornada/clienteJornadas';
 import { executarAcaoAvaria } from '../outbox';
 import { drenarFila } from '../syncManager';
 
-const TOKEN = 'token-de-teste';
 const enviarMock = jest.mocked(enviarAvaria);
 
 const PAYLOAD: ReportarAvariaRequest = {
@@ -42,8 +40,8 @@ describe('executarAcaoAvaria', () => {
     const database = criarBancoDeTeste();
     enviarMock.mockResolvedValue({} as never);
 
-    expect(await executarAcaoAvaria(database, TOKEN, PAYLOAD)).toEqual({ tipo: 'enviada' });
-    expect(enviarMock).toHaveBeenCalledWith(TOKEN, PAYLOAD);
+    expect(await executarAcaoAvaria(database, PAYLOAD)).toEqual({ tipo: 'enviada' });
+    expect(enviarMock).toHaveBeenCalledWith(PAYLOAD);
     expect(await fila(database, 'pendente')).toHaveLength(0);
   });
 
@@ -51,7 +49,7 @@ describe('executarAcaoAvaria', () => {
     const database = criarBancoDeTeste();
     enviarMock.mockRejectedValue(new TypeError('Network request failed'));
 
-    expect(await executarAcaoAvaria(database, TOKEN, PAYLOAD)).toEqual({ tipo: 'pendente' });
+    expect(await executarAcaoAvaria(database, PAYLOAD)).toEqual({ tipo: 'pendente' });
     const pendentes = await fila(database, 'pendente');
     expect(pendentes).toHaveLength(1);
     expect(pendentes[0].tipo).toBe('avaria');
@@ -62,7 +60,7 @@ describe('executarAcaoAvaria', () => {
     const database = criarBancoDeTeste();
     enviarMock.mockRejectedValue(new ErroApi('ERRO', 'Peça não encontrada', 404));
 
-    expect(await executarAcaoAvaria(database, TOKEN, PAYLOAD)).toEqual({
+    expect(await executarAcaoAvaria(database, PAYLOAD)).toEqual({
       tipo: 'recusado',
       codigo: 'ERRO',
       mensagem: 'Peça não encontrada',
@@ -75,12 +73,12 @@ describe('drenarFila com avaria', () => {
   it('reenvia a avaria pendente pela rota de avarias, não pela de ponto', async () => {
     const database = criarBancoDeTeste();
     enviarMock.mockRejectedValueOnce(new TypeError('offline'));
-    await executarAcaoAvaria(database, TOKEN, PAYLOAD);
+    await executarAcaoAvaria(database, PAYLOAD);
     enviarMock.mockResolvedValue({} as never);
 
-    await drenarFila(database, TOKEN);
+    await drenarFila(database);
 
-    expect(enviarMock).toHaveBeenLastCalledWith(TOKEN, PAYLOAD);
+    expect(enviarMock).toHaveBeenLastCalledWith(PAYLOAD);
     expect(enviarSolicitacaoPonto).not.toHaveBeenCalled();
     expect(await fila(database, 'pendente')).toHaveLength(0);
   });

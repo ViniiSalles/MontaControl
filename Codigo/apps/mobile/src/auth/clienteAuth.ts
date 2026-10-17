@@ -79,7 +79,13 @@ export async function buscarUsuarioAtual(accessToken: string): Promise<UsuarioDT
   return (await resposta.json()) as UsuarioDTO;
 }
 
-/** POST /api/auth/refresh — troca o refresh token por uma sessão nova (TI02). */
+/**
+ * POST /api/auth/refresh — troca o refresh token por uma sessão nova (TI02).
+ *
+ * `ErroNaoAutorizado` só quando o servidor **recusa** o refresh token (4xx):
+ * é o que encerra a sessão. 5xx, 408 e 429 são falha transitória do servidor
+ * — lançam um erro comum (tratado como falha de rede) e a sessão é mantida.
+ */
 export async function renovarSessao(refreshToken: string): Promise<LoginResponse> {
   const resposta = await fetchComTimeout(`${urlBaseApi}/api/auth/refresh`, {
     method: 'POST',
@@ -87,7 +93,11 @@ export async function renovarSessao(refreshToken: string): Promise<LoginResponse
     body: JSON.stringify({ refreshToken }),
   });
 
-  if (!resposta.ok) throw new ErroNaoAutorizado('Refresh token inválido ou expirado');
+  if (!resposta.ok) {
+    const recusado = resposta.status >= 400 && resposta.status < 500 && ![408, 429].includes(resposta.status);
+    if (recusado) throw new ErroNaoAutorizado('Refresh token inválido ou expirado');
+    throw new Error(`Não foi possível renovar a sessão agora (HTTP ${resposta.status}).`);
+  }
 
   return (await resposta.json()) as LoginResponse;
 }

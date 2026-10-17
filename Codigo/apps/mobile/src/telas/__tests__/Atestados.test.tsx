@@ -1,4 +1,3 @@
-jest.mock('../../auth/AuthContext');
 jest.mock('../../atestados/clienteAtestados', () => ({
   listarMeusAtestados: jest.fn(),
   enviarAtestado: jest.fn(),
@@ -17,12 +16,10 @@ import * as ImagePicker from 'expo-image-picker';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { StatusAtestado } from '@montacontrol/shared';
 import type { AtestadoDTO } from '@montacontrol/shared';
-import { useAuth } from '../../auth/AuthContext';
 import { enviarAtestado, listarMeusAtestados } from '../../atestados/clienteAtestados';
 import { montador } from '../../auth/__tests__/apoio';
 import { Atestados } from '../Atestados';
 
-const useAuthMock = jest.mocked(useAuth);
 const listarMock = jest.mocked(listarMeusAtestados);
 const enviarMock = jest.mocked(enviarAtestado);
 
@@ -45,12 +42,6 @@ function atestadoFake(parcial: Partial<AtestadoDTO> = {}): AtestadoDTO {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  useAuthMock.mockReturnValue({
-    sessao: { accessToken: 'access', refreshToken: 'refresh', usuario: montador },
-    restaurando: false,
-    entrar: jest.fn(),
-    sair: jest.fn(),
-  });
   listarMock.mockResolvedValue([]);
 });
 
@@ -130,7 +121,6 @@ test('enviar com observação chama a API, avisa, zera o formulário e recarrega
 
   await waitFor(() =>
     expect(enviarMock).toHaveBeenCalledWith(
-      'access',
       expect.objectContaining({ observacao: 'Dor lombar', dataInicio: '2026-09-01' }),
     ),
   );

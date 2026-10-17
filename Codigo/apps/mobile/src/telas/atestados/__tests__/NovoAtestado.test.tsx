@@ -21,7 +21,7 @@ const launchCameraMock = jest.mocked(ImagePicker.launchCameraAsync);
 const enviado = jest.fn();
 
 function renderizar() {
-  return render(<NovoAtestado token="access" aoEnviado={enviado} />);
+  return render(<NovoAtestado aoEnviado={enviado} />);
 }
 
 async function preencherDatas(inicio: string, fim: string) {
@@ -88,7 +88,7 @@ test('envia o atestado com as datas em ISO, id do aparelho e a foto anexada', as
   await fireEvent.press(screen.getByText('Enviar Atestado'));
 
   await waitFor(() =>
-    expect(enviarMock).toHaveBeenCalledWith('access', {
+    expect(enviarMock).toHaveBeenCalledWith({
       idCliente: '11111111-1111-4111-8111-111111111111',
       dataInicio: '2026-09-01',
       dataFim: '2026-09-03',
@@ -132,7 +132,7 @@ test('envia a observação digitada e zera o formulário após o sucesso', async
   await fireEvent.press(screen.getByText('Enviar Atestado'));
 
   await waitFor(() =>
-    expect(enviarMock).toHaveBeenCalledWith('access', expect.objectContaining({ observacao: 'Dor lombar' })),
+    expect(enviarMock).toHaveBeenCalledWith(expect.objectContaining({ observacao: 'Dor lombar' })),
   );
   await waitFor(() => expect(enviado).toHaveBeenCalled());
   expect(screen.queryByLabelText('Foto 1 do atestado')).toBeNull();

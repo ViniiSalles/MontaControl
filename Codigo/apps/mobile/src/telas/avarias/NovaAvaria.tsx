@@ -19,7 +19,6 @@ import { executarAcaoAvaria } from '../../sincronizacao/outbox';
 import { Opcao } from './Opcao';
 
 interface PropsNovaAvaria {
-  token: string;
   pedidos: PedidoDoMontadorDTO[];
   tipos: TipoAvariaDTO[];
   /** Reporte aceito (enviado ou na fila) — o pai mostra o aviso e recarrega o histórico. */
@@ -49,7 +48,7 @@ function Secao({ titulo, erro, children }: { titulo: string; erro?: string; chil
 }
 
 /** Reporte de problema na peça pelo montador — entra na outbox, então funciona sem sinal. */
-export function NovaAvaria({ token, pedidos, tipos, aoEnviado, aoIniciarEnvio }: PropsNovaAvaria) {
+export function NovaAvaria({ pedidos, tipos, aoEnviado, aoIniciarEnvio }: PropsNovaAvaria) {
   const database = useDatabaseOuFalha();
   const [pedidoEscolhido, setPedidoEscolhido] = useState<number | null>(null);
   const [campos, setCampos] = useState<CamposReporteAvaria>(CAMPOS_VAZIOS);
@@ -126,7 +125,7 @@ export function NovaAvaria({ token, pedidos, tipos, aoEnviado, aoIniciarEnvio }:
     setEnviando(true);
     setFalha(null);
     try {
-      const resultado = await executarAcaoAvaria(database, token, { idCliente: randomUUID(), ...dados });
+      const resultado = await executarAcaoAvaria(database, { idCliente: randomUUID(), ...dados });
       if (resultado.tipo === 'recusado') {
         setFalha(resultado.mensagem);
         return;

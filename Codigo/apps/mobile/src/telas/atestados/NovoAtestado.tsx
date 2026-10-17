@@ -17,7 +17,6 @@ import { mascararData, validarEnvioAtestado } from '../../atestados/validarEnvio
 import type { CamposNovoAtestado, ErrosNovoAtestado } from '../../atestados/validarEnvioAtestado';
 
 interface PropsNovoAtestado {
-  token: string;
   /** Atestado criado com sucesso — o pai avisa e recarrega a lista. */
   aoEnviado: () => void;
   /** Um novo envio começou (validação ok) — o pai limpa avisos anteriores. */
@@ -31,7 +30,7 @@ const TAMANHO_MINIATURA = espacamento[80];
 const OPCOES_PICKER = { base64: true, quality: 0.7, allowsMultipleSelection: false } as const;
 
 /** Formulário de envio de atestado (`POST /api/atestados`) — foto por câmera ou galeria. */
-export function NovoAtestado({ token, aoEnviado, aoIniciarEnvio }: PropsNovoAtestado) {
+export function NovoAtestado({ aoEnviado, aoIniciarEnvio }: PropsNovoAtestado) {
   const [campos, setCampos] = useState<CamposNovoAtestado>(CAMPOS_VAZIOS);
   const [fotos, setFotos] = useState<FotoBase64[]>([]);
   const [previas, setPrevias] = useState<string[]>([]);
@@ -98,7 +97,7 @@ export function NovoAtestado({ token, aoEnviado, aoIniciarEnvio }: PropsNovoAtes
     setEnviando(true);
     setFalha(null);
     try {
-      await enviarAtestado(token, { idCliente: randomUUID(), ...dados });
+      await enviarAtestado({ idCliente: randomUUID(), ...dados });
       setCampos(CAMPOS_VAZIOS);
       setFotos([]);
       setPrevias([]);

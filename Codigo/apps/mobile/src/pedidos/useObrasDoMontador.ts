@@ -13,7 +13,7 @@ export interface EstadoObras {
 }
 
 /** Obras em que o montador pode bater ponto: servidor quando há rede, cópia local quando não. */
-export function useObrasDoMontador(token: string, database: Database): EstadoObras {
+export function useObrasDoMontador(database: Database): EstadoObras {
   const [obras, setObras] = useState<ObraDoPonto[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState(false);
@@ -21,7 +21,7 @@ export function useObrasDoMontador(token: string, database: Database): EstadoObr
   const recarregar = useCallback(async () => {
     setErro(false);
     try {
-      const pedidos = await listarMeusPedidos(token);
+      const pedidos = await listarMeusPedidos();
       setObras(pedidos);
       // Sem a cópia local só se perde o ponto offline; a tela segue com a lista lida.
       await guardarObras(database, pedidos).catch(() => undefined);
@@ -31,7 +31,7 @@ export function useObrasDoMontador(token: string, database: Database): EstadoObr
     } finally {
       setCarregando(false);
     }
-  }, [database, token]);
+  }, [database]);
 
   useEffect(() => {
     void recarregar();

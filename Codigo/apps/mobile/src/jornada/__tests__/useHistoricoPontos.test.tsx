@@ -9,7 +9,6 @@ import { criarBancoDeTeste } from '../../db/__tests__/apoio';
 import { upsertJornadas } from '../espelhoJornada';
 import { useHistoricoPontos } from '../useHistoricoPontos';
 
-const TOKEN = 'token-de-teste';
 
 // Turno de 8h encerrado há poucas horas — precisa cair dentro da janela de
 // `janelaDoPeriodo` calculada a partir de "agora" (a leitura reativa filtra
@@ -54,7 +53,7 @@ describe('useHistoricoPontos', () => {
       <DatabaseProvider database={database}>{children}</DatabaseProvider>
     );
 
-    const { result } = await renderHook(() => useHistoricoPontos(TOKEN, 5), { wrapper });
+    const { result } = await renderHook(() => useHistoricoPontos(5), { wrapper });
 
     await waitFor(() => expect(result.current.carregando).toBe(false));
     expect(result.current.totalMinutos).toBe(480);
@@ -70,7 +69,7 @@ describe('useHistoricoPontos', () => {
       <DatabaseProvider database={database}>{children}</DatabaseProvider>
     );
 
-    const { result } = await renderHook(() => useHistoricoPontos(TOKEN, 15), { wrapper });
+    const { result } = await renderHook(() => useHistoricoPontos(15), { wrapper });
 
     await waitFor(() => expect(result.current.erro).toBe(true));
     expect(result.current.dias).toEqual([]);
@@ -86,7 +85,7 @@ describe('useHistoricoPontos', () => {
     );
 
     const { result, rerender } = await renderHook(
-      ({ periodo }: { periodo: 5 | 15 | 30 }) => useHistoricoPontos(TOKEN, periodo),
+      ({ periodo }: { periodo: 5 | 15 | 30 }) => useHistoricoPontos(periodo),
       { wrapper, initialProps: { periodo: 5 } },
     );
 
@@ -95,7 +94,7 @@ describe('useHistoricoPontos', () => {
 
     await rerender({ periodo: 30 });
 
-    await waitFor(() => expect(puxarJornadas).toHaveBeenLastCalledWith(database, TOKEN, 30));
+    await waitFor(() => expect(puxarJornadas).toHaveBeenLastCalledWith(database, 30));
     await waitFor(() => expect(result.current.totalMinutos).toBe(480));
   });
 
@@ -107,8 +106,8 @@ describe('useHistoricoPontos', () => {
       <DatabaseProvider database={database}>{children}</DatabaseProvider>
     );
 
-    await renderHook(() => useHistoricoPontos(TOKEN, 15), { wrapper });
+    await renderHook(() => useHistoricoPontos(15), { wrapper });
 
-    await waitFor(() => expect(puxarJornadas).toHaveBeenCalledWith(database, TOKEN, 15));
+    await waitFor(() => expect(puxarJornadas).toHaveBeenCalledWith(database, 15));
   });
 });

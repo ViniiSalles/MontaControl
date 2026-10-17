@@ -1,7 +1,5 @@
 jest.mock('../../jornada/clienteJornadas', () => {
-  const real = jest.requireActual('../../jornada/clienteJornadas');
   return {
-    ErroApi: real.ErroApi,
     enviarCheckin: jest.fn(),
     enviarCheckout: jest.fn(),
     enviarSolicitacaoPonto: jest.fn(),
@@ -10,11 +8,11 @@ jest.mock('../../jornada/clienteJornadas', () => {
 
 import { Q } from '@nozbe/watermelondb';
 import { StatusJornada, type CheckinRequest, type CheckoutRequest, type JornadaDTO } from '@montacontrol/shared';
+import { ErroApi } from '../../http/erroApi';
 import { criarBancoDeTeste } from '../../db/__tests__/apoio';
 import { AcaoPendente } from '../../db/AcaoPendente';
 import { Jornada } from '../../db/Jornada';
 import {
-  ErroApi,
   enviarCheckin,
   enviarCheckout,
   enviarSolicitacaoPonto,
@@ -22,7 +20,6 @@ import {
 import { queryJornadaAtual, queryJornadasNoPeriodo, paraJornadaDTO } from '../../jornada/espelhoJornada';
 import { executarAcaoJornada, executarAcaoPontoEmAtraso } from '../outbox';
 
-const TOKEN = 'token-de-teste';
 
 const JORNADA_SERVIDOR: JornadaDTO = {
   id: 42,
@@ -56,7 +53,7 @@ describe('executarAcaoJornada', () => {
     const database = criarBancoDeTeste();
     (enviarCheckin as jest.Mock).mockResolvedValue(JORNADA_SERVIDOR);
 
-    const resultado = await executarAcaoJornada(database, 'checkin', TOKEN, PAYLOAD_CHECKIN);
+    const resultado = await executarAcaoJornada(database, 'checkin', PAYLOAD_CHECKIN);
 
     expect(resultado).toEqual({ tipo: 'ok', dado: JORNADA_SERVIDOR });
     const pendentes = await database
@@ -72,7 +69,7 @@ describe('executarAcaoJornada', () => {
     const database = criarBancoDeTeste();
     (enviarCheckin as jest.Mock).mockRejectedValue(new TypeError('Network request failed'));
 
-    const resultado = await executarAcaoJornada(database, 'checkin', TOKEN, PAYLOAD_CHECKIN);
+    const resultado = await executarAcaoJornada(database, 'checkin', PAYLOAD_CHECKIN);
 
     expect(resultado.tipo).toBe('ok');
     const registros = await queryJornadaAtual(database).fetch();
@@ -92,7 +89,7 @@ describe('executarAcaoJornada', () => {
       new ErroApi('JORNADA_EM_ANDAMENTO', 'Já existe uma jornada em andamento.', 409),
     );
 
-    const resultado = await executarAcaoJornada(database, 'checkin', TOKEN, PAYLOAD_CHECKIN);
+    const resultado = await executarAcaoJornada(database, 'checkin', PAYLOAD_CHECKIN);
 
     expect(resultado).toEqual({ tipo: 'recusado', codigo: 'JORNADA_EM_ANDAMENTO' });
     const pendentes = await database
@@ -146,7 +143,7 @@ describe('executarAcaoJornada', () => {
       longitude: -43.91,
       registradoEm: '2026-09-09T18:00:00.000Z',
     };
-    const resultado = await executarAcaoJornada(database, 'checkout', TOKEN, payloadCheckout);
+    const resultado = await executarAcaoJornada(database, 'checkout', payloadCheckout);
 
     expect(resultado).toEqual({ tipo: 'recusado', codigo: 'JORNADA_NAO_ENCONTRADA' });
     const pendentes = await database
@@ -171,7 +168,7 @@ describe('executarAcaoJornada', () => {
     const database = criarBancoDeTeste();
     (enviarCheckout as jest.Mock).mockResolvedValue({ ...JORNADA_SERVIDOR, status: StatusJornada.FINALIZADA });
 
-    await executarAcaoJornada(database, 'checkout', TOKEN, {
+    await executarAcaoJornada(database, 'checkout', {
       idCliente: 'id-cliente-2',
       latitude: -19.9,
       longitude: -43.9,
@@ -190,7 +187,7 @@ describe('executarAcaoPontoEmAtraso', () => {
     const database = criarBancoDeTeste();
     (enviarSolicitacaoPonto as jest.Mock).mockRejectedValue(new TypeError('Network request failed'));
 
-    const resultado = await executarAcaoPontoEmAtraso(database, TOKEN, {
+    const resultado = await executarAcaoPontoEmAtraso(database, {
       idCliente: 'id-cliente-3',
       data: '2026-09-08',
       horaInicio: '08:00',

@@ -1,31 +1,22 @@
 import type { AvariaDTO, ReportarAvariaRequest, TipoAvariaDTO } from '@montacontrol/shared';
-import { lerErro } from '../jornada/clienteJornadas';
-import { urlBaseApi } from '../config/api';
+import { requisitarAutenticado } from '../http/requisicao';
 
-async function buscar<T>(caminho: string, token: string): Promise<T> {
-  const resposta = await fetch(`${urlBaseApi}${caminho}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!resposta.ok) throw await lerErro(resposta);
+async function buscar<T>(caminho: string): Promise<T> {
+  const resposta = await requisitarAutenticado(caminho);
   return (await resposta.json()) as T;
 }
 
 /** POST /api/avarias — reporta problema na peça; idempotente por `idCliente` (outbox). */
-export async function enviarAvaria(token: string, dados: ReportarAvariaRequest): Promise<AvariaDTO> {
-  const resposta = await fetch(`${urlBaseApi}/api/avarias`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify(dados),
-  });
-  if (!resposta.ok) throw await lerErro(resposta);
+export async function enviarAvaria(dados: ReportarAvariaRequest): Promise<AvariaDTO> {
+  const resposta = await requisitarAutenticado('/api/avarias', { metodo: 'POST', corpo: dados });
   return (await resposta.json()) as AvariaDTO;
 }
 
 /** GET /api/avarias/minhas — os próprios reportes, mais recente primeiro. */
-export function listarMinhasAvarias(token: string): Promise<AvariaDTO[]> {
-  return buscar<AvariaDTO[]>('/api/avarias/minhas', token);
+export function listarMinhasAvarias(): Promise<AvariaDTO[]> {
+  return buscar<AvariaDTO[]>('/api/avarias/minhas');
 }
 
-export function listarTiposAvaria(token: string): Promise<TipoAvariaDTO[]> {
-  return buscar<TipoAvariaDTO[]>('/api/avarias/tipos', token);
+export function listarTiposAvaria(): Promise<TipoAvariaDTO[]> {
+  return buscar<TipoAvariaDTO[]>('/api/avarias/tipos');
 }

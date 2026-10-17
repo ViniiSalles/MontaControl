@@ -8,7 +8,6 @@ import { Carregando } from '../ui/Carregando';
 import { Cartao } from '../ui/Cartao';
 import { Tela } from '../ui/Tela';
 import { Texto } from '../ui/Texto';
-import { useAuth } from '../auth/AuthContext';
 import { formatarDuracao } from '../jornada/formatacao';
 import { useHistoricoPontos } from '../jornada/useHistoricoPontos';
 import { CartaoDia } from './jornada/CartaoDia';
@@ -28,11 +27,8 @@ const PERIODO_PADRAO: PeriodoHistorico = 15;
  * percebe o registro que faltou.
  */
 export function Historico({ aoVoltar, aoLancarEmAtraso }: PropsHistorico) {
-  const { sessao } = useAuth();
-  const token = sessao?.accessToken ?? '';
-
   const [periodo, setPeriodo] = useState<PeriodoHistorico>(PERIODO_PADRAO);
-  const { dias, totalMinutos, carregando, erro, recarregar } = useHistoricoPontos(token, periodo);
+  const { dias, totalMinutos, carregando, erro, recarregar } = useHistoricoPontos(periodo);
 
   return (
     <Tela rolavel>

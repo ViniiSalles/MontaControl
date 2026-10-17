@@ -12,7 +12,7 @@ export interface EstadoBancoHoras {
 }
 
 /** Saldo do banco de horas do mês/ano pedidos, lido do espelho local. Recarrega ao trocar de período. */
-export function useBancoHoras(token: string, mes: number, ano: number): EstadoBancoHoras {
+export function useBancoHoras(mes: number, ano: number): EstadoBancoHoras {
   const database = useDatabaseOuFalha();
   const [bancoHoras, setBancoHoras] = useState<BancoHorasDTO | null>(null);
   const [carregandoLocal, setCarregandoLocal] = useState(true);
@@ -20,12 +20,12 @@ export function useBancoHoras(token: string, mes: number, ano: number): EstadoBa
 
   const recarregar = useCallback(async () => {
     try {
-      await puxarBancoHoras(database, token, mes, ano);
+      await puxarBancoHoras(database, mes, ano);
       setFalhaRede(false);
     } catch {
       setFalhaRede(true);
     }
-  }, [database, token, mes, ano]);
+  }, [database, mes, ano]);
 
   useEffect(() => {
     const assinatura = queryBancoHoras(database, mes, ano)
