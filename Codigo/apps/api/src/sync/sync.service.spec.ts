@@ -189,29 +189,14 @@ describe('SyncService', () => {
       expect(SYNC_MARGEM_SEGURANCA_MS).toBe(5 * 60 * 1000);
     });
 
-    it('mantém as janelas do histórico e acrescenta o filtro de alteração', async () => {
+    it('não aplica as janelas de histórico: só o filtro de alteração', async () => {
       await service.pull(USUARIO_ID, ultimoPull);
 
-      expect(jornadas.listarParaSync).toHaveBeenCalledWith(
-        USUARIO_ID,
-        new Date(AGORA - SYNC_JANELA_JORNADAS_DIAS * DIA_MS),
-        desdeEsperado,
-      );
-      expect(avarias.listarParaSync).toHaveBeenCalledWith(
-        USUARIO_ID,
-        new Date(AGORA - SYNC_JANELA_AVARIAS_DIAS * DIA_MS),
-        desdeEsperado,
-      );
-      expect(atestados.listarParaSync).toHaveBeenCalledWith(
-        USUARIO_ID,
-        new Date(AGORA - SYNC_JANELA_ATESTADOS_DIAS * DIA_MS),
-        desdeEsperado,
-      );
-      expect(bancoHoras.listarParaSync).toHaveBeenCalledWith(
-        USUARIO_ID,
-        { ano: 2026, mes: 8 },
-        desdeEsperado,
-      );
+      // Uma avaria criada fora da janela e analisada agora precisa chegar ao aparelho.
+      expect(jornadas.listarParaSync).toHaveBeenCalledWith(USUARIO_ID, undefined, desdeEsperado);
+      expect(avarias.listarParaSync).toHaveBeenCalledWith(USUARIO_ID, undefined, desdeEsperado);
+      expect(atestados.listarParaSync).toHaveBeenCalledWith(USUARIO_ID, undefined, desdeEsperado);
+      expect(bancoHoras.listarParaSync).toHaveBeenCalledWith(USUARIO_ID, undefined, desdeEsperado);
     });
 
     it('manda as linhas alteradas em updated, com created vazio', async () => {

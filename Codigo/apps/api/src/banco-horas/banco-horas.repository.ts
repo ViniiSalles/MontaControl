@@ -63,18 +63,21 @@ export class BancoHorasRepository {
   }
 
   /**
-   * Linhas do pull de sincronização: competências do usuário de `inicial` em
-   * diante e, no pull incremental, alteradas depois de `alteradosDesde`.
+   * Linhas do pull de sincronização: competências do usuário. No primeiro pull,
+   * de `inicial` em diante; no incremental, sem janela, só as alteradas depois
+   * de `alteradosDesde`.
    */
   async listarParaSync(
     usuarioId: number,
-    inicial: CompetenciaInicial,
+    inicial: CompetenciaInicial | undefined,
     alteradosDesde?: Date,
   ): Promise<BancoHorasParaSync[]> {
     const linhas = await this.prisma.bancoHoras.findMany({
       where: {
         usuarioId,
-        OR: [{ ano: { gt: inicial.ano } }, { ano: inicial.ano, mes: { gte: inicial.mes } }],
+        OR: inicial
+          ? [{ ano: { gt: inicial.ano } }, { ano: inicial.ano, mes: { gte: inicial.mes } }]
+          : undefined,
         updatedAt: alteradosDesde ? { gt: alteradosDesde } : undefined,
       },
       orderBy: [{ ano: 'asc' }, { mes: 'asc' }],

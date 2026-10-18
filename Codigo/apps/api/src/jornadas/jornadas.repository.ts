@@ -246,19 +246,20 @@ export class JornadasRepository {
   }
 
   /**
-   * Linhas do pull de sincronização: jornadas do usuário com `checkin_at` a
-   * partir de `janelaDesde` (o histórico que a réplica carrega) e, no pull
-   * incremental, alteradas depois de `alteradosDesde`.
+   * Linhas do pull de sincronização: jornadas do usuário. No primeiro pull,
+   * com `checkin_at` a partir de `janelaDesde` (o histórico que a réplica
+   * carrega); no incremental, sem janela, só as alteradas depois de
+   * `alteradosDesde`.
    */
   async listarParaSync(
     usuarioId: number,
-    janelaDesde: Date,
+    janelaDesde: Date | undefined,
     alteradosDesde?: Date,
   ): Promise<JornadaParaSync[]> {
     const linhas = await this.prisma.jornada.findMany({
       where: {
         usuarioId,
-        checkinAt: { gte: janelaDesde },
+        checkinAt: janelaDesde ? { gte: janelaDesde } : undefined,
         updatedAt: alteradosDesde ? { gt: alteradosDesde } : undefined,
       },
       orderBy: { id: 'asc' },

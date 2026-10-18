@@ -699,6 +699,58 @@ describe('GET /api/sync/pull (e2e)', () => {
     });
   });
 
+  describe('linhas antigas que mudaram', () => {
+    it('avaria, jornada, atestado e banco de horas fora da janela do primeiro pull chegam no incremental', async () => {
+      const primeiro = await puxar(tokenA);
+      expect(atualizados(primeiro, 'avarias')).not.toContain(String(idsA.avariaAntiga));
+
+      // Avaria criada há 40 dias e analisada agora: o aparelho não pode ficar com REPORTADA.
+      await prisma.avaria.update({
+        where: { id: idsA.avariaAntiga },
+        data: { status: StatusAvaria.RESOLVIDA, parecer: 'Resolvida tardiamente' },
+      });
+      await prisma.jornada.update({
+        where: { id: idsA.jornadaAntiga },
+        data: { checkoutEndereco: 'Endereço corrigido' },
+      });
+      await prisma.atestado.update({
+        where: { id: idsA.atestadoAntigo },
+        data: { status: StatusAtestado.VALIDADO, validadoAt: new Date() },
+      });
+      await prisma.bancoHoras.update({ where: { id: idsA.bancoAntigo }, data: { saldo: 5 } });
+
+      const seguinte = await puxar(tokenA, primeiro.timestamp);
+
+      expect(seguinte.changes.avarias.updated).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: String(idsA.avariaAntiga),
+            status: 'RESOLVIDA',
+            parecer: 'Resolvida tardiamente',
+          }),
+        ]),
+      );
+      expect(seguinte.changes.jornadas.updated).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: String(idsA.jornadaAntiga),
+            checkout_endereco: 'Endereço corrigido',
+          }),
+        ]),
+      );
+      expect(seguinte.changes.atestados.updated).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: String(idsA.atestadoAntigo), status: 'VALIDADO' }),
+        ]),
+      );
+      expect(seguinte.changes.banco_horas.updated).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: String(idsA.bancoAntigo), saldo: 5 }),
+        ]),
+      );
+    });
+  });
+
   describe('exclusões (desalocação)', () => {
     it('desalocar o montador manda o pedido, os ambientes e as peças em deleted só para ele; reatribuir não os apaga', async () => {
       const obraC = await criarObra([montadorA.usuarioId, montadorB.usuarioId]);

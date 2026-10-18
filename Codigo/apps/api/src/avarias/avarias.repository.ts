@@ -148,18 +148,19 @@ export class AvariasRepository {
 
   /**
    * Linhas do pull de sincronização: avarias registradas por `usuarioId`
-   * (nunca as de outros) criadas a partir de `janelaDesde` e, no pull
-   * incremental, alteradas depois de `alteradosDesde`. Sem fotos.
+   * (nunca as de outros). No primeiro pull, criadas a partir de `janelaDesde`;
+   * no incremental, sem janela, só as alteradas depois de `alteradosDesde`.
+   * Sem fotos.
    */
   async listarParaSync(
     usuarioId: number,
-    janelaDesde: Date,
+    janelaDesde: Date | undefined,
     alteradosDesde?: Date,
   ): Promise<AvariaParaSync[]> {
     const linhas = await this.prisma.avaria.findMany({
       where: {
         registradaPor: usuarioId,
-        createdAt: { gte: janelaDesde },
+        createdAt: janelaDesde ? { gte: janelaDesde } : undefined,
         updatedAt: alteradosDesde ? { gt: alteradosDesde } : undefined,
       },
       orderBy: { id: 'asc' },

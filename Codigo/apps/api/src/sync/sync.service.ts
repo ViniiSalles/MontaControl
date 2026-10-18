@@ -79,8 +79,9 @@ export class SyncService {
 
   /**
    * Tudo que mudou na réplica do montador desde `lastPulledAt`. Sem ele (ou 0)
-   * é o primeiro pull: histórico pelas janelas do contrato, sem exclusões. O
-   * escopo é sempre o do `usuarioId`.
+   * é o primeiro pull: histórico pelas janelas do contrato, sem exclusões. Os
+   * pulls seguintes filtram só por alteração, sem janela. O escopo é sempre o do
+   * `usuarioId`.
    *
    * O `timestamp` é o relógio do servidor lido ANTES das consultas: o cliente o
    * devolve como `lastPulledAt`, então uma escrita concorrente às consultas
@@ -93,10 +94,20 @@ export class SyncService {
         ? undefined
         : new Date(lastPulledAt - SYNC_MARGEM_SEGURANCA_MS);
 
-    const desdeJornadas = new Date(timestamp - SYNC_JANELA_JORNADAS_DIAS * DIA_MS);
-    const desdeAvarias = new Date(timestamp - SYNC_JANELA_AVARIAS_DIAS * DIA_MS);
-    const desdeAtestados = new Date(timestamp - SYNC_JANELA_ATESTADOS_DIAS * DIA_MS);
-    const competenciaInicial = primeiraCompetencia(timestamp);
+    // As janelas valem só no primeiro pull. No incremental, uma linha que já está
+    // no aparelho precisa continuar recebendo atualizações mesmo depois de sair da
+    // janela (avaria criada no dia 0 e analisada no dia 35, por exemplo).
+    const primeiroPull = alteradosDesde === undefined;
+    const desdeJornadas = primeiroPull
+      ? new Date(timestamp - SYNC_JANELA_JORNADAS_DIAS * DIA_MS)
+      : undefined;
+    const desdeAvarias = primeiroPull
+      ? new Date(timestamp - SYNC_JANELA_AVARIAS_DIAS * DIA_MS)
+      : undefined;
+    const desdeAtestados = primeiroPull
+      ? new Date(timestamp - SYNC_JANELA_ATESTADOS_DIAS * DIA_MS)
+      : undefined;
+    const competenciaInicial = primeiroPull ? primeiraCompetencia(timestamp) : undefined;
 
     const [
       jornadas,

@@ -152,19 +152,20 @@ export class AtestadosRepository {
   }
 
   /**
-   * Linhas do pull de sincronização: atestados do usuário criados a partir de
-   * `janelaDesde` e, no pull incremental, alterados depois de `alteradosDesde`
-   * (a validação/rejeição do RH muda `updated_at`).
+   * Linhas do pull de sincronização: atestados do usuário. No primeiro pull,
+   * criados a partir de `janelaDesde`; no incremental, sem janela, só os
+   * alterados depois de `alteradosDesde` (a validação/rejeição do RH muda
+   * `updated_at`).
    */
   async listarParaSync(
     usuarioId: number,
-    janelaDesde: Date,
+    janelaDesde: Date | undefined,
     alteradosDesde?: Date,
   ): Promise<AtestadoParaSync[]> {
     const linhas = await this.prisma.atestado.findMany({
       where: {
         usuarioId,
-        createdAt: { gte: janelaDesde },
+        createdAt: janelaDesde ? { gte: janelaDesde } : undefined,
         updatedAt: alteradosDesde ? { gt: alteradosDesde } : undefined,
       },
       orderBy: { id: 'asc' },

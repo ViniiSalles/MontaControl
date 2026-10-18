@@ -97,6 +97,11 @@ export function paraLinhaTipoAvaria(tipo: TipoAvariaParaSync): SyncTipoAvariaRow
   return { id: paraId(tipo.id), nome: tipo.nome, descricao: tipo.descricao };
 }
 
+/**
+ * Os rótulos `peca_descricao`, `ambiente_nome` e `numero_pedido` são cópia de
+ * quando a avaria foi lida: só são reenviados (e atualizados) quando a própria
+ * avaria muda. Renomear a peça, o ambiente ou o pedido depois não toca a avaria.
+ */
 export function paraLinhaAvaria(avaria: AvariaParaSync): SyncAvariaRow {
   return {
     id: paraId(avaria.id),
