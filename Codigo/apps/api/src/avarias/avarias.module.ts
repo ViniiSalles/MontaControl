@@ -12,5 +12,7 @@ import { TiposAvariaRepository } from './tipos-avaria.repository';
   imports: [PrismaModule, SupabaseModule, PecasModule, PedidosModule],
   controllers: [AvariasController],
   providers: [AvariasService, AvariasRepository, TiposAvariaRepository],
+  // O pull de sincronização lê as avarias do montador e o catálogo de tipos.
+  exports: [AvariasRepository, TiposAvariaRepository],
 })
 export class AvariasModule {}

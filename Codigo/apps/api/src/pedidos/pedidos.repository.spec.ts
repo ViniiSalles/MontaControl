@@ -4,12 +4,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PedidosRepository } from './pedidos.repository';
 
 describe('PedidosRepository', () => {
-  let prisma: { pedido: { findUnique: jest.Mock; updateMany: jest.Mock } };
+  let prisma: { pedido: { findUnique: jest.Mock; findMany: jest.Mock; updateMany: jest.Mock } };
   let repository: PedidosRepository;
 
   beforeEach(() => {
     prisma = {
-      pedido: { findUnique: jest.fn(), updateMany: jest.fn() },
+      pedido: { findUnique: jest.fn(), findMany: jest.fn(), updateMany: jest.fn() },
     };
     repository = new PedidosRepository(prisma as unknown as PrismaService);
   });
@@ -301,6 +301,67 @@ describe('PedidosRepository', () => {
         where: { id: 3, status: StatusPedido.AGUARDANDO },
         data: { status: StatusPedido.EM_TRIAGEM },
       });
+    });
+  });
+
+  describe('listarParaSync', () => {
+    const linha = {
+      id: 12,
+      numeroPedido: 'PED-000012',
+      status: StatusPedido.EM_ENTREGA,
+      cliente: {
+        id: 3,
+        nome: 'Residencial Acácias',
+        endereco: 'Rua das Acácias, 120',
+        cidade: 'Belo Horizonte',
+        estado: 'MG',
+        latitude: { toNumber: () => -19.9191234 },
+        longitude: { toNumber: () => -43.9386123 },
+      },
+    };
+
+    it('primeiro pull: só os pedidos atribuídos ao montador (pedido_montador), sem olhar jornadas', async () => {
+      prisma.pedido.findMany.mockResolvedValue([linha]);
+
+      const pedidos = await repository.listarParaSync(7);
+
+      expect(prisma.pedido.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { montadores: { some: { usuarioId: 7 } } } }),
+      );
+      expect(pedidos).toEqual([
+        {
+          id: 12,
+          numeroPedido: 'PED-000012',
+          status: StatusPedido.EM_ENTREGA,
+          clienteId: 3,
+          clienteNome: 'Residencial Acácias',
+          clienteEndereco: 'Rua das Acácias, 120',
+          clienteCidade: 'Belo Horizonte',
+          clienteEstado: 'MG',
+          clienteLatitude: -19.9191234,
+          clienteLongitude: -43.9386123,
+        },
+      ]);
+    });
+
+    it('incremental: pedido, cliente ou atribuição alterados depois de desde', async () => {
+      prisma.pedido.findMany.mockResolvedValue([]);
+      const desde = new Date('2026-10-17T12:00:00.000Z');
+
+      await repository.listarParaSync(7, desde);
+
+      expect(prisma.pedido.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            montadores: { some: { usuarioId: 7 } },
+            OR: [
+              { updatedAt: { gt: desde } },
+              { cliente: { updatedAt: { gt: desde } } },
+              { montadores: { some: { usuarioId: 7, createdAt: { gt: desde } } } },
+            ],
+          },
+        }),
+      );
     });
   });
 });

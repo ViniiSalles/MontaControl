@@ -12,5 +12,7 @@ import { BancoHorasService } from './banco-horas.service';
   imports: [PrismaModule, JornadasModule, AtestadosModule, PontosEmAtrasoModule, UsuariosModule],
   controllers: [BancoHorasController],
   providers: [BancoHorasService, BancoHorasRepository],
+  // O pull de sincronização lê o saldo mensal gravado.
+  exports: [BancoHorasRepository],
 })
 export class BancoHorasModule {}

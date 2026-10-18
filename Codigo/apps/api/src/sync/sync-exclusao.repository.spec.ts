@@ -3,12 +3,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SyncExclusaoRepository } from './sync-exclusao.repository';
 
 describe('SyncExclusaoRepository', () => {
-  let prisma: { syncExclusao: { create: jest.Mock; createMany: jest.Mock } };
+  let prisma: {
+    syncExclusao: { create: jest.Mock; createMany: jest.Mock; findMany: jest.Mock };
+  };
   let repository: SyncExclusaoRepository;
 
   beforeEach(async () => {
     prisma = {
-      syncExclusao: { create: jest.fn(), createMany: jest.fn() },
+      syncExclusao: { create: jest.fn(), createMany: jest.fn(), findMany: jest.fn() },
     };
     const modulo = await Test.createTestingModule({
       providers: [SyncExclusaoRepository, { provide: PrismaService, useValue: prisma }],
@@ -68,6 +70,32 @@ describe('SyncExclusaoRepository', () => {
       await repository.registrarVarios([]);
 
       expect(prisma.syncExclusao.createMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('listarDesde', () => {
+    it('devolve as exclusões do usuário e as globais posteriores a desde, só de tabelas replicadas', async () => {
+      const desde = new Date('2026-10-17T12:00:00.000Z');
+      prisma.syncExclusao.findMany.mockResolvedValue([
+        { entidade: 'pedidos', registroId: '3' },
+        { entidade: 'pecas', registroId: '21' },
+      ]);
+
+      const exclusoes = await repository.listarDesde(9, desde);
+
+      expect(exclusoes).toEqual([
+        { entidade: 'pedidos', registroId: '3' },
+        { entidade: 'pecas', registroId: '21' },
+      ]);
+      expect(prisma.syncExclusao.findMany).toHaveBeenCalledWith({
+        where: {
+          excluidoEm: { gt: desde },
+          OR: [{ usuarioId: 9 }, { usuarioId: null }],
+          entidade: { in: expect.arrayContaining(['pedidos', 'ambientes', 'pecas']) },
+        },
+        orderBy: { id: 'asc' },
+        select: { entidade: true, registroId: true },
+      });
     });
   });
 });

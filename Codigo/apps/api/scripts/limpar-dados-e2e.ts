@@ -111,6 +111,7 @@ async function limparUsuariosE2e(
         prisma.jornada.deleteMany({ where: porUsuario }),
         prisma.bancoHoras.deleteMany({ where: porUsuario }),
         prisma.pedidoMontador.deleteMany({ where: porUsuario }),
+        prisma.syncExclusao.deleteMany({ where: porUsuario }),
         prisma.cautela.deleteMany({ where: porUsuario }),
         prisma.epi.deleteMany({ where: porUsuario }),
         prisma.usuario.delete({ where: { id: u.id } }),

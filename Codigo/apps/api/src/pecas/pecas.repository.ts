@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { PecaDTO } from '@montacontrol/shared';
+import type { PecaDTO, StatusPeca as StatusPecaCompartilhado } from '@montacontrol/shared';
 import { StatusPeca } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 import { paraPecaDTO, SELECAO_PECA } from './peca-mapper';
@@ -17,6 +17,16 @@ function ehViolacaoDeUnicidade(erro: unknown): boolean {
     'code' in erro &&
     (erro as { code?: unknown }).code === CODIGO_PRISMA_VIOLACAO_UNICIDADE
   );
+}
+
+/** Peça de um pedido atribuído ao montador, como o pull de sincronização a consome. */
+export interface PecaParaSync {
+  id: number;
+  ambienteId: number;
+  codigoBarras: string | null;
+  descricao: string;
+  quantidade: number;
+  status: StatusPecaCompartilhado;
 }
 
 export interface DadosNovaPeca {
@@ -136,5 +146,45 @@ export class PecasRepository {
       select: SELECAO_PECA,
     });
     return paraPecaDTO(linha);
+  }
+
+  /**
+   * Linhas do pull de sincronização: peças dos pedidos atribuídos ao montador.
+   * No pull incremental, as alteradas depois de `alteradosDesde` e todas as
+   * dos pedidos em que ele foi atribuído depois disso.
+   */
+  async listarParaSync(usuarioId: number, alteradosDesde?: Date): Promise<PecaParaSync[]> {
+    const linhas = await this.prisma.peca.findMany({
+      where: {
+        ambiente: { pedido: { montadores: { some: { usuarioId } } } },
+        ...(alteradosDesde
+          ? {
+              OR: [
+                { updatedAt: { gt: alteradosDesde } },
+                {
+                  ambiente: {
+                    pedido: {
+                      montadores: { some: { usuarioId, createdAt: { gt: alteradosDesde } } },
+                    },
+                  },
+                },
+              ],
+            }
+          : {}),
+      },
+      orderBy: { id: 'asc' },
+      select: {
+        id: true,
+        ambienteId: true,
+        codigoBarras: true,
+        descricao: true,
+        quantidade: true,
+        status: true,
+      },
+    });
+    return linhas.map((linha) => ({
+      ...linha,
+      status: linha.status as unknown as StatusPecaCompartilhado,
+    }));
   }
 }

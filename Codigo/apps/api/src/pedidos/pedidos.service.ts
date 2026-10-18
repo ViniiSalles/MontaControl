@@ -77,8 +77,16 @@ export class PedidosService {
       const { ambienteIds, pecaIds } = await this.pedidos.listarIdsAmbientesEPecas(pedidoId, tx);
       const exclusoes = removidos.flatMap((usuarioId): NovaExclusao[] => [
         { entidade: 'pedidos', registroId: String(pedidoId), usuarioId },
-        ...ambienteIds.map((id) => ({ entidade: 'ambientes', registroId: String(id), usuarioId })),
-        ...pecaIds.map((id) => ({ entidade: 'pecas', registroId: String(id), usuarioId })),
+        ...ambienteIds.map((id): NovaExclusao => ({
+          entidade: 'ambientes',
+          registroId: String(id),
+          usuarioId,
+        })),
+        ...pecaIds.map((id): NovaExclusao => ({
+          entidade: 'pecas',
+          registroId: String(id),
+          usuarioId,
+        })),
       ]);
       await this.syncExclusoes.registrarVarios(exclusoes, tx);
     });

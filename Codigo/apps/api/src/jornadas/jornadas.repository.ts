@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, StatusJornada, TipoMarcacao } from '../../generated/prisma';
 import { LIMITE_JORNADA_MS } from '@montacontrol/shared';
-import type { JornadaDTO } from '@montacontrol/shared';
+import type {
+  JornadaDTO,
+  StatusJornada as StatusJornadaCompartilhado,
+} from '@montacontrol/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { CHAVE_LOCK_NSR } from '../common/marcacao-ponto-lock';
 import { SELECAO_JORNADA, paraJornadaDTO } from './jornada-mapper';
@@ -23,6 +26,50 @@ export interface DadosCheckout {
   endereco: string | null;
   checkoutAt: Date;
   pedidoId: number | null;
+}
+
+/** Jornada como o pull de sincronização a consome: tipos de domínio, sem Prisma. */
+export interface JornadaParaSync {
+  id: number;
+  usuarioId: number;
+  pedidoId: number | null;
+  status: StatusJornadaCompartilhado;
+  checkinAt: Date | null;
+  checkinLatitude: number | null;
+  checkinLongitude: number | null;
+  checkinEndereco: string | null;
+  checkinIdCliente: string | null;
+  checkoutAt: Date | null;
+  checkoutLatitude: number | null;
+  checkoutLongitude: number | null;
+  checkoutEndereco: string | null;
+  checkoutIdCliente: string | null;
+  /** Nasceu de um ponto em atraso aprovado (há `solicitacaoPonto` ligada). */
+  lancadoEmAtraso: boolean;
+  criadoEm: Date;
+}
+
+const SELECAO_JORNADA_SYNC = {
+  id: true,
+  usuarioId: true,
+  pedidoId: true,
+  status: true,
+  checkinAt: true,
+  checkinLatitude: true,
+  checkinLongitude: true,
+  checkinEndereco: true,
+  checkinIdCliente: true,
+  checkoutAt: true,
+  checkoutLatitude: true,
+  checkoutLongitude: true,
+  checkoutEndereco: true,
+  checkoutIdCliente: true,
+  createdAt: true,
+  solicitacaoPonto: { select: { id: true } },
+} as const;
+
+function numeroOuNulo(valor: Prisma.Decimal | null): number | null {
+  return valor === null ? null : valor.toNumber();
 }
 
 /** Status que caracterizam jornada aberta — a que impede um segundo check-in. */
@@ -198,13 +245,44 @@ export class JornadasRepository {
     );
   }
 
-  /** Cursor do pull do WatermelonDB: tudo que mudou depois de `desdeMs`. */
-  async listarAlteradasDesde(usuarioId: number, desdeMs: number): Promise<JornadaDTO[]> {
+  /**
+   * Linhas do pull de sincronização: jornadas do usuário. No primeiro pull,
+   * com `checkin_at` a partir de `janelaDesde` (o histórico que a réplica
+   * carrega); no incremental, sem janela, só as alteradas depois de
+   * `alteradosDesde`.
+   */
+  async listarParaSync(
+    usuarioId: number,
+    janelaDesde: Date | undefined,
+    alteradosDesde?: Date,
+  ): Promise<JornadaParaSync[]> {
     const linhas = await this.prisma.jornada.findMany({
-      where: { usuarioId, updatedAt: { gt: new Date(desdeMs) } },
-      select: SELECAO_JORNADA,
+      where: {
+        usuarioId,
+        checkinAt: janelaDesde ? { gte: janelaDesde } : undefined,
+        updatedAt: alteradosDesde ? { gt: alteradosDesde } : undefined,
+      },
+      orderBy: { id: 'asc' },
+      select: SELECAO_JORNADA_SYNC,
     });
-    return linhas.map(paraJornadaDTO);
+    return linhas.map((linha) => ({
+      id: linha.id,
+      usuarioId: linha.usuarioId,
+      pedidoId: linha.pedidoId,
+      status: linha.status as unknown as StatusJornadaCompartilhado,
+      checkinAt: linha.checkinAt,
+      checkinLatitude: numeroOuNulo(linha.checkinLatitude),
+      checkinLongitude: numeroOuNulo(linha.checkinLongitude),
+      checkinEndereco: linha.checkinEndereco,
+      checkinIdCliente: linha.checkinIdCliente,
+      checkoutAt: linha.checkoutAt,
+      checkoutLatitude: numeroOuNulo(linha.checkoutLatitude),
+      checkoutLongitude: numeroOuNulo(linha.checkoutLongitude),
+      checkoutEndereco: linha.checkoutEndereco,
+      checkoutIdCliente: linha.checkoutIdCliente,
+      lancadoEmAtraso: linha.solicitacaoPonto !== null,
+      criadoEm: linha.createdAt,
+    }));
   }
 
   /**
