@@ -12,7 +12,7 @@ import { executarAcaoJornada } from '../sincronizacao/outbox';
  * Desfechos de uma tentativa de bater ponto. `sem_rede` não existe mais — a
  * ação é sempre gravada localmente antes de qualquer chamada de rede, então
  * do ponto de vista do montador ela sempre dá certo (`ok`, possivelmente com
- * `jornada.id === -1` enquanto não sincroniza). Quem comunica a pendência de
+ * `jornada.id` provisório negativo (-1, -2…) enquanto não sincroniza). Quem comunica a pendência de
  * sincronização é o badge da UI, não o resultado da ação.
  *
  * `fora_do_raio` é decidido no aparelho, antes de gravar: sem isso, uma

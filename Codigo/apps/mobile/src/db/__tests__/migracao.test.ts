@@ -253,6 +253,10 @@ describe('migrações do banco local', () => {
     const { sql } = passos![0] as { type: 'sql'; sql: string };
     expect(sql).toContain('delete from "jornadas"');
     expect(sql).toContain('delete from "banco_horas"');
+    // Dados pessoais legados (cliente da obra) guardados pelo app v2 no localStorage.
+    expect(sql).toContain('delete from "local_storage" where "key" in');
+    expect(sql).toContain("'obras_do_montador'");
+    expect(sql).toContain("'obra_da_jornada_aberta'");
     expect(sql).not.toMatch(/acoes_pendentes|drop /i);
   });
 

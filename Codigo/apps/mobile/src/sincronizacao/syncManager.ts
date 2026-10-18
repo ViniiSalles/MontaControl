@@ -171,10 +171,16 @@ export async function executarSincronizacao(database: Database): Promise<void> {
     const enviadasAntesDoPull = await idsDasEnviadas(database);
     await synchronize({
       database,
-      pullChanges: ({ lastPulledAt }) => puxarMudancas(lastPulledAt ?? null, geracao),
+      pullChanges: ({ lastPulledAt, migration }) =>
+        puxarMudancas(lastPulledAt ?? null, geracao, migration),
       onWillApplyRemoteChanges: async () => {
         if (!aindaEhASessao()) throw new ErroSessaoExpirada();
       },
+      // Vazio de propósito: a réplica não recebe escrita local. O synchronize()
+      // ainda roda a fase de push local (ele a executa sempre que `pushChanges`
+      // existe) e marca como sincronizadas as linhas locais não sincronizadas —
+      // aqui, as de `acoes_pendentes` (escrita inofensiva: a fila não usa o
+      // `_status` do WatermelonDB, e esses estados não são lidos em lugar nenhum).
       pushChanges: async () => {},
       sendCreatedAsUpdated: true,
       migrationsEnabledAtVersion: VERSAO_INICIAL_DA_SINCRONIZACAO,

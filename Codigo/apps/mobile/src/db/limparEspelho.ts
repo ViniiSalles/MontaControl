@@ -12,6 +12,10 @@ const TABELA_DA_FILA = 'acoes_pendentes';
 const CHAVES_DA_SINCRONIZACAO = [
   '__watermelon_last_pulled_at',
   '__watermelon_last_pulled_schema_version',
+  // Legadas (app v2, `obrasLocais`): cópia do cliente da obra. A migração v3 as
+  // apaga; mantidas aqui por segurança caso algum aparelho as reintroduza.
+  'obras_do_montador',
+  'obra_da_jornada_aberta',
 ];
 
 /**

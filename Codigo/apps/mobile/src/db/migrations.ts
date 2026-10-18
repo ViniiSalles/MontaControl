@@ -122,7 +122,14 @@ export const migrations = schemaMigrations({
         // da fila; o primeiro `synchronize()` as traria de novo com o id do
         // servidor, duplicando. A réplica é refeita pelo pull; `acoes_pendentes`
         // não é tocada, e a sobreposição reexibe o que ainda está na fila.
-        unsafeExecuteSql('delete from "jornadas";delete from "banco_horas";'),
+        //
+        // Também apaga as cópias de obra que o app v2 guardava no `local_storage`
+        // (nome/endereço do cliente, dado pessoal): `obrasLocais` deixou de existir
+        // e nada mais as removeria nos aparelhos migrados.
+        unsafeExecuteSql(
+          'delete from "jornadas";delete from "banco_horas";' +
+            `delete from "local_storage" where "key" in ('obras_do_montador','obra_da_jornada_aberta');`,
+        ),
       ],
     },
   ],

@@ -84,6 +84,17 @@ describe('limparEspelhoLocal', () => {
     expect(await database.get('pedidos').query().fetchCount()).toBe(0);
   });
 
+  it('apaga também as cópias de obra legadas do app v2 (dado pessoal do cliente)', async () => {
+    const database = criarBancoDeTeste();
+    await database.localStorage.set(localStorageKey<unknown>('obras_do_montador'), [{ nome: 'Maria' }]);
+    await database.localStorage.set(localStorageKey<number>('obra_da_jornada_aberta'), 10);
+
+    await limparEspelhoLocal(database);
+
+    expect(await database.localStorage.get('obras_do_montador')).toBeUndefined();
+    expect(await database.localStorage.get('obra_da_jornada_aberta')).toBeUndefined();
+  });
+
   it('não mexe em chaves de localStorage que não são da réplica (nem no dono da fila)', async () => {
     const database = criarBancoDeTeste();
     const chave = localStorageKey<string>('outra_chave');

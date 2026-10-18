@@ -17,7 +17,20 @@ import { requisitarAutenticado } from '../http/requisicao';
 export async function puxarMudancas(
   lastPulledAt: number | null,
   geracao: number,
+  migration: unknown = null,
 ): Promise<SyncPullResponse> {
+  // `migration` vem do WatermelonDB quando o schema local subiu desde o último
+  // pull (ex.: uma v4 que acrescenta colunas/tabelas à réplica): o servidor
+  // teria de mandar também o histórico dessas colunas. O contrato de pull não
+  // tem esse parâmetro, e ignorá-lo em silêncio deixaria a réplica incompleta
+  // com o `lastPulledAt` avançando. Então falha alto: quem criar a v4 precisa
+  // tratar isso (pull completo ou parâmetro novo no contrato).
+  if (migration) {
+    throw new Error(
+      'Pull com migração de schema não suportado: a nova versão do schema local exige tratar a migração do pull (#112).',
+    );
+  }
+
   const consulta = new URLSearchParams();
   if (lastPulledAt) consulta.set('lastPulledAt', String(lastPulledAt));
   consulta.set('schemaVersion', String(SYNC_SCHEMA_VERSION));

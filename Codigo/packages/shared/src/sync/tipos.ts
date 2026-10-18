@@ -65,7 +65,8 @@ export interface SyncJornadaRow {
   /**
    * Exceção à regra de ids string: é `number` porque a coluna local v1 de
    * `jornadas.usuario_id` é numérica (o WatermelonDB sanitiza string em coluna
-   * number para 0) e o schema só cresce de forma aditiva. Sai na v3 da #112.
+   * number para 0) e o schema só cresce de forma aditiva. A v3 da #112 manteve a
+   * coluna.
    */
   usuario_id: number;
   /** Obra do check-in; `null` em jornada aberta antes da regra e em ponto em atraso. */
