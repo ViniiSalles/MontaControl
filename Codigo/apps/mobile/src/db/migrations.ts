@@ -10,13 +10,13 @@ import {
  * adaptador em `database.ts`: sem elas, subir `schema.version` reseta o banco
  * e apaga a fila `acoes_pendentes`.
  *
- * Para a v3 (#112): acrescentar `{ toVersion: 3, steps: [...] }` ao fim da
- * lista e subir `schema.version` para 3. A migração do WatermelonDB só sabe
- * criar tabela e acrescentar coluna (`createTable`, `addColumns`) ou rodar SQL
- * (`unsafeExecuteSql`, ignorado no LokiJS dos testes) — remover coluna
- * (`remote_id`) não é um passo suportado: basta tirá-la do schema e do model;
- * a coluna física fica órfã no SQLite, sem efeito. Atualize também a cópia
- * congelada do schema v2 no teste de migração.
+ * A migração do WatermelonDB só sabe criar tabela e acrescentar coluna
+ * (`createTable`, `addColumns`) ou rodar SQL (`unsafeExecuteSql`, ignorado no
+ * LokiJS dos testes) — remover coluna não é um passo suportado: basta tirá-la
+ * do schema e do model; a coluna física fica órfã no SQLite, sem efeito.
+ * Recriar a tabela por SQL foi descartado (mais arriscado, sem ganho). Todo
+ * passo novo exige atualizar a cópia congelada do schema anterior no teste de
+ * migração.
  */
 export const migrations = schemaMigrations({
   migrations: [
@@ -111,6 +111,18 @@ export const migrations = schemaMigrations({
             'create index if not exists "banco_horas_mes" on "banco_horas" ("mes");' +
             'create index if not exists "banco_horas_ano" on "banco_horas" ("ano");',
         ),
+      ],
+    },
+    {
+      toVersion: 3,
+      steps: [
+        // Estado otimista sai da réplica (`remote_id`, `id_cliente_*` fora do
+        // schema). As linhas de `jornadas` e `banco_horas` da v2 vieram de GET
+        // (id local aleatório, não o do servidor) ou eram jornadas otimistas
+        // da fila; o primeiro `synchronize()` as traria de novo com o id do
+        // servidor, duplicando. A réplica é refeita pelo pull; `acoes_pendentes`
+        // não é tocada, e a sobreposição reexibe o que ainda está na fila.
+        unsafeExecuteSql('delete from "jornadas";delete from "banco_horas";'),
       ],
     },
   ],
