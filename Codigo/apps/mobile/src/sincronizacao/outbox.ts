@@ -4,20 +4,34 @@ import type {
   CheckinRequest,
   CheckoutRequest,
   JornadaDTO,
-  ReportarAvariaRequest,
   SolicitarPontoEmAtrasoRequest,
 } from '@montacontrol/shared';
+import { enviarAtestado } from '../atestados/clienteAtestados';
 import { enviarAvaria } from '../avarias/clienteAvarias';
 import { AcaoPendente } from '../db/AcaoPendente';
 import { ErroApi } from '../http/erroApi';
 import { enviarCheckin, enviarCheckout, enviarSolicitacaoPonto } from '../jornada/clienteJornadas';
 import { lerJornadasComPendentes } from '../jornada/jornadasComPendentes';
+import {
+  apagarFotosDaAcao,
+  caminhosDasFotos,
+  MENSAGEM_ATESTADO_SEM_FOTOS,
+  CODIGO_ATESTADO_SEM_FOTOS,
+  montarCorpoAtestado,
+  montarCorpoAvaria,
+} from './payloadsDaFila';
+import type { PayloadAtestadoNaFila, PayloadAvariaNaFila } from './payloadsDaFila';
 
 export type ResultadoEnvio<T> = { tipo: 'ok'; dado: T } | { tipo: 'recusado'; codigo: string };
 export type ResultadoPontoEmAtraso = { tipo: 'ok' } | { tipo: 'recusado'; codigo: string };
 /** `pendente`: sem rede agora, fica na fila e sobe sozinho quando a conexão voltar. */
 export type ResultadoAvaria =
   | { tipo: 'enviada' }
+  | { tipo: 'pendente' }
+  | { tipo: 'recusado'; codigo: string; mensagem: string };
+/** Mesma ideia da avaria: `pendente` = sem rede agora, sobe sozinho depois. */
+export type ResultadoAtestado =
+  | { tipo: 'enviado' }
   | { tipo: 'pendente' }
   | { tipo: 'recusado'; codigo: string; mensagem: string };
 
@@ -152,24 +166,59 @@ export async function executarAcaoPontoEmAtraso(
 
 /**
  * Reporte de avaria: o montador está na casa do cliente, muitas vezes sem
- * sinal — o reporte entra na fila antes da rede e nunca se perde. Recusa do
- * servidor (4xx) sai da fila e volta para a tela com a mensagem.
+ * sinal — o reporte entra na fila antes da rede e nunca se perde. As fotos já
+ * são arquivos no aparelho (o payload leva só os caminhos); viram base64 aqui,
+ * no envio, e os arquivos somem quando o servidor confirma ou recusa. Recusa
+ * do servidor (4xx) sai da fila e volta para a tela com a mensagem.
  */
 export async function executarAcaoAvaria(
   database: Database,
-  payload: ReportarAvariaRequest,
+  payload: PayloadAvariaNaFila,
 ): Promise<ResultadoAvaria> {
   const acao = await enfileirar(database, 'avaria', payload.idCliente, payload);
 
   try {
-    await enviarAvaria(payload);
-    await database.write(() => acao.destroyPermanently());
-    return { tipo: 'enviada' };
+    await enviarAvaria(await montarCorpoAvaria(payload));
   } catch (erro) {
-    if (ehRecusaDoServidor(erro)) {
-      await database.write(() => acao.destroyPermanently());
-      return { tipo: 'recusado', codigo: erro.codigo, mensagem: erro.message };
-    }
-    return { tipo: 'pendente' };
+    if (!ehRecusaDoServidor(erro)) return { tipo: 'pendente' };
+    await database.write(() => acao.destroyPermanently());
+    await apagarFotosDaAcao(caminhosDasFotos(payload));
+    return { tipo: 'recusado', codigo: erro.codigo, mensagem: erro.message };
   }
+  await database.write(() => acao.destroyPermanently());
+  await apagarFotosDaAcao(caminhosDasFotos(payload));
+  return { tipo: 'enviada' };
+}
+
+/**
+ * Atestado: mesmo caminho da avaria (fila antes da rede, fotos em arquivo,
+ * idempotente por `idCliente` no servidor). Sem nenhuma foto legível o envio
+ * seria recusado — atestado sem documento não é analisável —, então nem vai.
+ */
+export async function executarAcaoAtestado(
+  database: Database,
+  payload: PayloadAtestadoNaFila,
+): Promise<ResultadoAtestado> {
+  const acao = await enfileirar(database, 'atestado', payload.idCliente, payload);
+
+  try {
+    const corpo = await montarCorpoAtestado(payload);
+    if (corpo === null) {
+      await database.write(() => acao.destroyPermanently());
+      return {
+        tipo: 'recusado',
+        codigo: CODIGO_ATESTADO_SEM_FOTOS,
+        mensagem: MENSAGEM_ATESTADO_SEM_FOTOS,
+      };
+    }
+    await enviarAtestado(corpo);
+  } catch (erro) {
+    if (!ehRecusaDoServidor(erro)) return { tipo: 'pendente' };
+    await database.write(() => acao.destroyPermanently());
+    await apagarFotosDaAcao(caminhosDasFotos(payload));
+    return { tipo: 'recusado', codigo: erro.codigo, mensagem: erro.message };
+  }
+  await database.write(() => acao.destroyPermanently());
+  await apagarFotosDaAcao(caminhosDasFotos(payload));
+  return { tipo: 'enviado' };
 }

@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 import { Q } from '@nozbe/watermelondb';
 import type { Database } from '@nozbe/watermelondb';
 import { synchronize } from '@nozbe/watermelondb/sync';
+import { enviarAtestado } from '../atestados/clienteAtestados';
 import { enviarAvaria } from '../avarias/clienteAvarias';
 import {
   enviarCheckin,
@@ -13,6 +14,14 @@ import { ErroSessaoExpirada, geracaoDaSessao, lerTokenAtual } from '../auth/toke
 import { AcaoPendente } from '../db/AcaoPendente';
 import { ErroApi } from '../http/erroApi';
 import { ehRecusaDoServidor } from './outbox';
+import {
+  apagarFotosDaAcao,
+  caminhosDasFotosDaAcao,
+  CODIGO_ATESTADO_SEM_FOTOS,
+  MENSAGEM_ATESTADO_SEM_FOTOS,
+  montarCorpoAtestado,
+  montarCorpoAvaria,
+} from './payloadsDaFila';
 import { puxarMudancas } from './pullChanges';
 import { atualizarStatusDaSincronizacao } from './statusDaSincronizacao';
 import type { ErroDeSincronizacao } from './statusDaSincronizacao';
@@ -32,13 +41,29 @@ const VERSAO_INICIAL_DA_SINCRONIZACAO = 2;
 async function reenviar(
   acao: AcaoPendente,
   geracao: number,
-): Promise<{ tipo: 'ok' } | { tipo: 'recusado'; codigo: string } | { tipo: 'sem_rede' }> {
+): Promise<
+  | { tipo: 'ok' }
+  | { tipo: 'recusado'; codigo: string; mensagem?: string }
+  | { tipo: 'sem_rede' }
+> {
   const payload = JSON.parse(acao.payload);
   try {
     if (acao.tipo === 'checkin') await enviarCheckin(payload, { geracao });
     else if (acao.tipo === 'checkout') await enviarCheckout(payload, { geracao });
-    else if (acao.tipo === 'avaria') await enviarAvaria(payload, { geracao });
-    else await enviarSolicitacaoPonto(payload, { geracao });
+    else if (acao.tipo === 'avaria') {
+      await enviarAvaria(await montarCorpoAvaria(payload), { geracao });
+    } else if (acao.tipo === 'atestado') {
+      const corpo = await montarCorpoAtestado(payload);
+      // Sem nenhuma foto o servidor recusaria; as fotos não voltam, então nem tenta.
+      if (corpo === null) {
+        return {
+          tipo: 'recusado',
+          codigo: CODIGO_ATESTADO_SEM_FOTOS,
+          mensagem: MENSAGEM_ATESTADO_SEM_FOTOS,
+        };
+      }
+      await enviarAtestado(corpo, { geracao });
+    } else await enviarSolicitacaoPonto(payload, { geracao });
     return { tipo: 'ok' };
   } catch (erro) {
     if (ehRecusaDoServidor(erro)) {
@@ -91,13 +116,17 @@ export async function drenarFila(database: Database): Promise<void> {
           await acao.destroyPermanently();
         }
       });
+      // Só depois de a ação sair da fila: se o app morrer aqui sobra um arquivo
+      // órfão (apagado no logout), nunca uma ação pendente sem a foto.
+      await apagarFotosDaAcao(caminhosDasFotosDaAcao(acao.payload));
     } else if (resultado.tipo === 'recusado') {
       await database.write(() =>
         acao.update((registro) => {
           registro.status = 'descartada';
-          registro.mensagemDescarte = `Ação recusada: ${resultado.codigo}.`;
+          registro.mensagemDescarte = resultado.mensagem ?? `Ação recusada: ${resultado.codigo}.`;
         }),
       );
+      await apagarFotosDaAcao(caminhosDasFotosDaAcao(acao.payload));
     } else {
       break;
     }
