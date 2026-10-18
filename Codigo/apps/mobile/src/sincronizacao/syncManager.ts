@@ -130,8 +130,9 @@ async function sincronizarUmaVez(database: Database): Promise<void> {
 
 /**
  * Liga os gatilhos automáticos de sincronização (boot, volta de
- * conectividade, retorno ao primeiro plano). Chamado uma vez em `App.tsx`;
- * devolve uma função de limpeza.
+ * conectividade, retorno ao primeiro plano). Chamado uma vez por
+ * `ProvedorSincronizacao` (app autenticado), que guarda a função de limpeza
+ * devolvida e a chama no logout.
  */
 export function iniciarSincronizacao(database: Database): () => void {
   void sincronizarUmaVez(database);

@@ -1,0 +1,145 @@
+jest.mock('../../auth/AuthContext');
+jest.mock('../../jornada/clienteJornadas');
+jest.mock('../../banco-horas/clienteBancoHoras');
+jest.mock('../../pedidos/clientePedidos');
+jest.mock('../../avarias/clienteAvarias');
+jest.mock('../../atestados/clienteAtestados');
+
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { DatabaseProvider } from '@nozbe/watermelondb/react';
+import { useAuth } from '../../auth/AuthContext';
+import { montador } from '../../auth/__tests__/apoio';
+import { listarMeusAtestados } from '../../atestados/clienteAtestados';
+import { enviarAvaria, listarMinhasAvarias, listarTiposAvaria } from '../../avarias/clienteAvarias';
+import { buscarBancoHoras } from '../../banco-horas/clienteBancoHoras';
+import { periodoAtual } from '../../banco-horas/periodo';
+import { AcaoPendente } from '../../db/AcaoPendente';
+import { criarBancoDeTeste } from '../../db/__tests__/apoio';
+import { buscarHistorico, buscarJornadaAtual } from '../../jornada/clienteJornadas';
+import { listarMeusPedidos } from '../../pedidos/clientePedidos';
+import { instalarGatilhosFalsos } from '../../sincronizacao/__tests__/gatilhosFalsos';
+import { AppAutenticado } from '../AppAutenticado';
+
+const { mes: MES, ano: ANO } = periodoAtual(new Date().toISOString());
+
+let database = criarBancoDeTeste();
+let gatilhos: ReturnType<typeof instalarGatilhosFalsos>;
+
+function arvore() {
+  return (
+    <DatabaseProvider database={database}>
+      <AppAutenticado />
+    </DatabaseProvider>
+  );
+}
+
+/** O rótulo da aba repete o título da tela ativa; a barra inferior é o último da árvore. */
+async function irParaAba(rotulo: string) {
+  const ocorrencias = screen.getAllByText(rotulo);
+  await fireEvent.press(ocorrencias[ocorrencias.length - 1]);
+}
+
+async function enfileirarAvaria() {
+  await database.write(() =>
+    database.get<AcaoPendente>('acoes_pendentes').create((registro) => {
+      registro.tipo = 'avaria';
+      registro.idCliente = 'avaria-1';
+      registro.payload = JSON.stringify({ idCliente: 'avaria-1' });
+      registro.criadoEm = '2026-09-09T12:00:00.000Z';
+      registro.status = 'pendente';
+    }),
+  );
+}
+
+async function contarAcoesNaFila() {
+  return database.get<AcaoPendente>('acoes_pendentes').query().fetchCount();
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  database = criarBancoDeTeste();
+  gatilhos = instalarGatilhosFalsos();
+
+  jest.mocked(useAuth).mockReturnValue({
+    sessao: { usuario: montador },
+    restaurando: false,
+    entrar: jest.fn(),
+    sair: jest.fn(),
+  });
+  jest.mocked(buscarJornadaAtual).mockResolvedValue(null);
+  jest.mocked(buscarHistorico).mockResolvedValue({
+    periodoDias: 5,
+    inicioPeriodo: '2026-09-05',
+    fimPeriodo: '2026-09-09',
+    totalMinutos: 0,
+    dias: [],
+  });
+  jest.mocked(buscarBancoHoras).mockResolvedValue({
+    id: 1,
+    usuarioId: montador.id,
+    mes: MES,
+    ano: ANO,
+    horasTrabalhadas: 0,
+    horasPrevistas: 168,
+    saldo: -168,
+  });
+  jest.mocked(listarMeusPedidos).mockResolvedValue([]);
+  jest.mocked(listarTiposAvaria).mockResolvedValue([]);
+  jest.mocked(listarMinhasAvarias).mockResolvedValue([]);
+  jest.mocked(listarMeusAtestados).mockResolvedValue([]);
+});
+
+describe.each([
+  ['a volta da conexão', () => gatilhos.emitirRede(true)],
+  ['o retorno ao primeiro plano', () => gatilhos.emitirAppState('active')],
+])('com a aba Avarias ativa, %s', (_nome, disparar) => {
+  test('drena a fila', async () => {
+    await enfileirarAvaria();
+    // Sem rede no boot: a ação fica pendente. Só o gatilho posterior a envia.
+    jest.mocked(enviarAvaria).mockRejectedValueOnce(new TypeError('Network request failed'));
+    jest.mocked(enviarAvaria).mockResolvedValue({} as never);
+
+    await render(arvore());
+    await waitFor(() => expect(enviarAvaria).toHaveBeenCalledTimes(1));
+    await irParaAba('Avarias');
+    await waitFor(() => expect(screen.getByText('MEUS REPORTES')).toBeTruthy());
+    expect(await contarAcoesNaFila()).toBe(1);
+
+    // A sincronização do boot pode ainda estar terminando; disparar de novo é
+    // inofensivo (uma sincronização por vez) e evita depender do instante exato.
+    await waitFor(async () => {
+      disparar();
+      expect(await contarAcoesNaFila()).toBe(0);
+    });
+    expect(enviarAvaria).toHaveBeenCalledTimes(2);
+  });
+});
+
+test('trocar de aba não cria nem derruba listeners de rede e AppState', async () => {
+  await render(arvore());
+
+  expect(gatilhos.adicionarRede).toHaveBeenCalledTimes(1);
+  expect(gatilhos.adicionarAppState).toHaveBeenCalledTimes(1);
+  expect(gatilhos.rede.size).toBe(1);
+  expect(gatilhos.appState.size).toBe(1);
+
+  for (const aba of ['Avarias', 'Atestados', 'Jornada', 'Avarias']) {
+    await irParaAba(aba);
+    expect(gatilhos.rede.size).toBe(1);
+    expect(gatilhos.appState.size).toBe(1);
+  }
+
+  expect(gatilhos.adicionarRede).toHaveBeenCalledTimes(1);
+  expect(gatilhos.adicionarAppState).toHaveBeenCalledTimes(1);
+});
+
+test('desmontar o app autenticado remove os listeners', async () => {
+  const { unmount } = await render(arvore());
+  expect(gatilhos.rede.size).toBe(1);
+  expect(gatilhos.appState.size).toBe(1);
+
+  await unmount();
+
+  expect(gatilhos.rede.size).toBe(0);
+  expect(gatilhos.appState.size).toBe(0);
+});
