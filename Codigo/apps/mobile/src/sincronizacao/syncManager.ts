@@ -74,10 +74,24 @@ async function reenviar(
     return { tipo: 'ok' };
   } catch (erro) {
     if (ehRecusaDoServidor(erro)) {
-      return { tipo: 'recusado', codigo: erro.codigo };
+      return {
+        tipo: 'recusado',
+        codigo: erro.codigo,
+        mensagem: mensagemDeRecusa(acao.tipo, erro),
+      };
     }
     return { tipo: 'sem_rede' };
   }
+}
+
+/**
+ * Avaria e atestado são ações do próprio montador, que já saiu da tela: o aviso
+ * leva o texto do servidor (o motivo). Ponto segue com o código, como antes.
+ */
+function mensagemDeRecusa(tipo: string, erro: ErroApi): string | undefined {
+  if (tipo === 'avaria') return `Avaria recusada: ${erro.message}`;
+  if (tipo === 'atestado') return `Atestado recusado: ${erro.message}`;
+  return undefined;
 }
 
 /**

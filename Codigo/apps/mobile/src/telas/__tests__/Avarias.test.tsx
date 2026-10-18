@@ -15,7 +15,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 import { StatusAvaria, syncPullFixture } from '@montacontrol/shared';
 import { enviarAvaria } from '../../avarias/clienteAvarias';
 import { criarBancoDeTeste, gravarLinhasNaReplica, gravarPullNaReplica } from '../../db/__tests__/apoio';
-import { comBanco } from '../../db/__tests__/apoioReact';
+import { comBancoESincronizacao } from '../../db/__tests__/apoioReact';
 import { AcaoPendente } from '../../db/AcaoPendente';
 import { apagarTodasAsFotos } from '../../fotos/armazenamentoFotos';
 import { criarFotoDoPicker, fotosGuardadas } from '../../fotos/__tests__/apoio';
@@ -37,7 +37,7 @@ async function bancoComReplica() {
 }
 
 async function renderizar(database: ReturnType<typeof criarBancoDeTeste>) {
-  await render(<Avarias />, { wrapper: comBanco(database) });
+  await render(<Avarias />, { wrapper: comBancoESincronizacao(database) });
 }
 
 /** Toca em "Fotografar problema" e escolhe uma foto da galeria (o picker devolve o arquivo temporário). */
@@ -232,7 +232,7 @@ test('remover uma foto antes de enviar apaga o arquivo', async () => {
 
 test('fechar a tela sem enviar apaga as fotos anexadas', async () => {
   const database = await bancoComReplica();
-  await render(<Avarias />, { wrapper: comBanco(database) });
+  await render(<Avarias />, { wrapper: comBancoESincronizacao(database) });
   await waitFor(() => expect(screen.getByText('Enviar problema')).toBeTruthy());
   await anexarFotoDaGaleria();
   await waitFor(() => expect(screen.getByLabelText('Foto 1 do problema')).toBeTruthy());

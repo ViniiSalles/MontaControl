@@ -237,7 +237,7 @@ describe('avaria sem rede', () => {
     expect(screen.getAllByText('ENVIADA')).toHaveLength(1);
   });
 
-  it('recusa de regra na subida: a ação sai da fila, o aviso fica no app e os arquivos são apagados', async () => {
+  it('recusa de regra na subida: a ação sai da fila, a tela mostra o texto do servidor e os arquivos são apagados', async () => {
     await renderizar(<Avarias />);
     await reportarAvariaComDuasFotos();
     await waitFor(() => expect(screen.getByText('AGUARDANDO ENVIO')).toBeTruthy());
@@ -253,6 +253,15 @@ describe('avaria sem rede', () => {
     expect(fotosGuardadas()).toEqual([]);
     await waitFor(() => expect(screen.queryByText('AGUARDANDO ENVIO')).toBeNull());
     expect(servidor.avarias).toHaveLength(0);
+    // A recusa chega à tela de Avarias com o texto do servidor (e não só um código).
+    await waitFor(() =>
+      expect(screen.getByText('Avaria recusada: Peça não pertence ao montador')).toBeTruthy(),
+    );
+    expect(screen.getByText('Uma ação não foi sincronizada')).toBeTruthy();
+
+    await fireEvent.press(screen.getByText('Dispensar'));
+
+    expect(screen.queryByText('Avaria recusada: Peça não pertence ao montador')).toBeNull();
   });
 });
 
@@ -296,7 +305,7 @@ describe('atestado sem rede', () => {
     expect(screen.getAllByText('RECUSADO')).toHaveLength(1);
   });
 
-  it('recusa do servidor com a rede de volta: a ação sai da fila e os arquivos são apagados', async () => {
+  it('recusa do servidor com a rede de volta: a ação sai da fila, a tela mostra o texto do servidor e os arquivos são apagados', async () => {
     await renderizar(<Atestados />);
     await waitFor(() => expect(screen.getByText('Enviar Atestado')).toBeTruthy());
     await enviarAtestadoComDuasFotos();
@@ -312,5 +321,12 @@ describe('atestado sem rede', () => {
     expect(fotosGuardadas()).toEqual([]);
     await waitFor(() => expect(screen.queryByText('AGUARDANDO ENVIO')).toBeNull());
     expect(servidor.atestados).toHaveLength(0);
+    await waitFor(() =>
+      expect(screen.getByText('Atestado recusado: Período inválido')).toBeTruthy(),
+    );
+
+    await fireEvent.press(screen.getByText('Dispensar'));
+
+    expect(screen.queryByText('Atestado recusado: Período inválido')).toBeNull();
   });
 });

@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { cores, espacamento, espacamentoNomeado } from '@montacontrol/design-tokens/native';
 import { estadoJornada } from '@montacontrol/shared';
 import { Alerta } from '../ui/Alerta';
+import { AvisosDeAcoesRecusadas } from './AvisosDeAcoesRecusadas';
 import { Botao } from '../ui/Botao';
 import { Cartao } from '../ui/Cartao';
 import { Carregando } from '../ui/Carregando';
@@ -55,7 +56,7 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
 
   // A sincronização automática e o status da fila vêm do provider do app
   // autenticado (`ProvedorSincronizacao`), não desta tela.
-  const { pendentes, avisosDescartados, dispensarAvisos } = useSincronizacao();
+  const { pendentes, dispensarAvisos } = useSincronizacao();
   const { ultimoErro: erroDeSincronizacao } = useStatusDaSincronizacao();
 
   const { jornada, carregando, erro } = useJornadaAtual();
@@ -185,14 +186,7 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
           <Alerta variante={aviso.variante} titulo={aviso.titulo} mensagem={aviso.mensagem} />
         )}
 
-        {avisosDescartados.map((mensagem, indice) => (
-          <Alerta
-            key={`${mensagem}-${indice}`}
-            variante="erro"
-            titulo="Uma ação não foi sincronizada"
-            mensagem={mensagem}
-          />
-        ))}
+        <AvisosDeAcoesRecusadas />
 
         {acao === 'entrada' ? (
           <SeletorObra

@@ -12,6 +12,7 @@ import { ROTULO_STATUS_AVARIA, VARIANTE_STATUS_AVARIA } from '../avarias/rotulos
 import type { AvariaExibida } from '../avarias/avariasComPendentes';
 import { useDadosAvarias } from '../avarias/useDadosAvarias';
 import { useStatusDaSincronizacao } from '../sincronizacao/statusDaSincronizacao';
+import { AvisosDeAcoesRecusadas } from './AvisosDeAcoesRecusadas';
 import { NovaAvaria } from './avarias/NovaAvaria';
 
 function ItemHistorico({ avaria }: { avaria: AvariaExibida }) {
@@ -69,6 +70,7 @@ export function Avarias() {
         </View>
 
         {aviso && <Alerta variante="sucesso" mensagem={aviso} />}
+        <AvisosDeAcoesRecusadas />
 
         {carregando ? (
           <View style={{ alignItems: 'center', paddingVertical: espacamento[32] }}>

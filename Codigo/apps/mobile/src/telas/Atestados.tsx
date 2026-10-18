@@ -16,6 +16,7 @@ import { textoPeriodo } from '../atestados/formatarPeriodo';
 import type { AtestadoExibido } from '../atestados/atestadosComPendentes';
 import { atestadosRecentes } from '../atestados/recentes';
 import { useMeusAtestados } from '../atestados/useMeusAtestados';
+import { AvisosDeAcoesRecusadas } from './AvisosDeAcoesRecusadas';
 import { NovoAtestado } from './atestados/NovoAtestado';
 
 const VARIANTE_POR_STATUS: Record<StatusAtestado, VarianteBadge> = {
@@ -88,6 +89,7 @@ export function Atestados() {
         <Texto variante="headlineMd">Atestados Médicos</Texto>
 
         {aviso && <Alerta variante="sucesso" mensagem={aviso} />}
+        <AvisosDeAcoesRecusadas />
 
         <NovoAtestado aoEnviado={aoEnviado} aoIniciarEnvio={() => setAviso(null)} />
 

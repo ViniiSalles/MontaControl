@@ -18,7 +18,7 @@ import { enviarAtestado } from '../../atestados/clienteAtestados';
 import { definirTokens } from '../../auth/tokenSessao';
 import { respostaJson } from '../../auth/__tests__/apoio';
 import { criarBancoDeTeste, gravarLinhasNaReplica } from '../../db/__tests__/apoio';
-import { comBanco } from '../../db/__tests__/apoioReact';
+import { comBancoESincronizacao } from '../../db/__tests__/apoioReact';
 import { apagarTodasAsFotos } from '../../fotos/armazenamentoFotos';
 import { criarFotoDoPicker } from '../../fotos/__tests__/apoio';
 import {
@@ -57,7 +57,7 @@ async function semearAtestados(...linhas: SyncAtestadoRow[]) {
 }
 
 function renderizar() {
-  return render(<Atestados />, { wrapper: comBanco(database) });
+  return render(<Atestados />, { wrapper: comBancoESincronizacao(database) });
 }
 
 beforeEach(() => {

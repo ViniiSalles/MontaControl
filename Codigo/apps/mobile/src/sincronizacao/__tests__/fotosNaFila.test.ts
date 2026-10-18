@@ -71,6 +71,7 @@ describe.each([
   {
     nome: 'avaria',
     tipo: 'avaria',
+    mensagemDeRecusa: 'Avaria recusada: O servidor não aceitou',
     enviar: enviarAvariaMock,
     base: AVARIA,
     executar: (database: Banco, fotosCaminhos: string[]) =>
@@ -79,12 +80,13 @@ describe.each([
   {
     nome: 'atestado',
     tipo: 'atestado',
+    mensagemDeRecusa: 'Atestado recusado: O servidor não aceitou',
     enviar: enviarAtestadoMock,
     base: ATESTADO,
     executar: (database: Banco, fotosCaminhos: string[]) =>
       executarAcaoAtestado(database, { ...ATESTADO, fotosCaminhos }),
   },
-])('$nome com fotos em arquivo', ({ tipo, enviar, base, executar }) => {
+])('$nome com fotos em arquivo', ({ tipo, enviar, base, executar, mensagemDeRecusa }) => {
   it('sem rede: a fila guarda só os caminhos (nada de base64) e os arquivos ficam', async () => {
     const database = criarBancoDeTeste();
     const caminhos = await duasFotos();
@@ -200,7 +202,7 @@ describe.each([
     expect(caminhos.some(existe)).toBe(false);
   });
 
-  it('drenagem: recusa de regra descarta a ação e apaga os arquivos', async () => {
+  it('drenagem: recusa de regra descarta a ação com o texto do servidor e apaga os arquivos', async () => {
     const database = criarBancoDeTeste();
     const caminhos = await duasFotos();
     await criarAcaoPendente(database, {
@@ -208,12 +210,12 @@ describe.each([
       idCliente: base.idCliente,
       payload: { ...base, fotosCaminhos: caminhos },
     });
-    enviar.mockRejectedValue(new ErroApi('REGRA', 'Recusado', 409));
+    enviar.mockRejectedValue(new ErroApi('REGRA', 'O servidor não aceitou', 409));
 
     await drenarFila(database);
 
     const [descartada] = await acoes(database, 'descartada');
-    expect(descartada.mensagemDescarte).toBe('Ação recusada: REGRA.');
+    expect(descartada.mensagemDescarte).toBe(mensagemDeRecusa);
     expect(caminhos.some(existe)).toBe(false);
   });
 
