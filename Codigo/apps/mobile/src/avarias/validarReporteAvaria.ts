@@ -1,4 +1,4 @@
-import type { FotoBase64, ReportarAvariaRequest } from '@montacontrol/shared';
+import type { PayloadAvariaNaFila } from '../sincronizacao/payloadsDaFila';
 
 export const LIMITE_DESCRICAO = 500;
 export const MAXIMO_FOTOS = 3;
@@ -14,8 +14,8 @@ export type ErrosReporteAvaria = Partial<Record<'peca' | 'tipo' | 'descricao' | 
 
 export interface ResultadoValidacaoAvaria {
   erros: ErrosReporteAvaria;
-  /** Corpo pronto para envio, sem o `idCliente` (é do aparelho). Nulo se inválido. */
-  dados: Omit<ReportarAvariaRequest, 'idCliente'> | null;
+  /** O que vai para a fila, sem o `idCliente` (é do aparelho): fotos como caminhos de arquivo. Nulo se inválido. */
+  dados: Omit<PayloadAvariaNaFila, 'idCliente' | 'fotos'> | null;
 }
 
 /**
@@ -25,7 +25,7 @@ export interface ResultadoValidacaoAvaria {
  */
 export function validarReporteAvaria(
   campos: CamposReporteAvaria,
-  fotos: readonly FotoBase64[],
+  fotosCaminhos: readonly string[],
 ): ResultadoValidacaoAvaria {
   const erros: ErrosReporteAvaria = {};
 
@@ -38,7 +38,7 @@ export function validarReporteAvaria(
     erros.descricao = `A descrição pode ter no máximo ${LIMITE_DESCRICAO} caracteres.`;
   }
 
-  if (fotos.length > MAXIMO_FOTOS) erros.fotos = `Envie no máximo ${MAXIMO_FOTOS} fotos.`;
+  if (fotosCaminhos.length > MAXIMO_FOTOS) erros.fotos = `Envie no máximo ${MAXIMO_FOTOS} fotos.`;
 
   if (Object.keys(erros).length > 0 || campos.pecaId === null || campos.tipoAvariaId === null) {
     return { erros, dados: null };
@@ -50,7 +50,7 @@ export function validarReporteAvaria(
       pecaId: campos.pecaId,
       tipoAvariaId: campos.tipoAvariaId,
       descricao,
-      ...(fotos.length > 0 ? { fotos: [...fotos] } : {}),
+      ...(fotosCaminhos.length > 0 ? { fotosCaminhos: [...fotosCaminhos] } : {}),
     },
   };
 }
