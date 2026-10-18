@@ -1,15 +1,16 @@
 import { Alerta } from '../ui/Alerta';
 import { Botao } from '../ui/Botao';
-import { useSincronizacao } from '../sincronizacao/SincronizacaoContext';
+import { useSincronizacaoStore } from '../estado/sincronizacaoStore';
 
 /**
  * Ações da fila que o servidor recusou depois de o montador já ter saído da
  * tela (ponto, avaria, atestado): a linha foi apagada e só a mensagem fica.
  * Aparece igual em todas as telas que enfileiram algo, até ser dispensada.
- * Precisa estar dentro de `ProvedorSincronizacao`.
+ * Lê do store de sincronização, alimentado por `observarFila`.
  */
 export function AvisosDeAcoesRecusadas() {
-  const { avisosDescartados, dispensarAvisos } = useSincronizacao();
+  const avisosDescartados = useSincronizacaoStore((estado) => estado.avisosDescartados);
+  const dispensarAvisos = useSincronizacaoStore((estado) => estado.dispensarAvisos);
   if (avisosDescartados.length === 0) return null;
 
   return (

@@ -4,7 +4,7 @@ import { definirTokens } from '../../auth/tokenSessao';
 import { respostaJson } from '../../auth/__tests__/apoio';
 import { criarBancoDeTeste, gravarPullNaReplica, pullSemMudancas } from '../../db/__tests__/apoio';
 import { comBanco } from '../../db/__tests__/apoioReact';
-import { reiniciarStatusDaSincronizacao } from '../../sincronizacao/statusDaSincronizacao';
+import { useSincronizacaoStore } from '../../estado/sincronizacaoStore';
 import { executarSincronizacao } from '../../sincronizacao/syncManager';
 import { useObrasDoMontador } from '../useObrasDoMontador';
 
@@ -19,7 +19,7 @@ beforeEach(() => {
   fetchMock.mockReset();
   globalThis.fetch = fetchMock;
   definirTokens({ accessToken: 'token', refreshToken: 'refresh' });
-  reiniciarStatusDaSincronizacao();
+  useSincronizacaoStore.getState().reiniciar();
 });
 
 describe('useObrasDoMontador', () => {

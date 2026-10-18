@@ -4,7 +4,7 @@ import { definirTokens } from '../../auth/tokenSessao';
 import { respostaJson } from '../../auth/__tests__/apoio';
 import { criarBancoDeTeste } from '../../db/__tests__/apoio';
 import { iniciarSincronizacao, sincronizar } from '../syncManager';
-import { reiniciarStatusDaSincronizacao } from '../statusDaSincronizacao';
+import { useSincronizacaoStore } from '../../estado/sincronizacaoStore';
 import { instalarGatilhosFalsos } from './gatilhosFalsos';
 
 jest.mock('../../auth/armazenamentoSessao', () => ({
@@ -32,7 +32,7 @@ beforeEach(() => {
   fetchMock.mockReset();
   globalThis.fetch = fetchMock;
   definirTokens({ accessToken: 'token', refreshToken: 'refresh' });
-  reiniciarStatusDaSincronizacao();
+  useSincronizacaoStore.getState().reiniciar();
 });
 
 describe('sincronizar — gatilho com uma sincronização em curso', () => {

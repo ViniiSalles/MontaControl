@@ -5,7 +5,7 @@ import { cores } from '@montacontrol/design-tokens/native';
 import { BarraNavInferior } from '../ui/BarraNavInferior';
 import { Atestados } from '../telas/Atestados';
 import { Avarias } from '../telas/Avarias';
-import { ProvedorSincronizacao } from '../sincronizacao/SincronizacaoContext';
+import { useSincronizacaoDoApp } from '../sincronizacao/useSincronizacaoDoApp';
 import { PilhaJornada } from './PilhaJornada';
 import { ABA_PADRAO, ABAS } from './abas';
 import type { IdAba } from './abas';
@@ -16,10 +16,10 @@ import type { IdAba } from './abas';
  * Cada sprint acrescenta uma linha aqui e vira `disponivel: true` em
  * `abas.ts`, sem reescrever a navegação.
  *
- * A sincronização vive acima das abas (`ProvedorSincronizacao`): só a aba
+ * A sincronização vive acima das abas (`useSincronizacaoDoApp`): só a aba
  * ativa está montada, então ligá-la numa tela deixaria as outras sem gatilho.
- * Este componente só existe com sessão, logo o logout desmonta o provider e
- * desliga os listeners.
+ * Este componente só existe com sessão, logo o logout o desmonta e desliga os
+ * listeners.
  */
 const telaPorAba: Partial<Record<IdAba, ComponentType>> = {
   jornada: PilhaJornada,
@@ -28,14 +28,7 @@ const telaPorAba: Partial<Record<IdAba, ComponentType>> = {
 };
 
 export function AppAutenticado() {
-  return (
-    <ProvedorSincronizacao>
-      <CascaAutenticada />
-    </ProvedorSincronizacao>
-  );
-}
-
-function CascaAutenticada() {
+  useSincronizacaoDoApp();
   const [abaAtiva, setAbaAtiva] = useState<IdAba>(ABA_PADRAO);
 
   // Aba sem tela entregue cai na padrão, que sempre existe — a barra já as

@@ -5,11 +5,7 @@ import type { Database } from '@nozbe/watermelondb';
 import { synchronize } from '@nozbe/watermelondb/sync';
 import { enviarAtestado } from '../atestados/clienteAtestados';
 import { enviarAvaria } from '../avarias/clienteAvarias';
-import {
-  enviarCheckin,
-  enviarCheckout,
-  enviarSolicitacaoPonto,
-} from '../jornada/clienteJornadas';
+import { enviarCheckin, enviarCheckout, enviarSolicitacaoPonto } from '../jornada/clienteJornadas';
 import { ErroSessaoExpirada, geracaoDaSessao, lerTokenAtual } from '../auth/tokenSessao';
 import { AcaoPendente } from '../db/AcaoPendente';
 import { ErroApi } from '../http/erroApi';
@@ -23,8 +19,8 @@ import {
   montarCorpoAvaria,
 } from './payloadsDaFila';
 import { puxarMudancas } from './pullChanges';
-import { atualizarStatusDaSincronizacao } from './statusDaSincronizacao';
-import type { ErroDeSincronizacao } from './statusDaSincronizacao';
+import { useSincronizacaoStore } from '../estado/sincronizacaoStore';
+import type { EstadoDaSincronizacao, ErroDeSincronizacao } from '../estado/sincronizacaoStore';
 
 /**
  * Versão do schema local em que a sincronização por `synchronize()` passou a
@@ -49,9 +45,7 @@ async function reenviar(
   acao: AcaoPendente,
   geracao: number,
 ): Promise<
-  | { tipo: 'ok' }
-  | { tipo: 'recusado'; codigo: string; mensagem?: string }
-  | { tipo: 'sem_rede' }
+  { tipo: 'ok' } | { tipo: 'recusado'; codigo: string; mensagem?: string } | { tipo: 'sem_rede' }
 > {
   const payload = JSON.parse(acao.payload);
   try {
@@ -198,12 +192,17 @@ function classificarErro(erro: unknown): ErroDeSincronizacao {
   return 'falha';
 }
 
+/** O syncManager roda fora do React: publica no store por `setState`, sem passar por componente. */
+function publicarStatus(parcial: Partial<EstadoDaSincronizacao>): void {
+  useSincronizacaoStore.setState(parcial);
+}
+
 let execucoesAtivas = 0;
 
 /**
  * Uma rodada completa: drena a fila (único caminho de envio) e baixa a réplica
  * com o `synchronize()` do WatermelonDB. Nunca rejeita — o desfecho vai para
- * `statusDaSincronizacao` (a tela mostra erro só se não houver dado local).
+ * o store de sincronização (a tela mostra erro só se não houver dado local).
  *
  * `pushChanges` fica vazio de propósito: as tabelas da réplica não recebem
  * escrita local, então não há o que enviar por ali.
@@ -221,7 +220,7 @@ export async function executarSincronizacao(database: Database): Promise<void> {
   const aindaEhASessao = () => geracaoDaSessao() === geracao;
 
   execucoesAtivas += 1;
-  atualizarStatusDaSincronizacao({ sincronizando: true });
+  publicarStatus({ sincronizando: true });
   try {
     await drenarFila(database);
     if (!aindaEhASessao()) throw new ErroSessaoExpirada();
@@ -246,13 +245,13 @@ export async function executarSincronizacao(database: Database): Promise<void> {
 
     if (!aindaEhASessao()) return;
     await apagarEnviadas(database, enviadasAntesDoPull);
-    atualizarStatusDaSincronizacao({ ultimoErro: null, ultimaSincronizacaoEm: Date.now() });
+    publicarStatus({ ultimoErro: null, ultimaSincronizacaoEm: Date.now() });
   } catch (erro) {
     // O erro de uma sessão que já acabou não é da sessão atual.
-    if (aindaEhASessao()) atualizarStatusDaSincronizacao({ ultimoErro: classificarErro(erro) });
+    if (aindaEhASessao()) publicarStatus({ ultimoErro: classificarErro(erro) });
   } finally {
     execucoesAtivas -= 1;
-    atualizarStatusDaSincronizacao({ sincronizando: execucoesAtivas > 0 });
+    publicarStatus({ sincronizando: execucoesAtivas > 0 });
   }
 }
 
@@ -300,13 +299,17 @@ export function sincronizar(database: Database): Promise<void> {
 /**
  * Liga os gatilhos automáticos de sincronização (boot, volta de
  * conectividade, retorno ao primeiro plano). Chamado uma vez por
- * `ProvedorSincronizacao` (app autenticado), que guarda a função de limpeza
- * devolvida e a chama no logout.
+ * `useSincronizacaoDoApp` (app autenticado), que guarda a função de limpeza
+ * devolvida e a chama no logout. Também publica `online` no store.
  */
 export function iniciarSincronizacao(database: Database): () => void {
   void sincronizar(database);
 
   const removerListenerRede = NetInfo.addEventListener((estado) => {
+    // `isConnected` nulo = ainda desconhecido: não declara offline à toa.
+    publicarStatus({
+      online: estado.isConnected !== false && estado.isInternetReachable !== false,
+    });
     if (estado.isConnected && estado.isInternetReachable !== false) {
       void sincronizar(database);
     }
@@ -321,6 +324,6 @@ export function iniciarSincronizacao(database: Database): () => void {
     assinaturaAppState.remove();
     // Logout: um gatilho que ficou para repetir era da sessão que acabou.
     if (execucaoAtual) execucaoAtual.reexecutar = false;
-    atualizarStatusDaSincronizacao({ ultimoErro: null, ultimaSincronizacaoEm: null });
+    useSincronizacaoStore.getState().reiniciar();
   };
 }

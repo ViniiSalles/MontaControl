@@ -19,11 +19,8 @@ import { useAuth } from '../../auth/AuthContext';
 import { registrarCheckin, registrarCheckout } from '../../jornada/acoes';
 import { buscarBancoHoras } from '../../banco-horas/clienteBancoHoras';
 import { iniciarSincronizacao, sincronizar } from '../../sincronizacao/syncManager';
-import { ProvedorSincronizacao } from '../../sincronizacao/SincronizacaoContext';
-import {
-  atualizarStatusDaSincronizacao,
-  reiniciarStatusDaSincronizacao,
-} from '../../sincronizacao/statusDaSincronizacao';
+import { ComSincronizacaoDoApp } from '../../db/__tests__/apoioReact';
+import { useSincronizacaoStore } from '../../estado/sincronizacaoStore';
 import { formatarHora } from '../../jornada/formatacao';
 import { periodoAtual } from '../../banco-horas/periodo';
 import { montador } from '../../auth/__tests__/apoio';
@@ -39,13 +36,13 @@ let database = criarBancoDeTeste();
 function renderizar() {
   return render(
     <DatabaseProvider database={database}>
-      <ProvedorSincronizacao>
+      <ComSincronizacaoDoApp>
         <Jornada
           aoAbrirHistorico={abrirHistorico}
           aoAbrirBancoHoras={abrirBancoHoras}
           aoLancarEmAtraso={lancarEmAtraso}
         />
-      </ProvedorSincronizacao>
+      </ComSincronizacaoDoApp>
     </DatabaseProvider>,
   );
 }
@@ -176,7 +173,7 @@ beforeEach(async () => {
   // jest-expo instala para os componentes nativos precisam sobreviver.
   jest.clearAllMocks();
   database = criarBancoDeTeste();
-  reiniciarStatusDaSincronizacao();
+  useSincronizacaoStore.getState().reiniciar();
   // Réplica padrão de todo teste: o saldo do mês corrente e uma obra.
   await gravarLinhasNaReplica(database, 'banco_horas', [
     {
@@ -284,7 +281,7 @@ test('recusa da API aparece como erro sem trocar o estado do botão', async () =
 // Regressão: a falha de leitura chegou a esconder o botão principal, e o
 // montador ficava sem como registrar por causa de um GET que não voltou.
 test('falha ao sincronizar sem nenhum dado local avisa mas mantém o botão de bater ponto', async () => {
-  atualizarStatusDaSincronizacao({ ultimoErro: 'sem_rede' });
+  useSincronizacaoStore.setState({ ultimoErro: 'sem_rede' });
 
   await renderizar();
 
@@ -297,7 +294,7 @@ test('falha ao sincronizar sem nenhum dado local avisa mas mantém o botão de b
 
 test('app desatualizado (426) mostra o aviso para atualizar, sem esconder o ponto', async () => {
   await gravarLinhasNaReplica(database, 'jornadas', [abertaNaReplica()]);
-  atualizarStatusDaSincronizacao({ ultimoErro: 'versao_incompativel' });
+  useSincronizacaoStore.setState({ ultimoErro: 'versao_incompativel' });
 
   await renderizar();
 
@@ -306,7 +303,7 @@ test('app desatualizado (426) mostra o aviso para atualizar, sem esconder o pont
 });
 
 test('atualizar dispara uma sincronização e a jornada que o pull traz aparece', async () => {
-  atualizarStatusDaSincronizacao({ ultimoErro: 'sem_rede' });
+  useSincronizacaoStore.setState({ ultimoErro: 'sem_rede' });
 
   await renderizar();
   await waitFor(() =>
@@ -319,7 +316,7 @@ test('atualizar dispara uma sincronização e a jornada que o pull traz aparece'
   // O pull que o gatilho dispara grava a réplica e limpa o erro.
   await act(async () => {
     await gravarLinhasNaReplica(database, 'jornadas', [abertaNaReplica()]);
-    atualizarStatusDaSincronizacao({ ultimoErro: null });
+    useSincronizacaoStore.setState({ ultimoErro: null });
   });
 
   await waitFor(() => expect(screen.getByText(ROTULO_SAIDA)).toBeTruthy());
@@ -392,13 +389,13 @@ test('o saldo do mês vem da réplica; a tela não sincroniza sozinha ao abrir',
   expect(sincronizarMock).not.toHaveBeenCalled();
 });
 
-// #107: a sincronização automática vive em `ProvedorSincronizacao` (app
+// #107: a sincronização automática vive em `useSincronizacaoDoApp` (app
 // autenticado), não na tela — montar Jornada não deve ligá-la de novo.
 test('a tela Jornada não liga a sincronização automática por conta própria', async () => {
   await renderizar();
   await waitFor(() => expect(screen.getByText(ROTULO_ENTRADA)).toBeTruthy());
 
-  // Uma única chamada: a do provider que envolve a tela neste teste.
+  // Uma única chamada: a do `ComSincronizacaoDoApp` que envolve a tela neste teste.
   expect(iniciarSincronizacaoMock).toHaveBeenCalledTimes(1);
 });
 

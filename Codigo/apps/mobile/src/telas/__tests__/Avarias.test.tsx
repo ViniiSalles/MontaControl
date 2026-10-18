@@ -20,10 +20,7 @@ import { AcaoPendente } from '../../db/AcaoPendente';
 import { apagarTodasAsFotos } from '../../fotos/armazenamentoFotos';
 import { criarFotoDoPicker, fotosGuardadas } from '../../fotos/__tests__/apoio';
 import { ErroApi } from '../../http/erroApi';
-import {
-  atualizarStatusDaSincronizacao,
-  reiniciarStatusDaSincronizacao,
-} from '../../sincronizacao/statusDaSincronizacao';
+import { useSincronizacaoStore } from '../../estado/sincronizacaoStore';
 import { drenarFila } from '../../sincronizacao/syncManager';
 import { Avarias } from '../Avarias';
 
@@ -74,7 +71,7 @@ async function preencherEEnviar(comFotos = 0) {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  reiniciarStatusDaSincronizacao();
+  useSincronizacaoStore.getState().reiniciar();
 });
 
 afterEach(async () => {
@@ -125,7 +122,7 @@ test('réplica vazia depois de uma sincronização que falhou pede para conectar
   await waitFor(() => expect(screen.getByText('Nenhum pedido vinculado')).toBeTruthy());
 
   await act(async () => {
-    atualizarStatusDaSincronizacao({ ultimoErro: 'sem_rede' });
+    useSincronizacaoStore.setState({ ultimoErro: 'sem_rede' });
   });
 
   await waitFor(() => expect(screen.getByText('Não foi possível carregar')).toBeTruthy());

@@ -2,7 +2,7 @@ import { useCallback, useMemo } from 'react';
 import type { DiaJornadaDTO, PeriodoHistorico } from '@montacontrol/shared';
 import { useDatabaseOuFalha } from '../db/useDatabase';
 import { sincronizar } from '../sincronizacao/syncManager';
-import { useStatusDaSincronizacao } from '../sincronizacao/statusDaSincronizacao';
+import { useSincronizacaoStore } from '../estado/sincronizacaoStore';
 import { construirHistoricoDTO, jornadasNoPeriodo } from './espelhoJornada';
 import { useJornadasComPendentes } from './useJornadasComPendentes';
 
@@ -24,7 +24,7 @@ export interface EstadoHistorico {
 export function useHistoricoPontos(periodo: PeriodoHistorico): EstadoHistorico {
   const database = useDatabaseOuFalha();
   const { jornadas, carregando } = useJornadasComPendentes();
-  const { ultimoErro } = useStatusDaSincronizacao();
+  const ultimoErro = useSincronizacaoStore((estado) => estado.ultimoErro);
 
   const historico = useMemo(() => {
     const agoraIso = new Date().toISOString();

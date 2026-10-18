@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { useConsulta } from '../db/useConsulta';
 import { useDatabaseOuFalha } from '../db/useDatabase';
-import { useStatusDaSincronizacao } from '../sincronizacao/statusDaSincronizacao';
+import { useSincronizacaoStore } from '../estado/sincronizacaoStore';
 import { sincronizar } from '../sincronizacao/syncManager';
 import {
   COLUNAS_OBSERVADAS_DE_ACAO_DE_ATESTADO,
@@ -32,7 +32,7 @@ export interface EstadoMeusAtestados {
  */
 export function useMeusAtestados(): EstadoMeusAtestados {
   const database = useDatabaseOuFalha();
-  const { ultimoErro } = useStatusDaSincronizacao();
+  const ultimoErro = useSincronizacaoStore((estado) => estado.ultimoErro);
 
   const replica = useConsulta(queryAtestados, COLUNAS_OBSERVADAS_DE_ATESTADO, paraAtestadoDaReplica);
   const acoes = useConsulta(

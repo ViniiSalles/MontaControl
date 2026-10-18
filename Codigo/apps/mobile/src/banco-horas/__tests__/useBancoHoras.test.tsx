@@ -5,7 +5,7 @@ import { definirTokens } from '../../auth/tokenSessao';
 import { respostaJson } from '../../auth/__tests__/apoio';
 import { criarBancoDeTeste, gravarLinhasNaReplica, gravarPullNaReplica } from '../../db/__tests__/apoio';
 import { comBanco } from '../../db/__tests__/apoioReact';
-import { reiniciarStatusDaSincronizacao } from '../../sincronizacao/statusDaSincronizacao';
+import { useSincronizacaoStore } from '../../estado/sincronizacaoStore';
 import { useBancoHoras } from '../useBancoHoras';
 
 jest.mock('../../auth/armazenamentoSessao', () => ({
@@ -46,7 +46,7 @@ beforeEach(() => {
   fetchMock.mockReset();
   globalThis.fetch = fetchMock;
   definirTokens({ accessToken: 'token', refreshToken: 'refresh' });
-  reiniciarStatusDaSincronizacao();
+  useSincronizacaoStore.getState().reiniciar();
 });
 
 describe('useBancoHoras', () => {

@@ -23,8 +23,7 @@ import type { TipoPonto } from '../jornada/ultimoPonto';
 import { useHistoricoPontos } from '../jornada/useHistoricoPontos';
 import { useJornadaAtual } from '../jornada/useJornadaAtual';
 import { useObrasDoMontador } from '../pedidos/useObrasDoMontador';
-import { useSincronizacao } from '../sincronizacao/SincronizacaoContext';
-import { useStatusDaSincronizacao } from '../sincronizacao/statusDaSincronizacao';
+import { useSincronizacaoStore } from '../estado/sincronizacaoStore';
 import { BotaoAcaoPrincipal } from './jornada/BotaoAcaoPrincipal';
 import { CartaoBancoHoras } from './jornada/CartaoBancoHoras';
 import { CartaoUltimoPonto } from './jornada/CartaoUltimoPonto';
@@ -54,10 +53,11 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
 
   const database = useDatabaseOuFalha();
 
-  // A sincronização automática e o status da fila vêm do provider do app
-  // autenticado (`ProvedorSincronizacao`), não desta tela.
-  const { pendentes, dispensarAvisos } = useSincronizacao();
-  const { ultimoErro: erroDeSincronizacao } = useStatusDaSincronizacao();
+  // A sincronização automática (`useSincronizacaoDoApp`) e o status da fila vêm
+  // do app autenticado; esta tela só lê o store.
+  const pendentes = useSincronizacaoStore((estado) => estado.pendentes);
+  const dispensarAvisos = useSincronizacaoStore((estado) => estado.dispensarAvisos);
+  const erroDeSincronizacao = useSincronizacaoStore((estado) => estado.ultimoErro);
 
   const { jornada, carregando, erro } = useJornadaAtual();
   // Menor período válido (`PeriodoHistorico`): só precisa alcançar hoje, o
