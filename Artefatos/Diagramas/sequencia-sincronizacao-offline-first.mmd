@@ -1,0 +1,78 @@
+---
+config:
+  theme: neutral
+---
+sequenceDiagram
+  autonumber
+  actor M as Montador
+  participant APP as App mobile (telas)
+  participant AUTH as Sessão (AuthContext + tokenSessao)
+  participant SS as SecureStore
+  participant WDB as WatermelonDB (réplica + acoes_pendentes)
+  participant SYNC as syncManager
+  participant API as API NestJS
+  participant PG as PostgreSQL
+
+  Note over M,PG: 1. Login com rede
+  M->>APP: informa e-mail e senha
+  APP->>API: POST /api/auth/login
+  API-->>APP: tokens + usuário (perfil MONTADOR)
+  APP->>AUTH: entrar
+  AUTH->>WDB: lê dono_da_fila e conta ações
+  alt fila de outro usuário ou dono ilegível
+    AUTH->>WDB: apaga o banco local inteiro
+  end
+  AUTH->>WDB: grava dono_da_fila = usuário logado
+  AUTH->>SS: salva sessão (mc.sessao.v2)
+  AUTH-->>APP: abre o app autenticado
+  APP->>SYNC: iniciarSincronizacao (boot, volta da rede, app em primeiro plano)
+
+  Note over M,PG: 2. Ciclo de sincronização (a cada gatilho)
+  SYNC->>WDB: lê acoes_pendentes com status pendente, em ordem de criação
+  loop cada ação da fila
+    SYNC->>API: POST do comando com idCliente e token atual
+    alt aceito (2xx)
+      API->>PG: grava (idempotente por idCliente)
+      SYNC->>WDB: remove a ação da fila
+    else recusa de regra (400, 403, 409, 422)
+      SYNC->>WDB: marca a ação como descartada, com mensagem
+    else 401, sem rede, 408, 429 ou 5xx
+      Note over SYNC: ação continua pendente e a drenagem para
+    end
+  end
+  SYNC->>API: GET /api/sync/pull com lastPulledAt e schemaVersion (synchronize, issue 112)
+  API->>API: captura timestamp antes das consultas
+  API->>PG: linhas do montador alteradas desde lastPulledAt menos 5 min e exclusões em sync_exclusao
+  alt schemaVersion diferente da do servidor
+    API-->>SYNC: 426 VERSAO_SCHEMA_INCOMPATIVEL
+  else versão compatível
+    API-->>SYNC: changes (tudo em updated, mais deleted) e timestamp
+    SYNC->>WDB: aplica upserts e exclusões e guarda lastPulledAt
+  end
+  WDB-->>APP: observe() atualiza as telas (réplica com a fila sobreposta)
+
+  Note over M,PG: 3. Boot sem rede
+  M->>APP: abre o app em modo avião
+  APP->>AUTH: restaurar
+  AUTH->>SS: lê mc.sessao.v2 (tokens + usuário)
+  AUTH->>WDB: confere o dono da fila
+  AUTH-->>APP: entra na Jornada com o usuário em cache
+  AUTH-)API: GET /api/auth/me em segundo plano
+  Note over AUTH,API: falha de rede não derruba a sessão
+
+  Note over M,PG: 4. Access token vencido (401)
+  SYNC->>API: comando ou pull com access token vencido
+  API-->>SYNC: 401 TOKEN_EXPIRADO
+  SYNC->>AUTH: comTokenRenovado (uma renovação compartilhada)
+  AUTH->>API: POST /api/auth/refresh
+  alt refresh aceito
+    API-->>AUTH: tokens novos
+    AUTH->>SS: salva a sessão renovada
+    AUTH->>API: repete a chamada uma vez com o token novo
+  else refresh recusado (4xx)
+    AUTH->>SS: grava o dono da fila (mc.fila.dono.v1) e apaga a sessão
+    AUTH->>WDB: apaga a réplica e mantém acoes_pendentes
+    AUTH-->>APP: volta ao Login
+  else sem rede ou 5xx no refresh
+    Note over AUTH,SYNC: sessão mantida e ação continua pendente
+  end
