@@ -9,10 +9,7 @@ import { AcaoPendente } from '../../db/AcaoPendente';
 import { Pedido } from '../../db/Pedido';
 import { lerJornadasComPendentes } from '../../jornada/jornadasComPendentes';
 import { executarSincronizacao } from '../syncManager';
-import {
-  lerStatusDaSincronizacao,
-  reiniciarStatusDaSincronizacao,
-} from '../statusDaSincronizacao';
+import { useSincronizacaoStore } from '../../estado/sincronizacaoStore';
 
 jest.mock('../../auth/armazenamentoSessao', () => ({
   salvarSessao: jest.fn().mockResolvedValue(undefined),
@@ -48,7 +45,7 @@ beforeEach(() => {
   fetchMock.mockReset();
   globalThis.fetch = fetchMock;
   definirTokens({ accessToken: 'token', refreshToken: 'refresh' });
-  reiniciarStatusDaSincronizacao();
+  useSincronizacaoStore.getState().reiniciar();
 });
 
 describe('executarSincronizacao — pull pelo synchronize()', () => {
@@ -70,7 +67,7 @@ describe('executarSincronizacao — pull pelo synchronize()', () => {
       expect(await database.get(tabela).query().fetchCount()).toBe(created.length + updated.length);
     }
     expect(await getLastPulledAt(database)).toBe(syncPullFixture.timestamp);
-    expect(lerStatusDaSincronizacao()).toMatchObject({ sincronizando: false, ultimoErro: null });
+    expect(useSincronizacaoStore.getState()).toMatchObject({ sincronizando: false, ultimoErro: null });
   });
 
   it('o 2º pull manda o lastPulledAt do anterior (incremental)', async () => {
@@ -191,7 +188,7 @@ describe('executarSincronizacao — fila e pull juntos', () => {
     const jornadas = await lerJornadasComPendentes(database);
     expect(jornadas).toHaveLength(1);
     expect(jornadas[0].status).toBe(StatusJornada.EM_ANDAMENTO);
-    expect(lerStatusDaSincronizacao().ultimoErro).toBe('sem_rede');
+    expect(useSincronizacaoStore.getState().ultimoErro).toBe('sem_rede');
 
     // Quando a rede volta, o pull traz a jornada e a "enviada" é apagada.
     fetchMock.mockReset();
@@ -240,7 +237,7 @@ describe('executarSincronizacao — falhas', () => {
     await expect(executarSincronizacao(database)).resolves.toBeUndefined();
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(lerStatusDaSincronizacao()).toMatchObject({
+    expect(useSincronizacaoStore.getState()).toMatchObject({
       sincronizando: false,
       ultimoErro: 'versao_incompativel',
     });
@@ -254,7 +251,7 @@ describe('executarSincronizacao — falhas', () => {
 
     await executarSincronizacao(database);
 
-    expect(lerStatusDaSincronizacao().ultimoErro).toBe('sem_rede');
+    expect(useSincronizacaoStore.getState().ultimoErro).toBe('sem_rede');
     expect(await getLastPulledAt(database)).toBeNull();
   });
 
@@ -264,20 +261,20 @@ describe('executarSincronizacao — falhas', () => {
 
     await executarSincronizacao(database);
 
-    expect(lerStatusDaSincronizacao().ultimoErro).toBe('sem_rede');
+    expect(useSincronizacaoStore.getState().ultimoErro).toBe('sem_rede');
   });
 
   it('um pull bem-sucedido limpa o erro anterior', async () => {
     const database = criarBancoDeTeste();
     fetchMock.mockRejectedValueOnce(new TypeError('Network request failed'));
     await executarSincronizacao(database);
-    expect(lerStatusDaSincronizacao().ultimoErro).toBe('sem_rede');
+    expect(useSincronizacaoStore.getState().ultimoErro).toBe('sem_rede');
 
     fetchMock.mockResolvedValueOnce(respostaJson(200, syncPullFixture));
     await executarSincronizacao(database);
 
-    expect(lerStatusDaSincronizacao().ultimoErro).toBeNull();
-    expect(lerStatusDaSincronizacao().ultimaSincronizacaoEm).not.toBeNull();
+    expect(useSincronizacaoStore.getState().ultimoErro).toBeNull();
+    expect(useSincronizacaoStore.getState().ultimaSincronizacaoEm).not.toBeNull();
   });
 
   it('sem sessão: não vai à rede nem mexe no banco', async () => {
@@ -314,7 +311,7 @@ describe('executarSincronizacao — falhas', () => {
     }
     expect(await getLastPulledAt(database)).toBeNull();
     // O erro de uma sessão que já acabou não suja o status da sessão atual.
-    expect(lerStatusDaSincronizacao().ultimoErro).toBeNull();
+    expect(useSincronizacaoStore.getState().ultimoErro).toBeNull();
   });
 
   it('wipe do banco durante o pull SEM troca de sessão (ex.: reconciliação do login): o WatermelonDB aborta a escrita', async () => {
@@ -338,7 +335,7 @@ describe('executarSincronizacao — falhas', () => {
     expect(await database.get('pedidos').query().fetchCount()).toBe(0);
     expect(await database.get('jornadas').query().fetchCount()).toBe(0);
     expect(await getLastPulledAt(database)).toBeNull();
-    expect(lerStatusDaSincronizacao().ultimoErro).toBe('falha');
+    expect(useSincronizacaoStore.getState().ultimoErro).toBe('falha');
   });
 
   it('logout (wipe do banco) durante o pull: nada é gravado e o lastPulledAt não volta', async () => {

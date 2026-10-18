@@ -11,7 +11,7 @@ import { Texto } from '../ui/Texto';
 import { ROTULO_STATUS_AVARIA, VARIANTE_STATUS_AVARIA } from '../avarias/rotulos';
 import type { AvariaExibida } from '../avarias/avariasComPendentes';
 import { useDadosAvarias } from '../avarias/useDadosAvarias';
-import { useStatusDaSincronizacao } from '../sincronizacao/statusDaSincronizacao';
+import { useSincronizacaoStore } from '../estado/sincronizacaoStore';
 import { AvisosDeAcoesRecusadas } from './AvisosDeAcoesRecusadas';
 import { NovaAvaria } from './avarias/NovaAvaria';
 
@@ -43,7 +43,7 @@ function ItemHistorico({ avaria }: { avaria: AvariaExibida }) {
 /** Reporte de problemas com peças pelo montador em campo e acompanhamento da análise do gestor. */
 export function Avarias() {
   const { pedidos, tipos, avarias, carregando, erro, recarregar } = useDadosAvarias();
-  const { sincronizando } = useStatusDaSincronizacao();
+  const sincronizando = useSincronizacaoStore((estado) => estado.sincronizando);
   const [aviso, setAviso] = useState<string | null>(null);
 
   function aoEnviado(mensagem: string) {

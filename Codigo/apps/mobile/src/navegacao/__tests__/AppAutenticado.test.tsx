@@ -6,7 +6,7 @@ jest.mock('../../banco-horas/clienteBancoHoras');
 jest.mock('../../avarias/clienteAvarias');
 jest.mock('../../atestados/clienteAtestados');
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { DatabaseProvider } from '@nozbe/watermelondb/react';
 import { useAuth } from '../../auth/AuthContext';
 import { montador, respostaJson } from '../../auth/__tests__/apoio';
@@ -16,6 +16,7 @@ import { buscarBancoHoras } from '../../banco-horas/clienteBancoHoras';
 import { periodoAtual } from '../../banco-horas/periodo';
 import { AcaoPendente } from '../../db/AcaoPendente';
 import { criarBancoDeTeste, pullSemMudancas } from '../../db/__tests__/apoio';
+import { useSincronizacaoStore } from '../../estado/sincronizacaoStore';
 import { instalarGatilhosFalsos } from '../../sincronizacao/__tests__/gatilhosFalsos';
 import { AppAutenticado } from '../AppAutenticado';
 
@@ -58,6 +59,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   database = criarBancoDeTeste();
   gatilhos = instalarGatilhosFalsos();
+  useSincronizacaoStore.getState().reiniciar();
 
   jest.mocked(useAuth).mockReturnValue({
     sessao: { usuario: montador },
@@ -132,4 +134,71 @@ test('desmontar o app autenticado remove os listeners', async () => {
 
   expect(gatilhos.rede.size).toBe(0);
   expect(gatilhos.appState.size).toBe(0);
+});
+
+const ABAS_COM_TELA = ['Jornada', 'Avarias', 'Atestados', 'Jornada'];
+
+describe('indicador de status da sincronização', () => {
+  test('aparece em TODAS as abas e acompanha a conexão', async () => {
+    await render(arvore());
+
+    for (const aba of ABAS_COM_TELA) {
+      await irParaAba(aba);
+      expect(screen.getByTestId('indicador-sincronizacao')).toBeTruthy();
+    }
+
+    // Espera a sincronização do boot terminar: o indicador deixa de dizer Sincronizando….
+    await waitFor(() => expect(screen.getByText(/^Sincronizado/)).toBeTruthy());
+    await act(async () => gatilhos.emitirRede(false));
+    for (const aba of ABAS_COM_TELA) {
+      await irParaAba(aba);
+      expect(screen.getByText('Sem conexão')).toBeTruthy();
+    }
+
+    await act(async () => gatilhos.emitirRede(true));
+    await waitFor(() => expect(screen.getByText(/^Sincronizado/)).toBeTruthy());
+    for (const aba of ABAS_COM_TELA) {
+      await irParaAba(aba);
+      expect(screen.queryByText('Sem conexão')).toBeNull();
+      expect(screen.getByText(/^Sincronizado/)).toBeTruthy();
+    }
+  });
+
+  test('mostra o tamanho da fila em qualquer aba, e some quando a fila esvazia', async () => {
+    await enfileirarAvaria();
+    // Sem rede para enviar: a ação segue pendente.
+    jest.mocked(enviarAvaria).mockRejectedValue(new TypeError('Network request failed'));
+
+    await render(arvore());
+
+    for (const aba of ABAS_COM_TELA) {
+      await irParaAba(aba);
+      await waitFor(() => expect(screen.getByText('1 pendente')).toBeTruthy());
+    }
+
+    await act(async () => gatilhos.emitirRede(false));
+    await waitFor(() => expect(screen.getByText('Sem conexão · 1 pendente')).toBeTruthy());
+
+    await act(async () => {
+      await database.write(async () => {
+        const [acao] = await database.get<AcaoPendente>('acoes_pendentes').query().fetch();
+        await acao.destroyPermanently();
+      });
+    });
+    await waitFor(() => expect(screen.getByText('Sem conexão')).toBeTruthy());
+  });
+
+  test('desmontar o app autenticado (logout) zera o status', async () => {
+    const { unmount } = await render(arvore());
+    await waitFor(() => expect(screen.getByText(/^Sincronizado/)).toBeTruthy());
+    expect(useSincronizacaoStore.getState().ultimaSincronizacaoEm).not.toBeNull();
+
+    await unmount();
+
+    expect(useSincronizacaoStore.getState()).toMatchObject({
+      ultimaSincronizacaoEm: null,
+      pendentes: 0,
+      online: true,
+    });
+  });
 });

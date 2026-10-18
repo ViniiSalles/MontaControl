@@ -10,10 +10,7 @@ import {
 } from '../../db/__tests__/apoio';
 import { comBanco } from '../../db/__tests__/apoioReact';
 import { AcaoPendente } from '../../db/AcaoPendente';
-import {
-  atualizarStatusDaSincronizacao,
-  reiniciarStatusDaSincronizacao,
-} from '../../sincronizacao/statusDaSincronizacao';
+import { useSincronizacaoStore } from '../../estado/sincronizacaoStore';
 import { executarSincronizacao } from '../../sincronizacao/syncManager';
 import { useDadosAvarias } from '../useDadosAvarias';
 
@@ -30,7 +27,7 @@ beforeEach(() => {
   fetchMock.mockReset();
   globalThis.fetch = fetchMock;
   definirTokens({ accessToken: 'token', refreshToken: 'refresh' });
-  reiniciarStatusDaSincronizacao();
+  useSincronizacaoStore.getState().reiniciar();
 });
 
 describe('useDadosAvarias', () => {
@@ -176,7 +173,7 @@ describe('useDadosAvarias', () => {
     await waitFor(() => expect(result.current.carregando).toBe(false));
 
     await act(async () => {
-      atualizarStatusDaSincronizacao({ ultimoErro: 'sem_rede' });
+      useSincronizacaoStore.setState({ ultimoErro: 'sem_rede' });
     });
     expect(result.current.erro).toBe(true);
 

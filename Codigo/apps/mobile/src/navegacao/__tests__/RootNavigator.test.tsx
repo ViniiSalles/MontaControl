@@ -4,6 +4,7 @@ import { ProvedorAuth } from '../../auth/AuthContext';
 import { RootNavigator } from '../RootNavigator';
 import * as armazenamento from '../../auth/armazenamentoSessao';
 import { definirTokens } from '../../auth/tokenSessao';
+import { reiniciarSessaoStore } from '../../estado/sessaoStore';
 import { criarBancoDeTeste } from '../../db/__tests__/apoio';
 import { gestor, montador, respostaJson, sessaoDe } from '../../auth/__tests__/apoio';
 import { instalarGatilhosFalsos } from '../../sincronizacao/__tests__/gatilhosFalsos';
@@ -73,6 +74,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   database = criarBancoDeTeste();
   definirTokens(null);
+  // O store de sessão é global (como no app): sem isto o usuário de um teste vaza para o seguinte.
+  reiniciarSessaoStore();
   armazenamentoMock.lerSessao.mockResolvedValue(null);
   armazenamentoMock.lerDonoDaFila.mockResolvedValue({ tipo: 'ausente' });
   armazenamentoMock.salvarSessao.mockResolvedValue(undefined);

@@ -10,10 +10,7 @@ import {
   gravarLinhasNaReplica,
   linhaDeJornada,
 } from '../../db/__tests__/apoio';
-import {
-  atualizarStatusDaSincronizacao,
-  reiniciarStatusDaSincronizacao,
-} from '../../sincronizacao/statusDaSincronizacao';
+import { useSincronizacaoStore } from '../../estado/sincronizacaoStore';
 import { sincronizar } from '../../sincronizacao/syncManager';
 import { Historico } from '../Historico';
 
@@ -52,7 +49,7 @@ function renderizar() {
 beforeEach(() => {
   jest.clearAllMocks();
   database = criarBancoDeTeste();
-  reiniciarStatusDaSincronizacao();
+  useSincronizacaoStore.getState().reiniciar();
   // `advanceTimers: true` é obrigatório com `waitFor`: sem isso o polling do
   // Testing Library nunca avança e a suíte trava (CI do PR fica em loop).
   jest.useFakeTimers({ advanceTimers: true }).setSystemTime(new Date('2026-08-27T15:00:00.000Z')); // 12:00 local, dia seguinte
@@ -143,7 +140,7 @@ test('ponto marcado offline (ainda na fila) já aparece no histórico', async ()
 });
 
 test('sem dado local e com a sincronização falhando, mostra erro e permite tentar de novo', async () => {
-  atualizarStatusDaSincronizacao({ ultimoErro: 'sem_rede' });
+  useSincronizacaoStore.setState({ ultimoErro: 'sem_rede' });
 
   await renderizar();
   await waitFor(() =>
@@ -157,7 +154,7 @@ test('sem dado local e com a sincronização falhando, mostra erro e permite ten
   // O pull que o gatilho dispara grava a réplica e limpa o erro.
   await act(async () => {
     await gravarLinhasNaReplica(database, 'jornadas', [TURNO_26_AGO, TURNO_24_AGO]);
-    atualizarStatusDaSincronizacao({ ultimoErro: null });
+    useSincronizacaoStore.setState({ ultimoErro: null });
   });
 
   await waitFor(() => expect(screen.getByText('10h 00min')).toBeTruthy());

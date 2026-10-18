@@ -1,6 +1,7 @@
 import { localStorageKey } from '@nozbe/watermelondb';
 import { getLastPulledAt } from '@nozbe/watermelondb/sync/impl';
 import { syncPullFixture, TABELAS_SYNC } from '@montacontrol/shared';
+import { CHAVE_SINCRONIZACAO, CHAVE_UI } from '../../estado/chavesPersistidas';
 import { definirTokens } from '../../auth/tokenSessao';
 import { respostaJson } from '../../auth/__tests__/apoio';
 import { executarSincronizacao } from '../../sincronizacao/syncManager';
@@ -93,6 +94,17 @@ describe('limparEspelhoLocal', () => {
 
     expect(await database.localStorage.get('obras_do_montador')).toBeUndefined();
     expect(await database.localStorage.get('obra_da_jornada_aberta')).toBeUndefined();
+  });
+
+  it('apaga o status persistido da sincronização (descreve a réplica) e MANTÉM obra e rascunho (mesmo dono da fila)', async () => {
+    const database = criarBancoDeTeste();
+    await database.localStorage.set(CHAVE_SINCRONIZACAO, '{"state":{"ultimaSincronizacaoEm":1}}');
+    await database.localStorage.set(CHAVE_UI, '{"state":{"obraEscolhidaId":12}}');
+
+    await limparEspelhoLocal(database);
+
+    expect(await database.localStorage.get(CHAVE_SINCRONIZACAO)).toBeUndefined();
+    expect(await database.localStorage.get(CHAVE_UI)).toBe('{"state":{"obraEscolhidaId":12}}');
   });
 
   it('não mexe em chaves de localStorage que não são da réplica (nem no dono da fila)', async () => {

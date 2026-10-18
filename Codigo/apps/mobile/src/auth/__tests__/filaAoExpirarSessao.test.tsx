@@ -9,8 +9,11 @@ import { AcaoPendente } from '../../db/AcaoPendente';
 import { Jornada } from '../../db/Jornada';
 import { lerDonoNoBanco, registrarDonoNoBanco } from '../../db/donoDaFila';
 import { apagarTodasAsFotos, salvarFoto } from '../../fotos/armazenamentoFotos';
-import { existeFoto } from '../../fotos/__tests__/apoio';
+import { criarFotoDoPicker, existeFoto, fotosGuardadas } from '../../fotos/__tests__/apoio';
+import { useUiStore } from '../../estado/uiStore';
+import { instalarDiscoEmMemoria } from '../../estado/__tests__/apoio';
 import { drenarFila } from '../../sincronizacao/syncManager';
+import { reiniciarSessaoStore } from '../../estado/sessaoStore';
 import { ProvedorAuth, useAuth } from '../AuthContext';
 import { definirTokens } from '../tokenSessao';
 import { montador, respostaJson, sessaoDe } from './apoio';
@@ -184,6 +187,8 @@ beforeEach(() => {
   mockSecureStore.clear();
   mockBanco = criarBancoDeTeste();
   definirTokens(null);
+  // O store de sessão é global (como no app): sem isto o usuário de um teste vaza para o seguinte.
+  reiniciarSessaoStore();
   chamadasAoCheckin = [];
   respostaDoLogin = respostaJson(200, sessaoDe(montador, '-2'));
   globalThis.fetch = jest.fn();
@@ -398,5 +403,99 @@ describe('fotos de atestado e avaria guardadas no aparelho (#113)', () => {
 
     await waitFor(() => expect(screen.getByTestId('usuario')).toHaveTextContent('sem-sessao'));
     await waitFor(() => expect(existeFoto(caminho)).toBe(false));
+  });
+});
+
+describe('obra e rascunho de avaria (#114) × sessão, ponta a ponta', () => {
+  let disco: ReturnType<typeof instalarDiscoEmMemoria>;
+
+  beforeEach(() => {
+    disco = instalarDiscoEmMemoria();
+  });
+
+  afterEach(async () => {
+    await apagarTodasAsFotos();
+  });
+
+  /** O montador (usuário 1) deixou a obra e um rascunho com foto gravados. */
+  async function deixarRascunhoComFoto(): Promise<string> {
+    const nome = await salvarFoto(criarFotoDoPicker(), 'image/jpeg');
+    useUiStore.getState().escolherObra(10);
+    useUiStore.getState().alterarRascunhoAvaria({
+      pedidoId: 10,
+      campos: { pecaId: 301, tipoAvariaId: 2, descricao: 'Porta riscada' },
+    });
+    useUiStore.getState().anexarFotoAoRascunho(nome);
+    return nome;
+  }
+
+  const estadoDaUiVazio = () => {
+    expect(useUiStore.getState().obraEscolhidaId).toBeNull();
+    expect(useUiStore.getState().rascunhoAvaria.fotos).toEqual([]);
+    expect(useUiStore.getState().rascunhoAvaria.campos.descricao).toBe('');
+  };
+
+  test('expiração forçada e o MESMO usuário de volta: a obra e o rascunho, com a foto, continuam lá', async () => {
+    guardarSessaoExpirada();
+    await popularBanco();
+    await renderizar();
+    await waitFor(() => expect(mockSecureStore.has(CHAVE_DONO)).toBe(true));
+    const nome = await deixarRascunhoComFoto();
+
+    await fireEvent.press(screen.getByTestId('entrar'));
+    await waitFor(() => expect(screen.getByTestId('usuario')).toHaveTextContent(montador.nome));
+
+    expect(useUiStore.getState().obraEscolhidaId).toBe(10);
+    expect(useUiStore.getState().rascunhoAvaria.fotos).toEqual([nome]);
+    expect(existeFoto(nome)).toBe(true);
+  });
+
+  test('expiração forçada e OUTRO usuário entra: obra, rascunho, arquivo da foto e fila do anterior somem', async () => {
+    guardarSessaoExpirada();
+    await popularBanco();
+    await renderizar();
+    await waitFor(() => expect(mockSecureStore.has(CHAVE_DONO)).toBe(true));
+    const nome = await deixarRascunhoComFoto();
+    respostaDoLogin = respostaJson(200, sessaoDe(OUTRO_MONTADOR, '-b'));
+
+    await fireEvent.press(screen.getByTestId('entrar'));
+    await waitFor(() =>
+      expect(screen.getByTestId('usuario')).toHaveTextContent(OUTRO_MONTADOR.nome),
+    );
+
+    estadoDaUiVazio();
+    expect(existeFoto(nome)).toBe(false);
+    expect(fotosGuardadas()).toEqual([]);
+    expect(await contarAcoes()).toBe(0);
+    expect([...disco.dados.keys()].filter((chave) => chave.startsWith('mc.ui'))).toEqual([]);
+  });
+
+  test('logout explícito: o próximo montador a entrar não encontra nada do anterior', async () => {
+    mockSecureStore.set(
+      CHAVE_SESSAO,
+      JSON.stringify({ accessToken: 'access', refreshToken: 'refresh', usuario: montador }),
+    );
+    jest.mocked(globalThis.fetch).mockResolvedValue(respostaJson(200, montador));
+    await popularBanco();
+    await renderizar();
+    const nome = await deixarRascunhoComFoto();
+
+    await fireEvent.press(screen.getByTestId('sair'));
+    await waitFor(() => expect(screen.getByTestId('usuario')).toHaveTextContent('sem-sessao'));
+    await waitFor(() => expect(existeFoto(nome)).toBe(false));
+    estadoDaUiVazio();
+
+    // O boot respondeu tudo com o montador; para o login volta o roteamento por URL.
+    rotear();
+    respostaDoLogin = respostaJson(200, sessaoDe(OUTRO_MONTADOR, '-b'));
+    await fireEvent.press(screen.getByTestId('entrar'));
+    await waitFor(() =>
+      expect(screen.getByTestId('usuario')).toHaveTextContent(OUTRO_MONTADOR.nome),
+    );
+
+    estadoDaUiVazio();
+    expect(await contarAcoes()).toBe(0);
+    expect(await contarJornadas()).toBe(0);
+    expect(fotosGuardadas()).toEqual([]);
   });
 });

@@ -3,7 +3,7 @@ import { diaNoFuso, StatusJornada } from '@montacontrol/shared';
 import { FUSO_OPERACAO } from '../config/fuso';
 import { useDatabaseOuFalha } from '../db/useDatabase';
 import { sincronizar } from '../sincronizacao/syncManager';
-import { useStatusDaSincronizacao } from '../sincronizacao/statusDaSincronizacao';
+import { useSincronizacaoStore } from '../estado/sincronizacaoStore';
 import type { JornadaExibida } from './jornadasComPendentes';
 import { useJornadasComPendentes } from './useJornadasComPendentes';
 
@@ -61,7 +61,7 @@ export function jornadaParaExibir(
 export function useJornadaAtual(): EstadoJornadaAtual {
   const database = useDatabaseOuFalha();
   const { jornadas, carregando } = useJornadasComPendentes();
-  const { ultimoErro } = useStatusDaSincronizacao();
+  const ultimoErro = useSincronizacaoStore((estado) => estado.ultimoErro);
 
   // Barato (dezenas de linhas) e depende do relógio: calculado a cada render,
   // sem memo, para virar o dia sem esperar uma mudança no banco.

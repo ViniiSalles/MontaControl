@@ -14,7 +14,11 @@ export interface FotosDoFormulario {
 }
 
 /**
- * Fotos de um formulário (avaria, atestado). Cada foto vira arquivo assim que
+ * Fotos de um formulário SEM rascunho persistido (hoje, o de atestado: o texto
+ * e as datas de um atestado são dado de saúde e não ficam em armazenamento sem
+ * criptografia). O formulário de avaria, que tem rascunho, usa
+ * `avarias/useRascunhoDeAvaria`, onde o rascunho é o dono das fotos e fechar a
+ * tela não apaga nada. Aqui, cada foto vira arquivo assim que
  * é anexada, e o formulário só carrega o caminho. O que não chegou à fila
  * (formulário fechado sem enviar, foto removida) é apagado — documento de
  * saúde não pode ficar órfão no aparelho. Depois de enfileirar, o formulário

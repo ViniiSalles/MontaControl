@@ -20,10 +20,9 @@ import { AcaoPendente } from '../../db/AcaoPendente';
 import { apagarTodasAsFotos } from '../../fotos/armazenamentoFotos';
 import { criarFotoDoPicker, fotosGuardadas } from '../../fotos/__tests__/apoio';
 import { ErroApi } from '../../http/erroApi';
-import {
-  atualizarStatusDaSincronizacao,
-  reiniciarStatusDaSincronizacao,
-} from '../../sincronizacao/statusDaSincronizacao';
+import { useSincronizacaoStore } from '../../estado/sincronizacaoStore';
+import { useUiStore } from '../../estado/uiStore';
+import { instalarDiscoEmMemoria } from '../../estado/__tests__/apoio';
 import { drenarFila } from '../../sincronizacao/syncManager';
 import { Avarias } from '../Avarias';
 
@@ -72,9 +71,14 @@ async function preencherEEnviar(comFotos = 0) {
   await fireEvent.press(screen.getByText('Enviar problema'));
 }
 
+let disco: ReturnType<typeof instalarDiscoEmMemoria>;
+
 beforeEach(() => {
   jest.clearAllMocks();
-  reiniciarStatusDaSincronizacao();
+  useSincronizacaoStore.getState().reiniciar();
+  // O rascunho mora no store global persistido: cada teste começa com ele vazio.
+  disco = instalarDiscoEmMemoria();
+  useUiStore.getState().reiniciar();
 });
 
 afterEach(async () => {
@@ -125,7 +129,7 @@ test('réplica vazia depois de uma sincronização que falhou pede para conectar
   await waitFor(() => expect(screen.getByText('Nenhum pedido vinculado')).toBeTruthy());
 
   await act(async () => {
-    atualizarStatusDaSincronizacao({ ultimoErro: 'sem_rede' });
+    useSincronizacaoStore.setState({ ultimoErro: 'sem_rede' });
   });
 
   await waitFor(() => expect(screen.getByText('Não foi possível carregar')).toBeTruthy());
@@ -230,16 +234,95 @@ test('remover uma foto antes de enviar apaga o arquivo', async () => {
   await waitFor(() => expect(fotosGuardadas()).toEqual([]));
 });
 
-test('fechar a tela sem enviar apaga as fotos anexadas', async () => {
+test('fechar a tela sem enviar mantém o rascunho e as fotos: ao voltar, está tudo lá', async () => {
   const database = await bancoComReplica();
-  await render(<Avarias />, { wrapper: comBancoESincronizacao(database) });
-  await waitFor(() => expect(screen.getByText('Enviar problema')).toBeTruthy());
+  await renderizar(database);
+  await waitFor(() => expect(screen.getByText('Armário aéreo 80cm')).toBeTruthy());
+  await fireEvent.press(screen.getByText('Armário aéreo 80cm'));
+  await fireEvent.press(screen.getByText('Peça faltando'));
+  await fireEvent.changeText(screen.getByPlaceholderText('O que aconteceu com a peça?'), 'Rascunho');
   await anexarFotoDaGaleria();
   await waitFor(() => expect(screen.getByLabelText('Foto 1 do problema')).toBeTruthy());
+  const [nome] = fotosGuardadas();
 
   await screen.unmount();
+  // O formulário não apaga nada ao fechar: o rascunho é o dono da foto.
+  expect(fotosGuardadas()).toEqual([nome]);
+  await renderizar(database);
 
-  expect(fotosGuardadas()).toEqual([]);
+  await waitFor(() => expect(screen.getByDisplayValue('Rascunho')).toBeTruthy());
+  expect(screen.getByLabelText('Foto 1 do problema')).toBeTruthy();
+  expect(fotosGuardadas()).toEqual([nome]);
+});
+
+test('fechar e reabrir o app mantém o rascunho de avaria: campos e fotos (os nomes)', async () => {
+  const database = await bancoComReplica();
+  await renderizar(database);
+  await waitFor(() => expect(screen.getByText('Armário aéreo 80cm')).toBeTruthy());
+  await fireEvent.press(screen.getByText('Armário aéreo 80cm'));
+  await fireEvent.press(screen.getByText('Peça faltando'));
+  await fireEvent.changeText(screen.getByPlaceholderText('O que aconteceu com a peça?'), 'Rascunho');
+  await anexarFotoDaGaleria();
+  await waitFor(() => expect(screen.getByLabelText('Foto 1 do problema')).toBeTruthy());
+  const [nome] = fotosGuardadas();
+  await screen.unmount();
+
+  await act(async () => {
+    await disco.fecharEReabrirOApp();
+  });
+  expect(useUiStore.getState().rascunhoAvaria.fotos).toEqual([nome]);
+  await renderizar(database);
+
+  await waitFor(() => expect(screen.getByDisplayValue('Rascunho')).toBeTruthy());
+  expect(screen.getByLabelText('Foto 1 do problema')).toBeTruthy();
+  // E o que volta é enviável: a fila recebe o mesmo arquivo.
+  enviarMock.mockRejectedValue(new TypeError('Network request failed'));
+  await fireEvent.press(screen.getByText('Enviar problema'));
+  await waitFor(() => expect(screen.getByText('AGUARDANDO ENVIO')).toBeTruthy());
+  const [pendente] = await database
+    .get<AcaoPendente>('acoes_pendentes')
+    .query(Q.where('status', 'pendente'))
+    .fetch();
+  expect(JSON.parse(pendente.payload)).toMatchObject({
+    pecaId: 301,
+    tipoAvariaId: 2,
+    descricao: 'Rascunho',
+    fotosCaminhos: [nome],
+  });
+});
+
+test('rascunho com pedido, peça e tipo que a réplica já não tem não é enviado com esses ids', async () => {
+  useUiStore.getState().alterarRascunhoAvaria({
+    pedidoId: 9999,
+    campos: { pecaId: 9999, tipoAvariaId: 9999, descricao: 'De uma réplica antiga' },
+  });
+  await renderizar(await bancoComReplica());
+  await waitFor(() => expect(screen.getByDisplayValue('De uma réplica antiga')).toBeTruthy());
+
+  await fireEvent.press(screen.getByText('Enviar problema'));
+
+  expect(screen.getByText('Selecione a peça com problema.')).toBeTruthy();
+  expect(screen.getByText('Selecione o tipo de problema.')).toBeTruthy();
+  expect(enviarMock).not.toHaveBeenCalled();
+});
+
+test('Descartar rascunho apaga os arquivos das fotos e esvazia o formulário', async () => {
+  const database = await bancoComReplica();
+  await renderizar(database);
+  await waitFor(() => expect(screen.getByText('Armário aéreo 80cm')).toBeTruthy());
+  expect(screen.queryByText('Descartar rascunho')).toBeNull();
+  await fireEvent.changeText(screen.getByPlaceholderText('O que aconteceu com a peça?'), 'Rascunho');
+  await anexarFotoDaGaleria();
+  await waitFor(() => expect(screen.getByLabelText('Foto 1 do problema')).toBeTruthy());
+  expect(fotosGuardadas()).toHaveLength(1);
+
+  await fireEvent.press(screen.getByText('Descartar rascunho'));
+
+  await waitFor(() => expect(fotosGuardadas()).toEqual([]));
+  expect(screen.queryByLabelText('Foto 1 do problema')).toBeNull();
+  expect(screen.queryByDisplayValue('Rascunho')).toBeNull();
+  expect(screen.queryByText('Descartar rascunho')).toBeNull();
+  expect(useUiStore.getState().rascunhoAvaria.fotos).toEqual([]);
 });
 
 test('desmontar a tela com o envio ainda pendurado na rede não perde as fotos: a fila é a dona e sobe depois com as duas', async () => {

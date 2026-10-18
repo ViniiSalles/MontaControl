@@ -1,12 +1,4 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { Perfil } from '@montacontrol/shared';
 import type { LoginResponse, UsuarioDTO } from '@montacontrol/shared';
@@ -39,6 +31,12 @@ import {
   registrarDonoNoBancoLocal,
 } from '../db/database';
 import { decidirDestinoDaFila } from './destinoDaFila';
+import {
+  descartarEstadosDaReplica,
+  descartarEstadosDoUsuario,
+  reidratarEstadosPersistidos,
+} from '../estado/estadosDoUsuario';
+import { useSessaoStore } from '../estado/sessaoStore';
 
 export const CODIGO_PERFIL_EXCLUSIVO_WEB = 'PERFIL_EXCLUSIVO_WEB';
 
@@ -54,16 +52,29 @@ export interface SessaoAutenticada {
   usuario: UsuarioDTO;
 }
 
-interface ContextoAuth {
-  /** `null` = sem sessão. Durante a restauração de boot é `null` com `restaurando = true`. */
-  sessao: SessaoAutenticada | null;
-  /** Verdadeiro só até a sessão guardada ser lida — segura a splash. Nunca espera a rede. */
-  restaurando: boolean;
+interface AcoesDeAuth {
   entrar: (email: string, senha: string) => Promise<void>;
   sair: () => Promise<void>;
 }
 
-const AuthContext = createContext<ContextoAuth | null>(null);
+interface ContextoAuth extends AcoesDeAuth {
+  /** `null` = sem sessão. Durante a restauração de boot é `null` com `restaurando = true`. */
+  sessao: SessaoAutenticada | null;
+  /** Verdadeiro só até a sessão guardada ser lida — segura a splash. Nunca espera a rede. */
+  restaurando: boolean;
+}
+
+/**
+ * O estado da sessão (usuário, restaurando) mora em `useSessaoStore`; o
+ * contexto só entrega as ações (`entrar`/`sair`), que dependem de refs e
+ * callbacks do provider e são estáveis — mudar a sessão não re-renderiza quem
+ * só chama as ações.
+ */
+const AcoesDeAuthContext = createContext<AcoesDeAuth | null>(null);
+
+function publicarUsuario(usuario: UsuarioDTO | null): void {
+  useSessaoStore.setState({ usuario });
+}
 
 /**
  * O app mobile é exclusivo do MONTADOR: GESTOR, RH e DEPOSITO são recusados
@@ -100,18 +111,23 @@ async function reconciliarFilaCom(usuario: UsuarioDTO): Promise<void> {
   if (
     decidirDestinoDaFila({ acoes, donoBanco, donoMarcador, usuarioId: usuario.id }) === 'apagar'
   ) {
+    // Obra e rascunho do usuário anterior também saem da memória (a expiração
+    // forçada os manteve) e do disco, antes de qualquer hidratação.
+    const descarte = descartarEstadosDoUsuario();
     await limparBancoLocal();
+    await descarte;
   }
   if (!(await registrarDonoNoBancoLocal(usuario.id))) {
     throw new Error('Não foi possível registrar o dono da fila no aparelho.');
   }
   // O marcador do SecureStore só existe entre a expiração forçada e este login.
   if (donoMarcador.tipo !== 'ausente') await limparDonoDaFila();
+  // Só agora o aparelho é comprovadamente deste usuário: lê do disco a obra
+  // escolhida, o rascunho e a última sincronização (antes disso poderiam ser de outro).
+  await reidratarEstadosPersistidos();
 }
 
 export function ProvedorAuth({ children }: { children: ReactNode }) {
-  const [sessao, setSessao] = useState<SessaoAutenticada | null>(null);
-  const [restaurando, setRestaurando] = useState(true);
   /** Quem está logado agora; permite descartar respostas de uma sessão que já acabou. */
   const usuarioIdRef = useRef<number | null>(null);
 
@@ -122,9 +138,11 @@ export function ProvedorAuth({ children }: { children: ReactNode }) {
   const encerrarLocalmente = useCallback(async () => {
     usuarioIdRef.current = null;
     definirTokens(null);
-    setSessao(null);
+    publicarUsuario(null);
+    const descarte = descartarEstadosDoUsuario();
     await limparSessao();
     await limparBancoLocal().catch(() => undefined);
+    await descarte;
   }, []);
 
   /**
@@ -139,15 +157,21 @@ export function ProvedorAuth({ children }: { children: ReactNode }) {
 
     usuarioIdRef.current = null;
     definirTokens(null);
-    setSessao(null);
+    publicarUsuario(null);
     // Dono primeiro: um app fechado no meio nunca deixa fila sem dono.
     if (!(await registrarDonoDaFila(donoId))) {
+      const descarte = descartarEstadosDoUsuario();
       await limparSessao();
       await limparBancoLocal().catch(() => undefined);
+      await descarte;
       return;
     }
+    // Fila e dono ficam, então obra e rascunho do mesmo montador também; só o
+    // status da sincronização (que descreve a réplica apagada) vai embora.
+    const descarteDaReplica = descartarEstadosDaReplica();
     await limparSessao();
     await limparEspelhoBancoLocal().catch(() => undefined);
+    await descarteDaReplica;
   }, [encerrarLocalmente]);
 
   useEffect(() => {
@@ -171,7 +195,7 @@ export function ProvedorAuth({ children }: { children: ReactNode }) {
       await reconciliarFilaCom(salva.usuario);
       usuarioIdRef.current = salva.usuario.id;
       definirTokens({ accessToken: salva.accessToken, refreshToken: salva.refreshToken });
-      if (!cancelado) setSessao({ usuario: salva.usuario });
+      if (!cancelado) publicarUsuario(salva.usuario);
       return salva.usuario.id;
     }
 
@@ -193,7 +217,7 @@ export function ProvedorAuth({ children }: { children: ReactNode }) {
           return;
         }
         // Funcional: se o montador saiu enquanto a rede respondia, não ressuscita a sessão.
-        setSessao((atual) => (atual ? { usuario } : atual));
+        useSessaoStore.setState((atual) => (atual.usuario ? { usuario } : atual));
         await atualizarUsuarioDaSessao(usuario);
       } catch {
         // Rede fora, servidor instável ou sessão já encerrada pelo aviso: nada a fazer aqui.
@@ -205,7 +229,7 @@ export function ProvedorAuth({ children }: { children: ReactNode }) {
       try {
         usuarioId = await restaurar();
       } finally {
-        if (!cancelado) setRestaurando(false);
+        if (!cancelado) useSessaoStore.setState({ restaurando: false });
       }
       if (usuarioId !== null) await revalidar(usuarioId);
     })().catch(() => undefined);
@@ -225,7 +249,7 @@ export function ProvedorAuth({ children }: { children: ReactNode }) {
     usuarioIdRef.current = resposta.usuario.id;
     definirTokens(tokens);
     await salvarSessao({ ...tokens, usuario: resposta.usuario });
-    setSessao({ usuario: resposta.usuario });
+    publicarUsuario(resposta.usuario);
   }, []);
 
   const sair = useCallback(async () => {
@@ -236,7 +260,9 @@ export function ProvedorAuth({ children }: { children: ReactNode }) {
     const donoId = usuarioIdRef.current;
     usuarioIdRef.current = null;
     definirTokens(null);
-    setSessao(null);
+    publicarUsuario(null);
+    // Obra, rascunho e status somem da memória já (síncrono); o disco é apagado abaixo.
+    const descarte = descartarEstadosDoUsuario();
     await limparSessao();
     // Sem isto, um segundo montador que logar neste aparelho veria o
     // espelho de jornada do anterior até a primeira sincronização. `.catch`
@@ -252,21 +278,30 @@ export function ProvedorAuth({ children }: { children: ReactNode }) {
     // deixou apagar, marca o dono: o próximo login de outro usuário limpa.
     if (apagou) await limparDonoDaFila();
     else if (donoId !== null) await registrarDonoDaFila(donoId);
+    await descarte;
     if (tokenDaSessao) {
       await encerrarSessaoNoServidor(tokenDaSessao).catch(() => undefined);
     }
   }, []);
 
-  const valor = useMemo(
-    () => ({ sessao, restaurando, entrar, sair }),
-    [sessao, restaurando, entrar, sair],
-  );
+  const acoes = useMemo(() => ({ entrar, sair }), [entrar, sair]);
 
-  return <AuthContext.Provider value={valor}>{children}</AuthContext.Provider>;
+  return <AcoesDeAuthContext.Provider value={acoes}>{children}</AcoesDeAuthContext.Provider>;
 }
 
+/**
+ * Fatia fina sobre `useSessaoStore`: mantém o formato de antes
+ * (`sessao`, `restaurando`, `entrar`, `sair`) para as telas. Quem só precisa do
+ * usuário pode ler o store por seletor e não re-renderizar com o resto.
+ */
 export function useAuth(): ContextoAuth {
-  const contexto = useContext(AuthContext);
-  if (!contexto) throw new Error('useAuth deve ser usado dentro de <ProvedorAuth>');
-  return contexto;
+  const usuario = useSessaoStore((estado) => estado.usuario);
+  const restaurando = useSessaoStore((estado) => estado.restaurando);
+  const acoes = useContext(AcoesDeAuthContext);
+  if (!acoes) throw new Error('useAuth deve ser usado dentro de <ProvedorAuth>');
+
+  return useMemo(
+    () => ({ sessao: usuario ? { usuario } : null, restaurando, ...acoes }),
+    [usuario, restaurando, acoes],
+  );
 }

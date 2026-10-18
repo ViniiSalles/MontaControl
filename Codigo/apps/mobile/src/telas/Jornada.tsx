@@ -23,8 +23,8 @@ import type { TipoPonto } from '../jornada/ultimoPonto';
 import { useHistoricoPontos } from '../jornada/useHistoricoPontos';
 import { useJornadaAtual } from '../jornada/useJornadaAtual';
 import { useObrasDoMontador } from '../pedidos/useObrasDoMontador';
-import { useSincronizacao } from '../sincronizacao/SincronizacaoContext';
-import { useStatusDaSincronizacao } from '../sincronizacao/statusDaSincronizacao';
+import { useSincronizacaoStore } from '../estado/sincronizacaoStore';
+import { useUiStore } from '../estado/uiStore';
 import { BotaoAcaoPrincipal } from './jornada/BotaoAcaoPrincipal';
 import { CartaoBancoHoras } from './jornada/CartaoBancoHoras';
 import { CartaoUltimoPonto } from './jornada/CartaoUltimoPonto';
@@ -54,10 +54,11 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
 
   const database = useDatabaseOuFalha();
 
-  // A sincronização automática e o status da fila vêm do provider do app
-  // autenticado (`ProvedorSincronizacao`), não desta tela.
-  const { pendentes, dispensarAvisos } = useSincronizacao();
-  const { ultimoErro: erroDeSincronizacao } = useStatusDaSincronizacao();
+  // A sincronização automática (`useSincronizacaoDoApp`) e o status da fila vêm
+  // do app autenticado; esta tela só lê o store.
+  const pendentes = useSincronizacaoStore((estado) => estado.pendentes);
+  const dispensarAvisos = useSincronizacaoStore((estado) => estado.dispensarAvisos);
+  const erroDeSincronizacao = useSincronizacaoStore((estado) => estado.ultimoErro);
 
   const { jornada, carregando, erro } = useJornadaAtual();
   // Menor período válido (`PeriodoHistorico`): só precisa alcançar hoje, o
@@ -65,9 +66,15 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
   const { dias: diasHistorico } = useHistoricoPontos(5);
 
   const { obras, carregando: carregandoObras } = useObrasDoMontador(database);
-  const [obraEscolhidaId, setObraEscolhidaId] = useState<number | null>(null);
+  // A escolha mora no store persistido: sobrevive a trocar de aba e a fechar o app.
+  const obraEscolhidaId = useUiStore((estado) => estado.obraEscolhidaId);
+  const escolherObra = useUiStore((estado) => estado.escolherObra);
+  // Só vale a escolha que ainda está entre as obras do montador (a atribuição pode ter mudado).
+  const obraEscolhidaValidaId = obras.some((obra) => obra.id === obraEscolhidaId)
+    ? obraEscolhidaId
+    : null;
   // Com uma obra só, não há o que escolher.
-  const obraEntradaId = obraEscolhidaId ?? (obras.length === 1 ? obras[0].id : null);
+  const obraEntradaId = obraEscolhidaValidaId ?? (obras.length === 1 ? obras[0].id : null);
   const obraEntrada = obras.find((obra) => obra.id === obraEntradaId) ?? null;
 
   // Obra do check-in da jornada aberta (`jornadas.pedido_id`, ou o pedido da
@@ -192,7 +199,7 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
           <SeletorObra
             obras={obras}
             selecionadaId={obraEntradaId}
-            aoSelecionar={setObraEscolhidaId}
+            aoSelecionar={escolherObra}
             carregando={carregandoObras}
           />
         ) : (

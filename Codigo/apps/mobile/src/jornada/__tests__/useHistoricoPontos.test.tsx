@@ -8,10 +8,7 @@ import {
   linhaDeJornada,
 } from '../../db/__tests__/apoio';
 import { comBanco } from '../../db/__tests__/apoioReact';
-import {
-  atualizarStatusDaSincronizacao,
-  reiniciarStatusDaSincronizacao,
-} from '../../sincronizacao/statusDaSincronizacao';
+import { useSincronizacaoStore } from '../../estado/sincronizacaoStore';
 import { useHistoricoPontos } from '../useHistoricoPontos';
 import { AGORA_FIXO_MS, fixarRelogio, soltarRelogio } from './relogioFixo';
 
@@ -44,7 +41,7 @@ beforeEach(() => {
   fetchMock.mockReset();
   globalThis.fetch = fetchMock;
   definirTokens({ accessToken: 'token', refreshToken: 'refresh' });
-  reiniciarStatusDaSincronizacao();
+  useSincronizacaoStore.getState().reiniciar();
 });
 
 describe('useHistoricoPontos', () => {
@@ -110,7 +107,7 @@ describe('useHistoricoPontos', () => {
 
   it('sem dado local e com a sincronização falhando: erro fica true e dias fica vazio', async () => {
     const database = criarBancoDeTeste();
-    atualizarStatusDaSincronizacao({ ultimoErro: 'sem_rede' });
+    useSincronizacaoStore.setState({ ultimoErro: 'sem_rede' });
 
     const { result } = await renderHook(() => useHistoricoPontos(15), {
       wrapper: comBanco(database),

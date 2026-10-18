@@ -14,7 +14,7 @@ import {
   queryPecasDoMontador,
   queryPedidosDoMontador,
 } from '../pedidos/pedidosDoMontador';
-import { useStatusDaSincronizacao } from '../sincronizacao/statusDaSincronizacao';
+import { useSincronizacaoStore } from '../estado/sincronizacaoStore';
 import { sincronizar } from '../sincronizacao/syncManager';
 import {
   COLUNAS_OBSERVADAS_DE_ACAO,
@@ -51,7 +51,7 @@ export interface EstadoDadosAvarias {
  */
 export function useDadosAvarias(): EstadoDadosAvarias {
   const database = useDatabaseOuFalha();
-  const { ultimoErro } = useStatusDaSincronizacao();
+  const ultimoErro = useSincronizacaoStore((estado) => estado.ultimoErro);
 
   const pedidos = useConsulta(queryPedidosDoMontador, COLUNAS_OBSERVADAS_DE_PEDIDO_COMPLETO, paraPedidoDoMontador);
   const ambientes = useConsulta(queryAmbientesDoMontador, COLUNAS_OBSERVADAS_DE_AMBIENTE, paraAmbienteDoMontador);

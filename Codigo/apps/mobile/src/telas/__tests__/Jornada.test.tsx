@@ -19,11 +19,10 @@ import { useAuth } from '../../auth/AuthContext';
 import { registrarCheckin, registrarCheckout } from '../../jornada/acoes';
 import { buscarBancoHoras } from '../../banco-horas/clienteBancoHoras';
 import { iniciarSincronizacao, sincronizar } from '../../sincronizacao/syncManager';
-import { ProvedorSincronizacao } from '../../sincronizacao/SincronizacaoContext';
-import {
-  atualizarStatusDaSincronizacao,
-  reiniciarStatusDaSincronizacao,
-} from '../../sincronizacao/statusDaSincronizacao';
+import { ComSincronizacaoDoApp } from '../../db/__tests__/apoioReact';
+import { useSincronizacaoStore } from '../../estado/sincronizacaoStore';
+import { useUiStore } from '../../estado/uiStore';
+import { instalarDiscoEmMemoria } from '../../estado/__tests__/apoio';
 import { formatarHora } from '../../jornada/formatacao';
 import { periodoAtual } from '../../banco-horas/periodo';
 import { montador } from '../../auth/__tests__/apoio';
@@ -35,17 +34,18 @@ const abrirBancoHoras = jest.fn();
 const lancarEmAtraso = jest.fn();
 
 let database = criarBancoDeTeste();
+let disco: ReturnType<typeof instalarDiscoEmMemoria>;
 
 function renderizar() {
   return render(
     <DatabaseProvider database={database}>
-      <ProvedorSincronizacao>
+      <ComSincronizacaoDoApp>
         <Jornada
           aoAbrirHistorico={abrirHistorico}
           aoAbrirBancoHoras={abrirBancoHoras}
           aoLancarEmAtraso={lancarEmAtraso}
         />
-      </ProvedorSincronizacao>
+      </ComSincronizacaoDoApp>
     </DatabaseProvider>,
   );
 }
@@ -176,7 +176,9 @@ beforeEach(async () => {
   // jest-expo instala para os componentes nativos precisam sobreviver.
   jest.clearAllMocks();
   database = criarBancoDeTeste();
-  reiniciarStatusDaSincronizacao();
+  useSincronizacaoStore.getState().reiniciar();
+  // A obra escolhida mora no store global persistido: cada teste começa sem ela.
+  disco = instalarDiscoEmMemoria();
   // Réplica padrão de todo teste: o saldo do mês corrente e uma obra.
   await gravarLinhasNaReplica(database, 'banco_horas', [
     {
@@ -284,7 +286,7 @@ test('recusa da API aparece como erro sem trocar o estado do botão', async () =
 // Regressão: a falha de leitura chegou a esconder o botão principal, e o
 // montador ficava sem como registrar por causa de um GET que não voltou.
 test('falha ao sincronizar sem nenhum dado local avisa mas mantém o botão de bater ponto', async () => {
-  atualizarStatusDaSincronizacao({ ultimoErro: 'sem_rede' });
+  useSincronizacaoStore.setState({ ultimoErro: 'sem_rede' });
 
   await renderizar();
 
@@ -297,7 +299,7 @@ test('falha ao sincronizar sem nenhum dado local avisa mas mantém o botão de b
 
 test('app desatualizado (426) mostra o aviso para atualizar, sem esconder o ponto', async () => {
   await gravarLinhasNaReplica(database, 'jornadas', [abertaNaReplica()]);
-  atualizarStatusDaSincronizacao({ ultimoErro: 'versao_incompativel' });
+  useSincronizacaoStore.setState({ ultimoErro: 'versao_incompativel' });
 
   await renderizar();
 
@@ -306,7 +308,7 @@ test('app desatualizado (426) mostra o aviso para atualizar, sem esconder o pont
 });
 
 test('atualizar dispara uma sincronização e a jornada que o pull traz aparece', async () => {
-  atualizarStatusDaSincronizacao({ ultimoErro: 'sem_rede' });
+  useSincronizacaoStore.setState({ ultimoErro: 'sem_rede' });
 
   await renderizar();
   await waitFor(() =>
@@ -319,7 +321,7 @@ test('atualizar dispara uma sincronização e a jornada que o pull traz aparece'
   // O pull que o gatilho dispara grava a réplica e limpa o erro.
   await act(async () => {
     await gravarLinhasNaReplica(database, 'jornadas', [abertaNaReplica()]);
-    atualizarStatusDaSincronizacao({ ultimoErro: null });
+    useSincronizacaoStore.setState({ ultimoErro: null });
   });
 
   await waitFor(() => expect(screen.getByText(ROTULO_SAIDA)).toBeTruthy());
@@ -392,13 +394,13 @@ test('o saldo do mês vem da réplica; a tela não sincroniza sozinha ao abrir',
   expect(sincronizarMock).not.toHaveBeenCalled();
 });
 
-// #107: a sincronização automática vive em `ProvedorSincronizacao` (app
+// #107: a sincronização automática vive em `useSincronizacaoDoApp` (app
 // autenticado), não na tela — montar Jornada não deve ligá-la de novo.
 test('a tela Jornada não liga a sincronização automática por conta própria', async () => {
   await renderizar();
   await waitFor(() => expect(screen.getByText(ROTULO_ENTRADA)).toBeTruthy());
 
-  // Uma única chamada: a do provider que envolve a tela neste teste.
+  // Uma única chamada: a do `ComSincronizacaoDoApp` que envolve a tela neste teste.
   expect(iniciarSincronizacaoMock).toHaveBeenCalledTimes(1);
 });
 
@@ -474,6 +476,37 @@ test('com mais de uma obra, a entrada exige escolher a obra', async () => {
   await fireEvent.press(screen.getByText(ROTULO_ENTRADA));
 
   await waitFor(() => expect(registrarCheckinMock).toHaveBeenCalledWith(database, OUTRA_OBRA));
+});
+
+test('a obra escolhida sobrevive a fechar e reabrir o app: o ponto de entrada já vai com ela', async () => {
+  await gravarLinhasNaReplica(database, 'pedidos', [
+    linhaDePedido({ id: '11', numero_pedido: 'PED-000011', cliente_nome: 'João Lima' }),
+  ]);
+  const { unmount } = await renderizar();
+  await waitFor(() => expect(screen.getByText('João Lima · PED-000011')).toBeTruthy());
+  await fireEvent.press(screen.getByText('João Lima · PED-000011'));
+  await unmount();
+
+  await act(async () => {
+    await disco.fecharEReabrirOApp();
+  });
+  expect(useUiStore.getState().obraEscolhidaId).toBe(OUTRA_OBRA.id);
+  await renderizar();
+  await waitFor(() => expect(screen.getByText(ROTULO_ENTRADA)).toBeTruthy());
+  await fireEvent.press(screen.getByText(ROTULO_ENTRADA));
+
+  expect(screen.queryByText('Escolha a obra')).toBeNull();
+  await waitFor(() => expect(registrarCheckinMock).toHaveBeenCalledWith(database, OUTRA_OBRA));
+});
+
+test('obra escolhida que deixou de existir na réplica é ignorada: com uma obra só, vale a única', async () => {
+  useUiStore.getState().escolherObra(9999);
+
+  await renderizar();
+  await waitFor(() => expect(screen.getByText(ROTULO_ENTRADA)).toBeTruthy());
+  await fireEvent.press(screen.getByText(ROTULO_ENTRADA));
+
+  await waitFor(() => expect(registrarCheckinMock).toHaveBeenCalledWith(database, OBRA));
 });
 
 test('sem obra atribuída avisa e não registra', async () => {

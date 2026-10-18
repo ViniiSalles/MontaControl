@@ -19,7 +19,7 @@ export interface EstadoJornadasComPendentes {
 /**
  * Jornadas como a tela mostra: a réplica (escrita só pelo `synchronize()`) com
  * as ações de check-in/check-out ainda na fila por cima. Não vai à rede — quem
- * sincroniza é o provider do app (`ProvedorSincronizacao`); a leitura reage
+ * sincroniza é o provider do app (`useSincronizacaoDoApp`); a leitura reage
  * sozinha quando o pull grava ou a fila muda.
  *
  * Duas assinaturas separadas e o resultado derivado no render: a sobreposição

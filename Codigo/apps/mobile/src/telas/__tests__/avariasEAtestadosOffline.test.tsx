@@ -21,13 +21,13 @@ import type { SyncPullResponse } from '@montacontrol/shared';
 import { definirTokens } from '../../auth/tokenSessao';
 import { respostaJson } from '../../auth/__tests__/apoio';
 import { criarBancoDeTeste, gravarPullNaReplica } from '../../db/__tests__/apoio';
-import { comBanco } from '../../db/__tests__/apoioReact';
+import { comBanco, ComSincronizacaoDoApp } from '../../db/__tests__/apoioReact';
 import { AcaoPendente } from '../../db/AcaoPendente';
 import { apagarTodasAsFotos } from '../../fotos/armazenamentoFotos';
 import { base64DeTexto, criarFotoDoPicker, fotosGuardadas } from '../../fotos/__tests__/apoio';
-import { ProvedorSincronizacao } from '../../sincronizacao/SincronizacaoContext';
 import { instalarGatilhosFalsos } from '../../sincronizacao/__tests__/gatilhosFalsos';
-import { reiniciarStatusDaSincronizacao } from '../../sincronizacao/statusDaSincronizacao';
+import { useSincronizacaoStore } from '../../estado/sincronizacaoStore';
+import { useUiStore } from '../../estado/uiStore';
 import { Atestados } from '../Atestados';
 import { Avarias } from '../Avarias';
 
@@ -115,7 +115,7 @@ async function fetchDoServidor(url: unknown, init?: RequestInit): Promise<Respon
 }
 
 function Tela({ children }: { children: ReactNode }) {
-  return <ProvedorSincronizacao>{children}</ProvedorSincronizacao>;
+  return <ComSincronizacaoDoApp>{children}</ComSincronizacaoDoApp>;
 }
 
 async function renderizar(tela: ReactNode) {
@@ -180,7 +180,8 @@ beforeEach(async () => {
   servidor = { online: false, avarias: [], atestados: [], recusa: null };
   globalThis.fetch = jest.fn(fetchDoServidor) as unknown as typeof fetch;
   definirTokens({ accessToken: 'token', refreshToken: 'refresh' });
-  reiniciarStatusDaSincronizacao();
+  useSincronizacaoStore.getState().reiniciar();
+  useUiStore.getState().reiniciar();
   gatilhos = instalarGatilhosFalsos();
   database = criarBancoDeTeste();
   // Réplica preenchida por um pull anterior; agora o aparelho está sem rede.

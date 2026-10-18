@@ -21,10 +21,7 @@ import { criarBancoDeTeste, gravarLinhasNaReplica } from '../../db/__tests__/apo
 import { comBancoESincronizacao } from '../../db/__tests__/apoioReact';
 import { apagarTodasAsFotos } from '../../fotos/armazenamentoFotos';
 import { criarFotoDoPicker } from '../../fotos/__tests__/apoio';
-import {
-  atualizarStatusDaSincronizacao,
-  reiniciarStatusDaSincronizacao,
-} from '../../sincronizacao/statusDaSincronizacao';
+import { useSincronizacaoStore } from '../../estado/sincronizacaoStore';
 import { Atestados } from '../Atestados';
 
 jest.mock('../../auth/armazenamentoSessao', () => ({
@@ -65,7 +62,7 @@ beforeEach(() => {
   fetchMock.mockReset();
   globalThis.fetch = fetchMock;
   definirTokens(null);
-  reiniciarStatusDaSincronizacao();
+  useSincronizacaoStore.getState().reiniciar();
   database = criarBancoDeTeste();
   jest.mocked(randomUUID).mockReturnValue(ID_DO_APARELHO);
 });
@@ -106,7 +103,7 @@ test('réplica vazia depois de uma sincronização que falhou pede para conectar
   await waitFor(() => expect(screen.getByText('Nenhum atestado enviado ainda.')).toBeTruthy());
 
   await act(async () => {
-    atualizarStatusDaSincronizacao({ ultimoErro: 'sem_rede' });
+    useSincronizacaoStore.setState({ ultimoErro: 'sem_rede' });
   });
 
   await waitFor(() =>
