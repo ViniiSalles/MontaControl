@@ -30,7 +30,8 @@ import type {
  * Deve subir sempre que o contrato mudar de forma incompatível — tabela ou
  * coluna removida/renomeada/com semântica nova. Acrescentar coluna opcional
  * não exige. O servidor recusa versões diferentes da dele (app antigo
- * precisa atualizar). Valor inicial 2, alinhado com o schema v2 do app.
+ * precisa atualizar). As duas versões são independentes de propósito: o contrato
+ * subir não implica migração local, nem o contrário.
  */
 export const SYNC_SCHEMA_VERSION = 2;
 
