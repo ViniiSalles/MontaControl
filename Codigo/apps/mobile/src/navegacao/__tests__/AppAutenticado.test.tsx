@@ -179,9 +179,11 @@ describe('indicador de status da sincronização', () => {
     await act(async () => gatilhos.emitirRede(false));
     await waitFor(() => expect(screen.getByText('Sem conexão · 1 pendente')).toBeTruthy());
 
-    await database.write(async () => {
-      const [acao] = await database.get<AcaoPendente>('acoes_pendentes').query().fetch();
-      await acao.destroyPermanently();
+    await act(async () => {
+      await database.write(async () => {
+        const [acao] = await database.get<AcaoPendente>('acoes_pendentes').query().fetch();
+        await acao.destroyPermanently();
+      });
     });
     await waitFor(() => expect(screen.getByText('Sem conexão')).toBeTruthy());
   });
