@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { Alert, Image, Pressable, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { randomUUID } from 'expo-crypto';
-import type { FotoBase64, PedidoDoMontadorDTO, TipoAvariaDTO } from '@montacontrol/shared';
+import type { PedidoDoMontadorDTO, TipoAvariaDTO } from '@montacontrol/shared';
 import { cores, espacamento, raio } from '@montacontrol/design-tokens/native';
 import { Alerta } from '../../ui/Alerta';
 import { Botao } from '../../ui/Botao';
@@ -12,7 +12,8 @@ import { Cartao } from '../../ui/Cartao';
 import { Icone } from '../../ui/Icone';
 import { Texto } from '../../ui/Texto';
 import { useDatabaseOuFalha } from '../../db/useDatabase';
-import { paraFotoBase64 } from '../../atestados/fotoParaBase64';
+import { mimeTypeSuportado } from '../../fotos/armazenamentoFotos';
+import { useFotosDoFormulario } from '../../fotos/useFotosDoFormulario';
 import { MAXIMO_FOTOS, validarReporteAvaria } from '../../avarias/validarReporteAvaria';
 import type { CamposReporteAvaria, ErrosReporteAvaria } from '../../avarias/validarReporteAvaria';
 import { executarAcaoAvaria } from '../../sincronizacao/outbox';
@@ -29,7 +30,8 @@ interface PropsNovaAvaria {
 
 const CAMPOS_VAZIOS: CamposReporteAvaria = { pecaId: null, tipoAvariaId: null, descricao: '' };
 const TAMANHO_MINIATURA = espacamento[80];
-const OPCOES_PICKER = { base64: true, quality: 0.7, allowsMultipleSelection: false } as const;
+/** Sem `base64`: a foto vira arquivo no aparelho e só é convertida na hora do envio. */
+const OPCOES_PICKER = { quality: 0.7, allowsMultipleSelection: false } as const;
 
 function Secao({ titulo, erro, children }: { titulo: string; erro?: string; children: ReactNode }) {
   return (
@@ -52,8 +54,7 @@ export function NovaAvaria({ pedidos, tipos, aoEnviado, aoIniciarEnvio }: PropsN
   const database = useDatabaseOuFalha();
   const [pedidoEscolhido, setPedidoEscolhido] = useState<number | null>(null);
   const [campos, setCampos] = useState<CamposReporteAvaria>(CAMPOS_VAZIOS);
-  const [fotos, setFotos] = useState<FotoBase64[]>([]);
-  const [previas, setPrevias] = useState<string[]>([]);
+  const fotos = useFotosDoFormulario();
   const [erros, setErros] = useState<ErrosReporteAvaria>({});
   const [enviando, setEnviando] = useState(false);
   const [falha, setFalha] = useState<string | null>(null);
@@ -92,20 +93,20 @@ export function NovaAvaria({ pedidos, tipos, aoEnviado, aoIniciarEnvio }: PropsN
           });
     if (resultado.canceled) return;
 
-    const foto = paraFotoBase64(resultado.assets[0]);
-    if (!foto) {
+    const [asset] = resultado.assets;
+    const mimeType = mimeTypeSuportado(asset.mimeType);
+    if (!mimeType) {
       setFalha('Não foi possível usar essa foto. Tente outra.');
       return;
     }
 
-    setFotos((atuais) => [...atuais, foto]);
-    setPrevias((atuais) => [...atuais, resultado.assets[0].uri]);
+    try {
+      await fotos.adicionar(asset.uri, mimeType);
+    } catch {
+      setFalha('Não foi possível guardar essa foto. Tente outra.');
+      return;
+    }
     setErros((atuais) => ({ ...atuais, fotos: undefined }));
-  }
-
-  function removerFoto(indice: number) {
-    setFotos((atuais) => atuais.filter((_, i) => i !== indice));
-    setPrevias((atuais) => atuais.filter((_, i) => i !== indice));
   }
 
   function aoTocarAdicionarFoto() {
@@ -117,7 +118,7 @@ export function NovaAvaria({ pedidos, tipos, aoEnviado, aoIniciarEnvio }: PropsN
   }
 
   async function enviar(): Promise<void> {
-    const { erros: encontrados, dados } = validarReporteAvaria(campos, fotos);
+    const { erros: encontrados, dados } = validarReporteAvaria(campos, fotos.caminhos);
     setErros(encontrados);
     if (!dados) return;
 
@@ -127,12 +128,19 @@ export function NovaAvaria({ pedidos, tipos, aoEnviado, aoIniciarEnvio }: PropsN
     try {
       const resultado = await executarAcaoAvaria(database, { idCliente: randomUUID(), ...dados });
       if (resultado.tipo === 'recusado') {
-        setFalha(resultado.mensagem);
+        // A recusa já apagou os arquivos: as miniaturas não têm mais o que mostrar.
+        fotos.esquecer();
+        setFalha(
+          dados.fotosCaminhos
+            ? `${resultado.mensagem}
+As fotos anexadas foram descartadas; anexe de novo se precisar.`
+            : resultado.mensagem,
+        );
         return;
       }
+      // Na fila (ou já aceita), os arquivos passam a ser dela.
+      fotos.esquecer();
       setCampos(CAMPOS_VAZIOS);
-      setFotos([]);
-      setPrevias([]);
       aoEnviado(
         resultado.tipo === 'enviada'
           ? 'Problema enviado. O gestor vai analisar.'
@@ -216,7 +224,7 @@ export function NovaAvaria({ pedidos, tipos, aoEnviado, aoIniciarEnvio }: PropsN
             obrigatorio
           />
 
-          {fotos.length < MAXIMO_FOTOS && (
+          {fotos.caminhos.length < MAXIMO_FOTOS && (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Fotografar problema"
@@ -240,9 +248,9 @@ export function NovaAvaria({ pedidos, tipos, aoEnviado, aoIniciarEnvio }: PropsN
             </Pressable>
           )}
 
-          {previas.length > 0 && (
+          {fotos.caminhos.length > 0 && (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: espacamento[8] }}>
-              {previas.map((uri, indice) => (
+              {fotos.caminhos.map((uri, indice) => (
                 <View key={uri} style={{ width: TAMANHO_MINIATURA, height: TAMANHO_MINIATURA }}>
                   <Image
                     source={{ uri }}
@@ -251,7 +259,7 @@ export function NovaAvaria({ pedidos, tipos, aoEnviado, aoIniciarEnvio }: PropsN
                   />
                   <Pressable
                     accessibilityLabel={`Remover foto ${indice + 1}`}
-                    onPress={() => removerFoto(indice)}
+                    onPress={() => void fotos.remover(indice)}
                     style={{
                       position: 'absolute',
                       top: -espacamento[6],
