@@ -1,34 +1,62 @@
-import { useCallback, useEffect, useState } from 'react';
-import type { AtestadoDTO } from '@montacontrol/shared';
-import { listarMeusAtestados } from './clienteAtestados';
+import { useCallback, useMemo } from 'react';
+import { useConsulta } from '../db/useConsulta';
+import { useDatabaseOuFalha } from '../db/useDatabase';
+import { useStatusDaSincronizacao } from '../sincronizacao/statusDaSincronizacao';
+import { sincronizar } from '../sincronizacao/syncManager';
+import {
+  COLUNAS_OBSERVADAS_DE_ACAO_DE_ATESTADO,
+  COLUNAS_OBSERVADAS_DE_ATESTADO,
+  montarAtestadosExibidos,
+  paraAtestadoDaReplica,
+  paraAtestadoNaFila,
+  queryAcoesDeAtestado,
+  queryAtestados,
+} from './atestadosComPendentes';
+import type { AtestadoExibido } from './atestadosComPendentes';
 
 export interface EstadoMeusAtestados {
-  atestados: AtestadoDTO[];
+  atestados: AtestadoExibido[];
+  /** `true` até a réplica e a fila terem emitido a primeira leitura. */
   carregando: boolean;
+  /** A última sincronização falhou e não há nenhum atestado (nem na fila) para mostrar. */
   erro: boolean;
+  /** Dispara uma sincronização e espera ela terminar. */
   recarregar: () => Promise<void>;
 }
 
-/** Online-only, sem espelho local: enviar atestado não é ação de campo sem sinal. */
+/**
+ * Atestados do montador lidos da réplica local (a análise do RH chega pelo
+ * pull), com os ainda na fila por cima (`aguardandoEnvio`); o do pull os
+ * substitui pelo `idCliente`. Não vai à rede: quem sincroniza é o provider do
+ * app, e `recarregar` só pede uma rodada.
+ */
 export function useMeusAtestados(): EstadoMeusAtestados {
-  const [atestados, setAtestados] = useState<AtestadoDTO[]>([]);
-  const [carregando, setCarregando] = useState(true);
-  const [erro, setErro] = useState(false);
+  const database = useDatabaseOuFalha();
+  const { ultimoErro } = useStatusDaSincronizacao();
 
-  const recarregar = useCallback(async () => {
-    setErro(false);
-    try {
-      setAtestados(await listarMeusAtestados());
-    } catch {
-      setErro(true);
-    } finally {
-      setCarregando(false);
-    }
-  }, []);
+  const replica = useConsulta(queryAtestados, COLUNAS_OBSERVADAS_DE_ATESTADO, paraAtestadoDaReplica);
+  const acoes = useConsulta(
+    queryAcoesDeAtestado,
+    COLUNAS_OBSERVADAS_DE_ACAO_DE_ATESTADO,
+    paraAtestadoNaFila,
+  );
 
-  useEffect(() => {
-    void recarregar();
-  }, [recarregar]);
+  const atestados = useMemo(
+    () =>
+      montarAtestadosExibidos({
+        replica: replica ?? [],
+        acoes: (acoes ?? []).flatMap((acao) => acao ?? []),
+      }),
+    [replica, acoes],
+  );
 
-  return { atestados, carregando, erro, recarregar };
+  const carregando = replica === null || acoes === null;
+  const recarregar = useCallback(() => sincronizar(database), [database]);
+
+  return {
+    atestados,
+    carregando,
+    erro: !carregando && ultimoErro !== null && atestados.length === 0,
+    recarregar,
+  };
 }

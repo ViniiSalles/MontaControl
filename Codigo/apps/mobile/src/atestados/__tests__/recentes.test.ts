@@ -1,27 +1,17 @@
-import { StatusAtestado } from '@montacontrol/shared';
-import type { AtestadoDTO } from '@montacontrol/shared';
 import { atestadosRecentes } from '../recentes';
 
-function atestadoFake(parcial: Partial<AtestadoDTO> = {}): AtestadoDTO {
-  return {
-    id: 1,
-    usuarioId: 1,
-    usuarioNome: 'Montador',
-    dataInicio: '2026-09-01',
-    dataFim: '2026-09-03',
-    observacao: null,
-    status: StatusAtestado.PENDENTE,
-    motivoRejeicao: null,
-    validadoPor: null,
-    validadoEm: null,
-    criadoEm: '2026-09-01T12:00:00.000Z',
-    ...parcial,
-  };
+interface Item {
+  chave: string;
+  criadoEm: string;
 }
 
-function lista(quantidade: number): AtestadoDTO[] {
+function item(parcial: Partial<Item> = {}): Item {
+  return { chave: '1', criadoEm: '2026-09-01T12:00:00.000Z', ...parcial };
+}
+
+function lista(quantidade: number): Item[] {
   return Array.from({ length: quantidade }, (_, i) =>
-    atestadoFake({ id: i + 1, criadoEm: `2026-09-${String(i + 1).padStart(2, '0')}T12:00:00.000Z` }),
+    item({ chave: String(i + 1), criadoEm: `2026-09-${String(i + 1).padStart(2, '0')}T12:00:00.000Z` }),
   );
 }
 
@@ -39,22 +29,22 @@ test('com exatamente o limite mostra todos e nenhum oculto', () => {
 
 test('com mais que o limite mostra só os mais recentes e conta os ocultos', () => {
   const { visiveis, ocultos } = atestadosRecentes(lista(7), 5, false);
-  expect(visiveis.map((a) => a.id)).toEqual([7, 6, 5, 4, 3]);
+  expect(visiveis.map((a) => a.chave)).toEqual(['7', '6', '5', '4', '3']);
   expect(ocultos).toBe(2);
 });
 
 test('ordena por criadoEm decrescente independentemente da ordem de entrada', () => {
   const entrada = [
-    atestadoFake({ id: 1, criadoEm: '2026-09-01T12:00:00.000Z' }),
-    atestadoFake({ id: 2, criadoEm: '2026-09-03T12:00:00.000Z' }),
-    atestadoFake({ id: 3, criadoEm: '2026-09-02T12:00:00.000Z' }),
+    item({ chave: 'a', criadoEm: '2026-09-01T12:00:00.000Z' }),
+    item({ chave: 'b', criadoEm: '2026-09-03T12:00:00.000Z' }),
+    item({ chave: 'c', criadoEm: '2026-09-02T12:00:00.000Z' }),
   ];
-  expect(atestadosRecentes(entrada, 5, false).visiveis.map((a) => a.id)).toEqual([2, 3, 1]);
+  expect(atestadosRecentes(entrada, 5, false).visiveis.map((a) => a.chave)).toEqual(['b', 'c', 'a']);
 });
 
-test('desempata criadoEm igual pelo id decrescente', () => {
-  const entrada = [atestadoFake({ id: 1 }), atestadoFake({ id: 3 }), atestadoFake({ id: 2 })];
-  expect(atestadosRecentes(entrada, 5, false).visiveis.map((a) => a.id)).toEqual([3, 2, 1]);
+test('desempata criadoEm igual pela chave decrescente (resultado estável)', () => {
+  const entrada = [item({ chave: 'a' }), item({ chave: 'c' }), item({ chave: 'b' })];
+  expect(atestadosRecentes(entrada, 5, false).visiveis.map((a) => a.chave)).toEqual(['c', 'b', 'a']);
 });
 
 test('mostrarTodos exibe a lista inteira e nenhum oculto', () => {
