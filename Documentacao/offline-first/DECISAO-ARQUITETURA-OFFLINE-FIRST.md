@@ -82,7 +82,7 @@ de outro montador (`@Roles(Perfil.MONTADOR)`, coberto por teste e2e). Janelas de
 | Tabela local | Conteúdo | Janela no primeiro pull |
 | --- | --- | --- |
 | `jornadas` | Jornadas do montador, com `pedido_id`, `checkin_id_cliente`, `checkout_id_cliente`, `lancado_em_atraso` | 30 dias, por `checkin_at` |
-| `banco_horas` | Saldos do montador por (`mes`, `ano`) | mês atual e os 2 anteriores |
+| `banco_horas` | Saldos do montador por (`mes`, `ano`); o mês corrente é recalculado pelo servidor a cada pull | mês atual e os 2 anteriores |
 | `pedidos` | Pedidos atribuídos ao montador (`pedido_montador`), com cliente desnormalizado: nome, endereço, cidade, UF, latitude, longitude | todos os atribuídos |
 | `ambientes`, `pecas` | Dos pedidos acima (o formulário de avaria escolhe a peça) | todos os dos pedidos atribuídos |
 | `tipos_avaria` | Catálogo global | todos |
@@ -389,8 +389,11 @@ WatermelonDB, a migração trocaria só a camada de banco local do app; a API n�
 - **Lacuna logo após a atualização.** A migração v2 → v3 apaga `jornadas` e `banco_horas` locais.
   Até o primeiro pull com rede, o aparelho atualizado não mostra histórico nem banco de horas
   offline (a fila é preservada e o ponto continua funcionando).
-- `banco_horas` é um registro gravado quando alguém calcula o saldo. Mês sem cálculo prévio pode
-  não estar na réplica, e o mês corrente pode ficar defasado até o próximo cálculo.
+- `banco_horas` é um registro gravado quando alguém calcula o saldo. O pull recalcula no servidor
+  o mês corrente do montador logado (só grava se o valor mudou, para não reenviar a linha sem
+  novidade), então esse mês sempre chega atualizado. Os meses anteriores da janela só estão na
+  réplica se já tiveram cálculo prévio (consulta do montador ou painel do RH) e não são
+  recalculados no pull. Se o recálculo falhar, o pull segue com o saldo já gravado.
 - Todos os pedidos atribuídos ao montador entram no primeiro pull, inclusive os já entregues (não
   há janela para pedidos).
 - A API aceita marcação de ponto do dia corrente ou do dia anterior (`REGISTRO_FORA_DA_JANELA`).
