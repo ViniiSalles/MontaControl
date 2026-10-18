@@ -1,52 +1,43 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import type { DiaJornadaDTO, PeriodoHistorico } from '@montacontrol/shared';
 import { useDatabaseOuFalha } from '../db/useDatabase';
-import { construirHistoricoDTO, janelaDoPeriodo, queryJornadasNoPeriodo } from './espelhoJornada';
-import { puxarJornadas } from '../sincronizacao/syncManager';
+import { sincronizar } from '../sincronizacao/syncManager';
+import { useStatusDaSincronizacao } from '../sincronizacao/statusDaSincronizacao';
+import { construirHistoricoDTO, jornadasNoPeriodo } from './espelhoJornada';
+import { useJornadasComPendentes } from './useJornadasComPendentes';
 
 export interface EstadoHistorico {
   dias: DiaJornadaDTO[];
   totalMinutos: number;
   carregando: boolean;
+  /** A última sincronização falhou e não há nenhum ponto local no período. */
   erro: boolean;
+  /** Dispara uma sincronização e espera ela terminar. */
   recarregar: () => Promise<void>;
 }
 
-/** Histórico de pontos do período escolhido, lido do espelho local. Recarrega ao trocar de período. */
+/**
+ * Histórico de pontos do período escolhido: réplica + ações na fila por cima.
+ * Só lê o banco local — o pull do app traz a janela de 30 dias (a maior do
+ * seletor), então trocar de período não precisa de rede.
+ */
 export function useHistoricoPontos(periodo: PeriodoHistorico): EstadoHistorico {
   const database = useDatabaseOuFalha();
-  const [dias, setDias] = useState<DiaJornadaDTO[]>([]);
-  const [totalMinutos, setTotalMinutos] = useState(0);
-  const [carregandoLocal, setCarregandoLocal] = useState(true);
-  const [falhaRede, setFalhaRede] = useState(false);
+  const { jornadas, carregando } = useJornadasComPendentes();
+  const { ultimoErro } = useStatusDaSincronizacao();
 
-  const recarregar = useCallback(async () => {
-    try {
-      await puxarJornadas(database, periodo);
-      setFalhaRede(false);
-    } catch {
-      setFalhaRede(true);
-    }
-  }, [database, periodo]);
-
-  useEffect(() => {
+  const historico = useMemo(() => {
     const agoraIso = new Date().toISOString();
-    const { inicioIso, fimIso } = janelaDoPeriodo(periodo, agoraIso);
+    return construirHistoricoDTO(jornadasNoPeriodo(jornadas, periodo, agoraIso), periodo, agoraIso);
+  }, [jornadas, periodo]);
 
-    const assinatura = queryJornadasNoPeriodo(database, inicioIso, fimIso)
-      .observe()
-      .subscribe((registros) => {
-        const historico = construirHistoricoDTO(registros, periodo, agoraIso);
-        setDias(historico.dias);
-        setTotalMinutos(historico.totalMinutos);
-        setCarregandoLocal(false);
-      });
-    return () => assinatura.unsubscribe();
-  }, [database, periodo]);
+  const recarregar = useCallback(() => sincronizar(database), [database]);
 
-  useEffect(() => {
-    void recarregar();
-  }, [recarregar]);
-
-  return { dias, totalMinutos, carregando: carregandoLocal, erro: falhaRede && dias.length === 0, recarregar };
+  return {
+    dias: historico.dias,
+    totalMinutos: historico.totalMinutos,
+    carregando,
+    erro: !carregando && ultimoErro !== null && historico.dias.length === 0,
+    recarregar,
+  };
 }
