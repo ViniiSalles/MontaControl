@@ -115,7 +115,9 @@ describe.each([
       ],
     });
     expect(corpo).not.toHaveProperty('fotosCaminhos');
+    // Aceita: sai do "a enviar" e fica `enviada` até o pull trazer o registro.
     expect(await acoes(database, 'pendente')).toHaveLength(0);
+    expect(await acoes(database, 'enviada')).toHaveLength(1);
     expect(caminhos.some(existe)).toBe(false);
   });
 

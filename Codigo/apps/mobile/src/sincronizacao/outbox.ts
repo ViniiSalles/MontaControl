@@ -72,6 +72,19 @@ async function enfileirar(
 }
 
 /**
+ * Aceita pelo servidor, a ação fica `enviada` até o pull trazer o registro
+ * (ver `StatusAcao`): a lista continua mostrando o item nesse intervalo e, se
+ * o pull falhar logo depois do envio, o montador não o vê sumir e reenvia.
+ */
+async function marcarComoEnviada(database: Database, acao: AcaoPendente): Promise<void> {
+  await database.write(() =>
+    acao.update((registro) => {
+      registro.status = 'enviada';
+    }),
+  );
+}
+
+/**
  * A jornada que a tela mostra para a ação recém-enfileirada: a da sobreposição
  * (réplica + fila), achada pelo `idCliente`. Um check-out sem jornada aberta
  * conhecida não aparece na sobreposição; devolve só o que se sabe dele.
@@ -129,11 +142,7 @@ export async function executarAcaoJornada(
         ? await enviarCheckin(payload as CheckinRequest)
         : await enviarCheckout(payload as CheckoutRequest);
 
-    await database.write(() =>
-      acao.update((registro) => {
-        registro.status = 'enviada';
-      }),
-    );
+    await marcarComoEnviada(database, acao);
     return { tipo: 'ok', dado: jornadaServidor };
   } catch (erro) {
     if (ehRecusaDoServidor(erro)) {
@@ -185,7 +194,7 @@ export async function executarAcaoAvaria(
     await apagarFotosDaAcao(caminhosDasFotos(payload));
     return { tipo: 'recusado', codigo: erro.codigo, mensagem: erro.message };
   }
-  await database.write(() => acao.destroyPermanently());
+  await marcarComoEnviada(database, acao);
   await apagarFotosDaAcao(caminhosDasFotos(payload));
   return { tipo: 'enviada' };
 }
@@ -218,7 +227,7 @@ export async function executarAcaoAtestado(
     await apagarFotosDaAcao(caminhosDasFotos(payload));
     return { tipo: 'recusado', codigo: erro.codigo, mensagem: erro.message };
   }
-  await database.write(() => acao.destroyPermanently());
+  await marcarComoEnviada(database, acao);
   await apagarFotosDaAcao(caminhosDasFotos(payload));
   return { tipo: 'enviado' };
 }

@@ -6,9 +6,11 @@ jest.mock('../../jornada/clienteJornadas', () => {
   };
 });
 jest.mock('../../avarias/clienteAvarias', () => ({ enviarAvaria: jest.fn() }));
+jest.mock('../../atestados/clienteAtestados', () => ({ enviarAtestado: jest.fn() }));
 
 import { Q } from '@nozbe/watermelondb';
 import { StatusJornada, type JornadaDTO } from '@montacontrol/shared';
+import { enviarAtestado } from '../../atestados/clienteAtestados';
 import { enviarAvaria } from '../../avarias/clienteAvarias';
 import { ErroApi } from '../../http/erroApi';
 import { criarAcaoPendente, criarBancoDeTeste } from '../../db/__tests__/apoio';
@@ -72,15 +74,22 @@ describe('drenarFila', () => {
     expect(await lerJornadasComPendentes(database)).toHaveLength(1);
   });
 
-  it('avaria e ponto em atraso aceitos saem da fila (não têm jornada para sobrepor)', async () => {
+  it('avaria e atestado aceitos ficam `enviada` até o pull (a lista não os perde); ponto em atraso sai da fila', async () => {
     const database = criarBancoDeTeste();
     (enviarAvaria as jest.Mock).mockResolvedValue({});
+    (enviarAtestado as jest.Mock).mockResolvedValue({});
     (enviarSolicitacaoPonto as jest.Mock).mockResolvedValue({});
     await criarAcaoPendente(database, {
       tipo: 'avaria',
       idCliente: 'avaria-1',
       payload: { idCliente: 'avaria-1' },
       criadoEm: '2026-09-09T12:00:00.000Z',
+    });
+    await criarAcaoPendente(database, {
+      tipo: 'atestado',
+      idCliente: 'atestado-1',
+      payload: { idCliente: 'atestado-1', fotos: [{ conteudoBase64: 'x', mimeType: 'image/jpeg' }] },
+      criadoEm: '2026-09-09T12:30:00.000Z',
     });
     await criarAcaoPendente(database, {
       tipo: 'ponto_em_atraso',
@@ -91,7 +100,9 @@ describe('drenarFila', () => {
 
     await drenarFila(database);
 
-    expect(await database.get<AcaoPendente>('acoes_pendentes').query().fetchCount()).toBe(0);
+    expect(await comStatus(database, 'pendente')).toHaveLength(0);
+    const enviadas = await comStatus(database, 'enviada');
+    expect(enviadas.map((acao) => acao.tipo).sort()).toEqual(['atestado', 'avaria']);
   });
 
   it('recusa 4xx: marca descartada com a mensagem, sem parar a fila', async () => {

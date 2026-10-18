@@ -35,6 +35,13 @@ import type { ErroDeSincronizacao } from './statusDaSincronizacao';
 const VERSAO_INICIAL_DA_SINCRONIZACAO = 2;
 
 /**
+ * Ações cujo resultado aparece na tela como registro da réplica (jornada,
+ * avaria, atestado): aceitas, ficam `enviada` até o pull o trazer. O ponto em
+ * atraso não tem registro para sobrepor e sai da fila.
+ */
+const TIPOS_QUE_AGUARDAM_O_PULL = ['checkin', 'checkout', 'avaria', 'atestado'];
+
+/**
  * `sem_rede` cobre tudo o que não é uma decisão do servidor sobre a ação:
  * falha de rede, 5xx e também 401 (token expirado, ver `ehRecusaDoServidor`).
  */
@@ -81,11 +88,11 @@ async function reenviar(
  * frente na ordem — a ação segue `pendente`. O token vem da fonte única
  * (`auth/tokenSessao`), buscado a cada chamada.
  *
- * Check-in/check-out aceitos viram `enviada` (não são apagados): a jornada só
- * entra na réplica no pull seguinte, e até lá a sobreposição precisa da ação
- * para a tela não perder o ponto — se o pull falhar logo depois do envio, o
- * montador não pode ver a jornada sumir e bater o ponto de novo. As demais
- * ações (avaria, ponto em atraso) não têm jornada para sobrepor e saem da fila.
+ * Check-in/check-out, avaria e atestado aceitos viram `enviada` (não são
+ * apagados): o registro só entra na réplica no pull seguinte, e até lá a
+ * sobreposição precisa da ação para a tela não perdê-lo — se o pull falhar logo
+ * depois do envio, o montador não pode ver o ponto (ou o atestado) sumir e
+ * enviar de novo. O ponto em atraso não tem registro para sobrepor e sai da fila.
  */
 export async function drenarFila(database: Database): Promise<void> {
   // A fila é lida e enviada aos poucos; se a sessão trocar no meio (sair/expirar
@@ -106,9 +113,9 @@ export async function drenarFila(database: Database): Promise<void> {
     if (geracaoDaSessao() !== geracao) break;
 
     if (resultado.tipo === 'ok') {
-      const deJornada = acao.tipo === 'checkin' || acao.tipo === 'checkout';
+      const aguardaOPull = TIPOS_QUE_AGUARDAM_O_PULL.includes(acao.tipo);
       await database.write(async () => {
-        if (deJornada) {
+        if (aguardaOPull) {
           await acao.update((registro) => {
             registro.status = 'enviada';
           });
