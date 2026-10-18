@@ -1,4 +1,5 @@
 import type { Database } from '@nozbe/watermelondb';
+import { CHAVE_SINCRONIZACAO } from '../estado/chavesPersistidas';
 
 const TABELA_DA_FILA = 'acoes_pendentes';
 
@@ -16,6 +17,10 @@ const CHAVES_DA_SINCRONIZACAO = [
   // apaga; mantidas aqui por segurança caso algum aparelho as reintroduza.
   'obras_do_montador',
   'obra_da_jornada_aberta',
+  // Status persistido da sincronização (`ultimaSincronizacaoEm`): descreve a réplica
+  // que acabou de ser apagada. A chave da UI (obra, rascunho) NÃO entra aqui: é do
+  // mesmo dono da fila mantida (ver `estado/chavesPersistidas`).
+  CHAVE_SINCRONIZACAO,
 ];
 
 /**

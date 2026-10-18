@@ -1,6 +1,7 @@
 import { File, Paths } from 'expo-file-system';
 import { apagarTodasAsFotos, salvarFoto } from '../../fotos/armazenamentoFotos';
 import { existeFoto } from '../../fotos/__tests__/apoio';
+import { CHAVE_SINCRONIZACAO, CHAVE_UI } from '../../estado/chavesPersistidas';
 import { criarAcaoPendente, criarBancoDeTeste } from './apoio';
 import { limparBancoCompleto } from '../limparBanco';
 
@@ -38,6 +39,17 @@ describe('limparBancoCompleto (logout e troca de usuário)', () => {
     await limparBancoCompleto(database);
 
     expect(existeFoto(caminho)).toBe(false);
+  });
+
+  it('apaga os stores persistidos: obra, rascunho de avaria e status da sincronização', async () => {
+    const database = criarBancoDeTeste();
+    await database.localStorage.set(CHAVE_UI, '{"state":{"obraEscolhidaId":12}}');
+    await database.localStorage.set(CHAVE_SINCRONIZACAO, '{"state":{}}');
+
+    await limparBancoCompleto(database);
+
+    expect(await database.localStorage.get(CHAVE_UI)).toBeUndefined();
+    expect(await database.localStorage.get(CHAVE_SINCRONIZACAO)).toBeUndefined();
   });
 
   it('se o banco não deixa apagar, as fotos ficam (a fila ainda as referencia)', async () => {

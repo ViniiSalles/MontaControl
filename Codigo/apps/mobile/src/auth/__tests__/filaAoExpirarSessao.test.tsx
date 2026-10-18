@@ -11,6 +11,7 @@ import { lerDonoNoBanco, registrarDonoNoBanco } from '../../db/donoDaFila';
 import { apagarTodasAsFotos, salvarFoto } from '../../fotos/armazenamentoFotos';
 import { existeFoto } from '../../fotos/__tests__/apoio';
 import { drenarFila } from '../../sincronizacao/syncManager';
+import { reiniciarSessaoStore } from '../../estado/sessaoStore';
 import { ProvedorAuth, useAuth } from '../AuthContext';
 import { definirTokens } from '../tokenSessao';
 import { montador, respostaJson, sessaoDe } from './apoio';
@@ -184,6 +185,8 @@ beforeEach(() => {
   mockSecureStore.clear();
   mockBanco = criarBancoDeTeste();
   definirTokens(null);
+  // O store de sessão é global (como no app): sem isto o usuário de um teste vaza para o seguinte.
+  reiniciarSessaoStore();
   chamadasAoCheckin = [];
   respostaDoLogin = respostaJson(200, sessaoDe(montador, '-2'));
   globalThis.fetch = jest.fn();
