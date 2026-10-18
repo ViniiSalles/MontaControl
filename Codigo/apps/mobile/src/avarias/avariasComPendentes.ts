@@ -61,6 +61,8 @@ export const COLUNAS_OBSERVADAS_DE_AVARIA = [
   'parecer',
 ];
 export const COLUNAS_OBSERVADAS_DE_TIPO_AVARIA = ['nome', 'descricao'];
+/** `pendente` → `enviada` é mudança de coluna: sem observá-la o selo "Aguardando envio" ficaria preso. */
+export const COLUNAS_OBSERVADAS_DE_ACAO = ['status'];
 
 export const queryAvarias = (database: Database): Query<Avaria> =>
   database.get<Avaria>('avarias').query();
