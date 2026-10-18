@@ -1,3 +1,4 @@
+import { Q } from '@nozbe/watermelondb';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Pressable, Text } from 'react-native';
 import { StatusJornada } from '@montacontrol/shared';
@@ -107,7 +108,6 @@ async function popularBanco(donoId: number | null = montador.id) {
   if (donoId !== null) await registrarDonoNoBanco(mockBanco, donoId);
   await mockBanco.write(async () => {
     await mockBanco.get<Jornada>('jornadas').create((registro) => {
-      registro.remoteId = 1;
       registro.usuarioId = montador.id;
       registro.status = StatusJornada.EM_ANDAMENTO;
       registro.lancadoEmAtraso = false;
@@ -130,6 +130,9 @@ async function popularBanco(donoId: number | null = montador.id) {
 }
 
 const contarAcoes = () => mockBanco.get('acoes_pendentes').query().fetchCount();
+// Check-in aceito vira `enviada` (aguarda o pull); só `pendente` ainda precisa subir.
+const contarPendentes = () =>
+  mockBanco.get('acoes_pendentes').query(Q.where('status', 'pendente')).fetchCount();
 const contarJornadas = () => mockBanco.get('jornadas').query().fetchCount();
 
 /** Sessão guardada do montador com refresh token que o servidor já não aceita. */
@@ -201,7 +204,7 @@ describe('expiração forçada da sessão (refresh recusado)', () => {
     await drenarFila(mockBanco);
 
     expect(chamadasAoCheckin).toEqual([{ authorization: 'Bearer access-2' }]);
-    expect(await contarAcoes()).toBe(0);
+    expect(await contarPendentes()).toBe(0);
   });
 
   test('fila sem nenhum dono conhecido (anterior à atualização): apagada no login, nada é enviado', async () => {
@@ -245,7 +248,7 @@ describe('expiração forçada da sessão (refresh recusado)', () => {
     await drenarFila(mockBanco);
 
     expect(chamadasAoCheckin).toEqual([{ authorization: 'Bearer access-2' }]);
-    expect(await contarAcoes()).toBe(0);
+    expect(await contarPendentes()).toBe(0);
   });
 
   test('login de OUTRO usuário: apaga tudo e nenhuma ação é enviada sob o token dele', async () => {
