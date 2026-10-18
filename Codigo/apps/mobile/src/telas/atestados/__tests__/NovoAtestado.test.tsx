@@ -205,3 +205,31 @@ test('envia a observação digitada e zera o formulário após o envio', async (
   expect(screen.queryByLabelText('Foto 1 do atestado')).toBeNull();
   expect(screen.getByPlaceholderText(/Descreva brevemente/).props.value).toBe('');
 });
+
+test('desmontar o formulário com o envio ainda pendurado na rede não perde as fotos: a fila é a dona', async () => {
+  let soltarEnvio!: (erro: Error) => void;
+  enviarMock.mockImplementationOnce(
+    () =>
+      new Promise((_resolver, rejeitar) => {
+        soltarEnvio = rejeitar;
+      }),
+  );
+  await renderizar();
+  await preencherDatas('01092026', '03092026');
+  for (const n of [1, 2]) {
+    await tirarFoto();
+    await waitFor(() => expect(screen.getByLabelText(`Foto ${n} do atestado`)).toBeTruthy());
+  }
+
+  await fireEvent.press(screen.getByText('Enviar Atestado'));
+  await waitFor(() => expect(enviarMock).toHaveBeenCalledTimes(1));
+  expect(screen.queryByLabelText('Remover foto 1')).toBeNull();
+
+  await screen.unmount();
+  expect(fotosGuardadas()).toHaveLength(2);
+  soltarEnvio(new TypeError('Network request failed'));
+  await waitFor(async () =>
+    expect(await database.get<AcaoPendente>('acoes_pendentes').query().fetchCount()).toBe(1),
+  );
+  expect(fotosGuardadas()).toHaveLength(2);
+});

@@ -3,13 +3,13 @@ import { apagarFotos, salvarFoto } from './armazenamentoFotos';
 import type { MimeTypeFoto } from './armazenamentoFotos';
 
 export interface FotosDoFormulario {
-  /** Caminhos dos arquivos já guardados no aparelho, na ordem em que foram anexados. */
+  /** Referências (nome do arquivo) das fotos já guardadas no aparelho, na ordem em que foram anexadas; `uriDaFoto` dá a URI da miniatura. */
   caminhos: string[];
   /** Copia a foto do picker para a pasta do app e a põe na lista. Rejeita se não conseguir copiar. */
   adicionar: (uri: string, mimeType: MimeTypeFoto) => Promise<void>;
   /** Tira a foto da lista e apaga o arquivo. */
   remover: (indice: number) => Promise<void>;
-  /** Zera a lista sem apagar os arquivos: a fila passou a ser a dona deles. */
+  /** Zera a lista sem apagar os arquivos: a fila passa a ser a dona deles (chamar ao entregá-los ao outbox, antes da rede). */
   esquecer: () => void;
 }
 

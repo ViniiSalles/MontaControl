@@ -24,6 +24,7 @@ import {
   atualizarStatusDaSincronizacao,
   reiniciarStatusDaSincronizacao,
 } from '../../sincronizacao/statusDaSincronizacao';
+import { drenarFila } from '../../sincronizacao/syncManager';
 import { Avarias } from '../Avarias';
 
 const enviarMock = jest.mocked(enviarAvaria);
@@ -238,5 +239,65 @@ test('fechar a tela sem enviar apaga as fotos anexadas', async () => {
 
   await screen.unmount();
 
+  expect(fotosGuardadas()).toEqual([]);
+});
+
+test('desmontar a tela com o envio ainda pendurado na rede não perde as fotos: a fila é a dona e sobe depois com as duas', async () => {
+  let soltarEnvio!: (erro: Error) => void;
+  enviarMock.mockImplementationOnce(
+    () =>
+      new Promise((_resolver, rejeitar) => {
+        soltarEnvio = rejeitar;
+      }),
+  );
+  const database = await bancoComReplica();
+  await renderizar(database);
+  await waitFor(() => expect(screen.getByText('Armário aéreo 80cm')).toBeTruthy());
+  await fireEvent.press(screen.getByText('Armário aéreo 80cm'));
+  await fireEvent.press(screen.getByText('Peça faltando'));
+  await fireEvent.changeText(
+    screen.getByPlaceholderText('O que aconteceu com a peça?'),
+    'Não veio na entrega',
+  );
+  for (const n of [1, 2]) {
+    await anexarFotoDaGaleria();
+    await waitFor(() => expect(screen.getByLabelText(`Foto ${n} do problema`)).toBeTruthy());
+  }
+
+  await fireEvent.press(screen.getByText('Enviar problema'));
+  await waitFor(() => expect(enviarMock).toHaveBeenCalledTimes(1));
+
+  // As fotos já são da fila: saem do formulário na hora e não há o que remover durante o envio.
+  expect(screen.queryByLabelText('Foto 1 do problema')).toBeNull();
+  expect(screen.queryByLabelText('Remover foto 1')).toBeNull();
+
+  // O montador troca de aba (a tela desmonta) com o fetch ainda pendurado.
+  await screen.unmount();
+  expect(fotosGuardadas()).toHaveLength(2);
+  soltarEnvio(new TypeError('Network request failed'));
+  await waitFor(async () =>
+    expect(await database.get<AcaoPendente>('acoes_pendentes').query().fetchCount()).toBe(1),
+  );
+  expect(fotosGuardadas()).toHaveLength(2);
+
+  // A conexão volta: a linha enfileirada sobe com as duas fotos.
+  enviarMock.mockResolvedValue({} as never);
+  await drenarFila(database);
+
+  const corpo = enviarMock.mock.calls[1][0];
+  expect(corpo.fotos).toHaveLength(2);
+  expect(corpo.fotos?.[0].conteudoBase64.length).toBeGreaterThan(0);
+  expect(fotosGuardadas()).toEqual([]);
+});
+
+test('falha ao registrar (enfileiramento) avisa que as fotos foram descartadas e não deixa arquivo', async () => {
+  const database = await bancoComReplica();
+  jest.spyOn(database, 'write').mockRejectedValueOnce(new Error('disco cheio'));
+  await renderizar(database);
+
+  await preencherEEnviar(1);
+
+  await waitFor(() => expect(screen.getByText(/Não foi possível registrar o problema/)).toBeTruthy());
+  expect(screen.getByText(/As fotos anexadas foram descartadas/)).toBeTruthy();
   expect(fotosGuardadas()).toEqual([]);
 });

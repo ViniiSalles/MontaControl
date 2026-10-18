@@ -10,9 +10,9 @@ import { CampoTexto } from '../../ui/CampoTexto';
 import { Icone } from '../../ui/Icone';
 import { Texto } from '../../ui/Texto';
 import { useDatabaseOuFalha } from '../../db/useDatabase';
-import { mimeTypeSuportado } from '../../fotos/armazenamentoFotos';
+import { mimeTypeSuportado, uriDaFoto } from '../../fotos/armazenamentoFotos';
 import { useFotosDoFormulario } from '../../fotos/useFotosDoFormulario';
-import { executarAcaoAtestado } from '../../sincronizacao/outbox';
+import { ErroAoEnfileirar, executarAcaoAtestado } from '../../sincronizacao/outbox';
 import { mascararData, validarEnvioAtestado } from '../../atestados/validarEnvioAtestado';
 import type { CamposNovoAtestado, ErrosNovoAtestado } from '../../atestados/validarEnvioAtestado';
 
@@ -31,6 +31,12 @@ const TAMANHO_MINIATURA = espacamento[80];
  * `base64`: a foto vira arquivo no aparelho e só é convertida no envio.
  */
 const OPCOES_PICKER = { quality: 0.7, allowsMultipleSelection: false } as const;
+
+/** Recusa e falha de registro apagam as fotos (a fila não as guarda): o montador precisa saber. */
+function comAvisoDeFotos(mensagem: string): string {
+  return `${mensagem}
+As fotos anexadas foram descartadas; anexe de novo.`;
+}
 
 /** Formulário de atestado — foto por câmera ou galeria; entra na fila, então funciona sem sinal. */
 export function NovoAtestado({ aoEnviado, aoIniciarEnvio }: PropsNovoAtestado) {
@@ -99,13 +105,13 @@ export function NovoAtestado({ aoEnviado, aoIniciarEnvio }: PropsNovoAtestado) {
     aoIniciarEnvio?.();
     setEnviando(true);
     setFalha(null);
+    // As fotos passam a ser da fila ao chamar o outbox: o formulário as solta
+    // JÁ, antes da rede (ver NovaAvaria). A recusa e a falha as apagam.
+    fotos.esquecer();
     try {
       const resultado = await executarAcaoAtestado(database, { idCliente: randomUUID(), ...dados });
-      // Aceito ou recusado, os arquivos já não são do formulário (a fila os guarda, ou a recusa os apagou).
-      fotos.esquecer();
       if (resultado.tipo === 'recusado') {
-        setFalha(`${resultado.mensagem}
-As fotos anexadas foram descartadas; anexe de novo.`);
+        setFalha(comAvisoDeFotos(resultado.mensagem));
         return;
       }
       setCampos(CAMPOS_VAZIOS);
@@ -114,8 +120,10 @@ As fotos anexadas foram descartadas; anexe de novo.`);
           ? 'Atestado enviado. O RH vai analisar.'
           : 'Sem conexão agora: o atestado foi salvo e será enviado automaticamente.',
       );
-    } catch {
-      setFalha('Não foi possível registrar o atestado. Tente de novo.');
+    } catch (erro) {
+      // Só o enfileiramento que falhou apagou as fotos; qualquer outra falha deixa a linha (e as fotos) na fila.
+      const mensagem = 'Não foi possível registrar o atestado. Tente de novo.';
+      setFalha(erro instanceof ErroAoEnfileirar ? comAvisoDeFotos(mensagem) : mensagem);
     } finally {
       setEnviando(false);
     }
@@ -176,15 +184,16 @@ As fotos anexadas foram descartadas; anexe de novo.`);
 
           {fotos.caminhos.length > 0 && (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: espacamento[8] }}>
-              {fotos.caminhos.map((uri, indice) => (
-                <View key={uri} style={{ width: TAMANHO_MINIATURA, height: TAMANHO_MINIATURA }}>
+              {fotos.caminhos.map((caminho, indice) => (
+                <View key={caminho} style={{ width: TAMANHO_MINIATURA, height: TAMANHO_MINIATURA }}>
                   <Image
-                    source={{ uri }}
+                    source={{ uri: uriDaFoto(caminho) }}
                     accessibilityLabel={`Foto ${indice + 1} do atestado`}
                     style={{ width: '100%', height: '100%', borderRadius: raio.md }}
                   />
                   <Pressable
                     accessibilityLabel={`Remover foto ${indice + 1}`}
+                    disabled={enviando}
                     onPress={() => void fotos.remover(indice)}
                     style={{
                       position: 'absolute',

@@ -3,10 +3,17 @@ import type { FotoBase64 } from '@montacontrol/shared';
 
 /**
  * Fotos de avaria e de atestado ficam como ARQUIVO no aparelho (nunca como
- * base64 no SQLite, onde uma linha passava de vários MB): a fila guarda só o
- * caminho, e o base64 só nasce na hora do envio. Tudo mora numa subpasta do
+ * base64 no SQLite, onde uma linha passava de vários MB): a fila guarda só a
+ * referência, e o base64 só nasce na hora do envio. Tudo mora numa subpasta do
  * diretório de documentos do app, o que permite apagar tudo de uma vez no
- * logout e recusar qualquer caminho de fora dela.
+ * logout.
+ *
+ * A referência é o NOME do arquivo (relativo à pasta): o prefixo absoluto do
+ * container muda no iOS a cada update/restore, e um caminho absoluto gravado na
+ * fila deixaria de apontar para a foto. Referências com caminho (absoluto, de
+ * versões anteriores) continuam aceitas: só o último segmento conta e ele é
+ * resolvido na pasta atual — o que também impede que um payload adulterado
+ * aponte para fora dela.
  */
 const NOME_DA_PASTA = 'fotos_pendentes';
 
@@ -29,13 +36,16 @@ function pasta(): Directory {
   return new Directory(Paths.document, NOME_DA_PASTA);
 }
 
-function semBarraFinal(uri: string): string {
-  return uri.replace(/\/+$/, '');
+/** Último segmento da referência; `null` se não sobra um nome de arquivo utilizável (`''`, `.`, `..`). */
+function nomeDoArquivo(referencia: string): string | null {
+  const nome = referencia.split(/[\\/]/).pop() ?? '';
+  return nome === '' || nome === '.' || nome === '..' ? null : nome;
 }
 
-/** Só o que está dentro da pasta de fotos pode ser apagado: o caminho vem de um payload gravado em disco. */
-function estaNaPasta(caminho: string): boolean {
-  return caminho.startsWith(`${semBarraFinal(pasta().uri)}/`);
+/** O arquivo da foto na pasta atual do app, qualquer que seja o formato da referência. */
+function arquivoDaFoto(referencia: string): File | null {
+  const nome = nomeDoArquivo(referencia);
+  return nome === null ? null : new File(pasta(), nome);
 }
 
 let sequencia = 0;
@@ -51,52 +61,57 @@ export function mimeTypeSuportado(mimeType: string | null | undefined): MimeType
   return mimeType === 'image/jpeg' || mimeType === 'image/png' ? mimeType : null;
 }
 
-function mimeTypeDoCaminho(caminho: string): MimeTypeFoto {
-  return caminho.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+function mimeTypeDaReferencia(referencia: string): MimeTypeFoto {
+  return referencia.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+}
+
+/** URI do arquivo da foto, para mostrar a miniatura (`<Image source={{ uri }}>`). */
+export function uriDaFoto(referencia: string): string {
+  return (arquivoDaFoto(referencia) ?? new File(pasta(), referencia)).uri;
 }
 
 /**
  * Copia a foto (normalmente o arquivo temporário do picker) para a pasta do
- * app e devolve o caminho do arquivo guardado — é ele que vai para a fila e
- * para o rascunho do formulário.
+ * app e devolve a referência (o nome do arquivo guardado) — é ela que vai para
+ * a fila e para o rascunho do formulário.
  */
-export async function salvarFoto(
-  uri: string,
-  mimeType: MimeTypeFoto = 'image/jpeg',
-): Promise<string> {
+export async function salvarFoto(uri: string, mimeType: MimeTypeFoto = 'image/jpeg'): Promise<string> {
   pasta().create({ intermediates: true, idempotent: true });
-  const destino = new File(pasta(), novoNomeDeArquivo(mimeType));
+  const nome = novoNomeDeArquivo(mimeType);
+  const destino = new File(pasta(), nome);
   try {
     await new File(uri).copy(destino);
   } catch (erro) {
     if (destino.exists) destino.delete();
     throw erro;
   }
-  return destino.uri;
+  return nome;
 }
 
-/** Conteúdo da foto em base64, sem prefixo `data:`. Lança `ErroFotoIndisponivel` se o arquivo não existe. */
-export async function lerFotoBase64(caminho: string): Promise<string> {
-  const arquivo = new File(caminho);
-  if (!arquivo.exists) throw new ErroFotoIndisponivel(caminho);
-  try {
-    return await arquivo.base64();
-  } catch {
-    throw new ErroFotoIndisponivel(caminho);
-  }
+/**
+ * Conteúdo da foto em base64, sem prefixo `data:`. Lança `ErroFotoIndisponivel`
+ * só quando o arquivo NÃO existe; qualquer outra falha de leitura sobe como
+ * está (não é foto ausente: a ação continua na fila e tenta de novo).
+ */
+export async function lerFotoBase64(referencia: string): Promise<string> {
+  const arquivo = arquivoDaFoto(referencia);
+  if (arquivo === null || !arquivo.exists) throw new ErroFotoIndisponivel(referencia);
+  return arquivo.base64();
 }
 
 /** A foto no formato do corpo da API; o mime sai da extensão que `salvarFoto` escolheu. */
-export async function lerFotoParaEnvio(caminho: string): Promise<FotoBase64> {
-  return { conteudoBase64: await lerFotoBase64(caminho), mimeType: mimeTypeDoCaminho(caminho) };
+export async function lerFotoParaEnvio(referencia: string): Promise<FotoBase64> {
+  return {
+    conteudoBase64: await lerFotoBase64(referencia),
+    mimeType: mimeTypeDaReferencia(referencia),
+  };
 }
 
-/** Apaga as fotos pedidas. Arquivo que já não existe não é erro; caminho fora da pasta de fotos é ignorado. */
-export async function apagarFotos(caminhos: readonly string[]): Promise<void> {
-  for (const caminho of caminhos) {
-    if (!estaNaPasta(caminho)) continue;
-    const arquivo = new File(caminho);
-    if (arquivo.exists) arquivo.delete();
+/** Apaga as fotos pedidas. Arquivo que já não existe não é erro; só se apaga dentro da pasta de fotos. */
+export async function apagarFotos(referencias: readonly string[]): Promise<void> {
+  for (const referencia of referencias) {
+    const arquivo = arquivoDaFoto(referencia);
+    if (arquivo?.exists) arquivo.delete();
   }
 }
 

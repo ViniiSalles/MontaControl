@@ -8,6 +8,7 @@ import { File, Paths } from 'expo-file-system';
 import { AcaoPendente } from '../../db/AcaoPendente';
 import { criarBancoDeTeste } from '../../db/__tests__/apoio';
 import { apagarTodasAsFotos, salvarFoto } from '../../fotos/armazenamentoFotos';
+import { existeFoto } from '../../fotos/__tests__/apoio';
 import { ProvedorSincronizacao, useSincronizacao } from '../SincronizacaoContext';
 import { iniciarSincronizacao } from '../syncManager';
 
@@ -204,6 +205,6 @@ test('ao apagar a ação descartada apaga também as fotos dela que ainda esteja
 
   await renderHook(() => useSincronizacao(), { wrapper: envolver });
 
-  await waitFor(() => expect(new File(caminho).exists).toBe(false));
+  await waitFor(() => expect(existeFoto(caminho)).toBe(false));
   await apagarTodasAsFotos();
 });

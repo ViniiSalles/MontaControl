@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react-native';
 import { Directory, File, Paths } from 'expo-file-system';
 import { apagarTodasAsFotos } from '../armazenamentoFotos';
 import { useFotosDoFormulario } from '../useFotosDoFormulario';
+import { existeFoto } from './apoio';
 
 /** Foto como o picker a entrega: arquivo temporário no cache do app. */
 function fotoDoPicker(): string {
@@ -11,7 +12,7 @@ function fotoDoPicker(): string {
   return arquivo.uri;
 }
 
-const existe = (caminho: string) => new File(caminho).exists;
+const existe = existeFoto;
 
 afterEach(async () => {
   await apagarTodasAsFotos();

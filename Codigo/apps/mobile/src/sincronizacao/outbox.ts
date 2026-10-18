@@ -71,6 +71,53 @@ async function enfileirar(
   );
 }
 
+/** O enfileiramento em si falhou: nenhuma linha existe (e as fotos já foram apagadas). */
+export class ErroAoEnfileirar extends Error {
+  constructor(causa: unknown) {
+    super(causa instanceof Error ? causa.message : 'Falha ao enfileirar a ação.');
+    this.name = 'ErroAoEnfileirar';
+  }
+}
+
+/**
+ * Enfileira uma ação que carrega fotos em arquivo. Quem chama entrega as fotos
+ * à fila ao chamar: a partir daqui o formulário não é mais dono delas. Se o
+ * enfileiramento falha nenhuma linha as referencia, então os arquivos são
+ * apagados aqui mesmo (e `ErroAoEnfileirar` sobe); depois de a linha existir, só a
+ * confirmação ou a recusa do servidor (ou o logout) as apaga.
+ */
+async function enfileirarComFotos(
+  database: Database,
+  tipo: 'avaria' | 'atestado',
+  payload: PayloadAvariaNaFila | PayloadAtestadoNaFila,
+): Promise<AcaoPendente> {
+  try {
+    return await enfileirar(database, tipo, payload.idCliente, payload);
+  } catch (erro) {
+    await apagarFotosDaAcao(caminhosDasFotos(payload));
+    throw new ErroAoEnfileirar(erro);
+  }
+}
+
+/**
+ * Marca como `enviada` e solta as fotos. Se a marcação falhar, a linha segue
+ * `pendente` — e dona das fotos: o reenvio é idempotente por `idCliente` —,
+ * então isso não é erro para a tela; devolve `false` (ela mostra "na fila").
+ */
+async function confirmarEnvio(
+  database: Database,
+  acao: AcaoPendente,
+  caminhos: readonly string[],
+): Promise<boolean> {
+  try {
+    await marcarComoEnviada(database, acao);
+  } catch {
+    return false;
+  }
+  await apagarFotosDaAcao(caminhos);
+  return true;
+}
+
 /**
  * Aceita pelo servidor, a ação fica `enviada` até o pull trazer o registro
  * (ver `StatusAcao`): a lista continua mostrando o item nesse intervalo e, se
@@ -176,7 +223,9 @@ export async function executarAcaoPontoEmAtraso(
 /**
  * Reporte de avaria: o montador está na casa do cliente, muitas vezes sem
  * sinal — o reporte entra na fila antes da rede e nunca se perde. As fotos já
- * são arquivos no aparelho (o payload leva só os caminhos); viram base64 aqui,
+ * são arquivos no aparelho (o payload leva só as referências, e **passam a ser
+ * da fila no instante da chamada**: quem chama as solta do formulário antes de
+ * esperar a rede); viram base64 aqui,
  * no envio, e os arquivos somem quando o servidor confirma ou recusa. Recusa
  * do servidor (4xx) sai da fila e volta para a tela com a mensagem.
  */
@@ -184,7 +233,7 @@ export async function executarAcaoAvaria(
   database: Database,
   payload: PayloadAvariaNaFila,
 ): Promise<ResultadoAvaria> {
-  const acao = await enfileirar(database, 'avaria', payload.idCliente, payload);
+  const acao = await enfileirarComFotos(database, 'avaria', payload);
 
   try {
     await enviarAvaria(await montarCorpoAvaria(payload));
@@ -194,9 +243,9 @@ export async function executarAcaoAvaria(
     await apagarFotosDaAcao(caminhosDasFotos(payload));
     return { tipo: 'recusado', codigo: erro.codigo, mensagem: erro.message };
   }
-  await marcarComoEnviada(database, acao);
-  await apagarFotosDaAcao(caminhosDasFotos(payload));
-  return { tipo: 'enviada' };
+  return (await confirmarEnvio(database, acao, caminhosDasFotos(payload)))
+    ? { tipo: 'enviada' }
+    : { tipo: 'pendente' };
 }
 
 /**
@@ -208,7 +257,7 @@ export async function executarAcaoAtestado(
   database: Database,
   payload: PayloadAtestadoNaFila,
 ): Promise<ResultadoAtestado> {
-  const acao = await enfileirar(database, 'atestado', payload.idCliente, payload);
+  const acao = await enfileirarComFotos(database, 'atestado', payload);
 
   try {
     const corpo = await montarCorpoAtestado(payload);
@@ -227,7 +276,7 @@ export async function executarAcaoAtestado(
     await apagarFotosDaAcao(caminhosDasFotos(payload));
     return { tipo: 'recusado', codigo: erro.codigo, mensagem: erro.message };
   }
-  await marcarComoEnviada(database, acao);
-  await apagarFotosDaAcao(caminhosDasFotos(payload));
-  return { tipo: 'enviado' };
+  return (await confirmarEnvio(database, acao, caminhosDasFotos(payload)))
+    ? { tipo: 'enviado' }
+    : { tipo: 'pendente' };
 }

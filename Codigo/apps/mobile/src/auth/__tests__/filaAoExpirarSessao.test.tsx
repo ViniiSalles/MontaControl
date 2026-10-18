@@ -9,6 +9,7 @@ import { AcaoPendente } from '../../db/AcaoPendente';
 import { Jornada } from '../../db/Jornada';
 import { lerDonoNoBanco, registrarDonoNoBanco } from '../../db/donoDaFila';
 import { apagarTodasAsFotos, salvarFoto } from '../../fotos/armazenamentoFotos';
+import { existeFoto } from '../../fotos/__tests__/apoio';
 import { drenarFila } from '../../sincronizacao/syncManager';
 import { ProvedorAuth, useAuth } from '../AuthContext';
 import { definirTokens } from '../tokenSessao';
@@ -353,7 +354,7 @@ describe('fotos de atestado e avaria guardadas no aparelho (#113)', () => {
     await waitFor(() => expect(mockSecureStore.has(CHAVE_DONO)).toBe(true));
 
     expect(await contarAcoes()).toBe(2);
-    expect(new File(caminho).exists).toBe(true);
+    expect(existeFoto(caminho)).toBe(true);
   });
 
   test('login do MESMO usuário depois da expiração mantém as fotos', async () => {
@@ -365,7 +366,7 @@ describe('fotos de atestado e avaria guardadas no aparelho (#113)', () => {
     await fireEvent.press(screen.getByTestId('entrar'));
     await waitFor(() => expect(screen.getByTestId('usuario')).toHaveTextContent(montador.nome));
 
-    expect(new File(caminho).exists).toBe(true);
+    expect(existeFoto(caminho)).toBe(true);
   });
 
   test('login de OUTRO usuário apaga a fila e as fotos do anterior', async () => {
@@ -381,7 +382,7 @@ describe('fotos de atestado e avaria guardadas no aparelho (#113)', () => {
     );
 
     expect(await contarAcoes()).toBe(0);
-    expect(new File(caminho).exists).toBe(false);
+    expect(existeFoto(caminho)).toBe(false);
   });
 
   test('logout explícito apaga as fotos', async () => {
@@ -396,6 +397,6 @@ describe('fotos de atestado e avaria guardadas no aparelho (#113)', () => {
     await fireEvent.press(screen.getByTestId('sair'));
 
     await waitFor(() => expect(screen.getByTestId('usuario')).toHaveTextContent('sem-sessao'));
-    await waitFor(() => expect(new File(caminho).exists).toBe(false));
+    await waitFor(() => expect(existeFoto(caminho)).toBe(false));
   });
 });

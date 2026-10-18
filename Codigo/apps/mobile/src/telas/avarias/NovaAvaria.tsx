@@ -12,11 +12,11 @@ import { Cartao } from '../../ui/Cartao';
 import { Icone } from '../../ui/Icone';
 import { Texto } from '../../ui/Texto';
 import { useDatabaseOuFalha } from '../../db/useDatabase';
-import { mimeTypeSuportado } from '../../fotos/armazenamentoFotos';
+import { mimeTypeSuportado, uriDaFoto } from '../../fotos/armazenamentoFotos';
 import { useFotosDoFormulario } from '../../fotos/useFotosDoFormulario';
 import { MAXIMO_FOTOS, validarReporteAvaria } from '../../avarias/validarReporteAvaria';
 import type { CamposReporteAvaria, ErrosReporteAvaria } from '../../avarias/validarReporteAvaria';
-import { executarAcaoAvaria } from '../../sincronizacao/outbox';
+import { ErroAoEnfileirar, executarAcaoAvaria } from '../../sincronizacao/outbox';
 import { Opcao } from './Opcao';
 
 interface PropsNovaAvaria {
@@ -47,6 +47,14 @@ function Secao({ titulo, erro, children }: { titulo: string; erro?: string; chil
       )}
     </View>
   );
+}
+
+/** Recusa e falha de registro apagam as fotos (a fila não as guarda): o montador precisa saber. */
+function comAvisoDeFotos(mensagem: string, tinhaFotos: boolean): string {
+  return tinhaFotos
+    ? `${mensagem}
+As fotos anexadas foram descartadas; anexe de novo se precisar.`
+    : mensagem;
 }
 
 /** Reporte de problema na peça pelo montador — entra na outbox, então funciona sem sinal. */
@@ -125,29 +133,27 @@ export function NovaAvaria({ pedidos, tipos, aoEnviado, aoIniciarEnvio }: PropsN
     aoIniciarEnvio?.();
     setEnviando(true);
     setFalha(null);
+    // As fotos passam a ser da fila ao chamar o outbox: o formulário as solta
+    // JÁ, antes da rede. Se a tela fechar com o envio pendurado, o cleanup do
+    // formulário não pode apagar arquivos que a linha da fila referencia.
+    const tinhaFotos = fotos.caminhos.length > 0;
+    fotos.esquecer();
     try {
       const resultado = await executarAcaoAvaria(database, { idCliente: randomUUID(), ...dados });
       if (resultado.tipo === 'recusado') {
-        // A recusa já apagou os arquivos: as miniaturas não têm mais o que mostrar.
-        fotos.esquecer();
-        setFalha(
-          dados.fotosCaminhos
-            ? `${resultado.mensagem}
-As fotos anexadas foram descartadas; anexe de novo se precisar.`
-            : resultado.mensagem,
-        );
+        setFalha(comAvisoDeFotos(resultado.mensagem, tinhaFotos));
         return;
       }
-      // Na fila (ou já aceita), os arquivos passam a ser dela.
-      fotos.esquecer();
       setCampos(CAMPOS_VAZIOS);
       aoEnviado(
         resultado.tipo === 'enviada'
           ? 'Problema enviado. O gestor vai analisar.'
           : 'Sem conexão agora: o problema foi salvo e será enviado automaticamente.',
       );
-    } catch {
-      setFalha('Não foi possível registrar o problema. Tente de novo.');
+    } catch (erro) {
+      // Só o enfileiramento que falhou apagou as fotos; qualquer outra falha deixa a linha (e as fotos) na fila.
+      const mensagem = 'Não foi possível registrar o problema. Tente de novo.';
+      setFalha(erro instanceof ErroAoEnfileirar ? comAvisoDeFotos(mensagem, tinhaFotos) : mensagem);
     } finally {
       setEnviando(false);
     }
@@ -250,15 +256,16 @@ As fotos anexadas foram descartadas; anexe de novo se precisar.`
 
           {fotos.caminhos.length > 0 && (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: espacamento[8] }}>
-              {fotos.caminhos.map((uri, indice) => (
-                <View key={uri} style={{ width: TAMANHO_MINIATURA, height: TAMANHO_MINIATURA }}>
+              {fotos.caminhos.map((caminho, indice) => (
+                <View key={caminho} style={{ width: TAMANHO_MINIATURA, height: TAMANHO_MINIATURA }}>
                   <Image
-                    source={{ uri }}
+                    source={{ uri: uriDaFoto(caminho) }}
                     accessibilityLabel={`Foto ${indice + 1} do problema`}
                     style={{ width: '100%', height: '100%', borderRadius: raio.md }}
                   />
                   <Pressable
                     accessibilityLabel={`Remover foto ${indice + 1}`}
+                    disabled={enviando}
                     onPress={() => void fotos.remover(indice)}
                     style={{
                       position: 'absolute',

@@ -17,9 +17,9 @@ import { enviarAvaria } from '../../avarias/clienteAvarias';
 import { criarAcaoPendente, criarBancoDeTeste } from '../../db/__tests__/apoio';
 import { AcaoPendente } from '../../db/AcaoPendente';
 import { apagarTodasAsFotos, salvarFoto } from '../../fotos/armazenamentoFotos';
-import { base64DeTexto } from '../../fotos/__tests__/apoio';
+import { base64DeTexto, existeFoto, sumirComFoto } from '../../fotos/__tests__/apoio';
 import { ErroApi } from '../../http/erroApi';
-import { executarAcaoAtestado, executarAcaoAvaria } from '../outbox';
+import { ErroAoEnfileirar, executarAcaoAtestado, executarAcaoAvaria } from '../outbox';
 import { drenarFila } from '../syncManager';
 
 // #113: a foto é um arquivo no aparelho; a fila guarda só o caminho e o base64
@@ -40,7 +40,7 @@ async function novaFoto(conteudo: string): Promise<string> {
   return salvarFoto(origem.uri, 'image/jpeg');
 }
 
-const existe = (caminho: string) => new File(caminho).exists;
+const existe = existeFoto;
 
 async function duasFotos() {
   return [await novaFoto('foto-a'), await novaFoto('foto-b')];
@@ -135,6 +135,36 @@ describe.each([
 
     expect(await acoes(database, 'pendente')).toHaveLength(0);
     expect(caminhos.some(existe)).toBe(false);
+  });
+
+  it('se o próprio enfileiramento falhar, nenhuma linha referencia as fotos: os arquivos são apagados e o erro sobe', async () => {
+    const database = criarBancoDeTeste();
+    const caminhos = await duasFotos();
+    jest.spyOn(database, 'write').mockRejectedValueOnce(new Error('disco cheio'));
+
+    const erro = await executar(database, caminhos).catch((causa: unknown) => causa);
+
+    expect(erro).toBeInstanceOf(ErroAoEnfileirar);
+    expect((erro as Error).message).toBe('disco cheio');
+    expect(enviar).not.toHaveBeenCalled();
+    expect(caminhos.some(existe)).toBe(false);
+  });
+
+  it('falha ao marcar como enviada (a linha já existe): não é erro para a tela, fica pendente e com as fotos', async () => {
+    const database = criarBancoDeTeste();
+    const caminhos = await duasFotos();
+    enviar.mockResolvedValue({} as never);
+    const escrever = database.write.bind(database);
+    // 1ª escrita (enfileirar) passa; a que marcaria como enviada falha.
+    jest
+      .spyOn(database, 'write')
+      .mockImplementationOnce(escrever)
+      .mockRejectedValueOnce(new Error('falha ao marcar'));
+
+    expect((await executar(database, caminhos)).tipo).toBe('pendente');
+
+    expect(await acoes(database, 'pendente')).toHaveLength(1);
+    expect(caminhos.every(existe)).toBe(true);
   });
 
   it('401 não apaga nada: a ação e as fotos esperam a sessão renovar', async () => {
@@ -235,7 +265,7 @@ describe('fotos que sumiram do aparelho', () => {
       idCliente: AVARIA.idCliente,
       payload: { ...AVARIA, fotosCaminhos: [a, b] },
     });
-    new File(a).delete();
+    sumirComFoto(a);
     enviarAvariaMock.mockResolvedValue({} as never);
 
     await drenarFila(database);
@@ -255,7 +285,7 @@ describe('fotos que sumiram do aparelho', () => {
       idCliente: ATESTADO.idCliente,
       payload: { ...ATESTADO, fotosCaminhos: [a] },
     });
-    new File(a).delete();
+    sumirComFoto(a);
 
     await drenarFila(database);
 
