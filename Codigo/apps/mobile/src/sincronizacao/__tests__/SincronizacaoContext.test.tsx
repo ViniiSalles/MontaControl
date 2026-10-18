@@ -4,8 +4,10 @@ import type { ReactNode } from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { DatabaseProvider } from '@nozbe/watermelondb/react';
 import { Q } from '@nozbe/watermelondb';
+import { File, Paths } from 'expo-file-system';
 import { AcaoPendente } from '../../db/AcaoPendente';
 import { criarBancoDeTeste } from '../../db/__tests__/apoio';
+import { apagarTodasAsFotos, salvarFoto } from '../../fotos/armazenamentoFotos';
 import { ProvedorSincronizacao, useSincronizacao } from '../SincronizacaoContext';
 import { iniciarSincronizacao } from '../syncManager';
 
