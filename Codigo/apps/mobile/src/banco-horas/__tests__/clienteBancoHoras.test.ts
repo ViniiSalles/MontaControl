@@ -1,5 +1,5 @@
 import { definirTokens } from '../../auth/tokenSessao';
-import { ErroApi } from '../../jornada/clienteJornadas';
+import { ErroApi } from '../../http/erroApi';
 import { buscarBancoHoras } from '../clienteBancoHoras';
 
 describe('clienteBancoHoras', () => {
