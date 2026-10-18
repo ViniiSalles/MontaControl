@@ -78,7 +78,7 @@ describe('drenarFila com avaria', () => {
 
     await drenarFila(database);
 
-    expect(enviarMock).toHaveBeenLastCalledWith(PAYLOAD);
+    expect(enviarMock).toHaveBeenLastCalledWith(PAYLOAD, { geracao: expect.any(Number) });
     expect(enviarSolicitacaoPonto).not.toHaveBeenCalled();
     expect(await fila(database, 'pendente')).toHaveLength(0);
   });

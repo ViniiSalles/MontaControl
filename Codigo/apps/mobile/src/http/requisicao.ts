@@ -6,6 +6,8 @@ interface OpcoesRequisicao {
   metodo?: 'GET' | 'POST';
   /** Serializado como JSON. */
   corpo?: unknown;
+  /** Geração da sessão a que a requisição pertence (ver `comTokenRenovado`); a fila de ações passa a sua. */
+  geracao?: number;
 }
 
 /**
@@ -16,7 +18,7 @@ interface OpcoesRequisicao {
  */
 export function requisitarAutenticado(
   caminho: string,
-  { metodo = 'GET', corpo }: OpcoesRequisicao = {},
+  { metodo = 'GET', corpo, geracao }: OpcoesRequisicao = {},
 ): Promise<Response> {
   return comTokenRenovado(async (token) => {
     const resposta = await fetch(`${urlBaseApi}${caminho}`, {
@@ -30,5 +32,5 @@ export function requisitarAutenticado(
 
     if (!resposta.ok) throw await lerErro(resposta);
     return resposta;
-  });
+  }, geracao);
 }

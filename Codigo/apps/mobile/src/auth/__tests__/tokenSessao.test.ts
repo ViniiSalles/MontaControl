@@ -8,6 +8,7 @@ import {
   atualizarUsuarioDaSessao,
   comTokenRenovado,
   definirTokens,
+  geracaoDaSessao,
   obterTokenValido,
 } from '../tokenSessao';
 import { gestor, montador, sessaoDe } from './apoio';
@@ -184,20 +185,145 @@ describe('comTokenRenovado', () => {
     expect(renovarSessaoMock).toHaveBeenCalledTimes(1);
   });
 
-  test('401 de um token que outra chamada já trocou repete com o token atual, sem renovar de novo', async () => {
-    definirTokens({ accessToken: 'atual', refreshToken: 'refresh' });
-    const emVoo = jest.fn().mockImplementation(async (token: string) => {
-      if (token === 'atual') {
-        // Outra chamada terminou de renovar enquanto esta estava no ar.
-        definirTokens({ accessToken: 'mais-novo', refreshToken: 'refresh-2' });
+  test('401 tardio de um token que outra chamada já renovou repete com o token atual, sem renovar de novo', async () => {
+    definirTokens(TOKENS);
+    renovarSessaoMock.mockResolvedValue(sessaoDe(montador, '-novo'));
+    let liberar401!: () => void;
+    const atrasada = new Promise<void>((resolver) => {
+      liberar401 = resolver;
+    });
+    const chamadaLenta = jest.fn().mockImplementation(async (token: string) => {
+      if (token === 'velho') {
+        await atrasada;
         throw naoAutorizado();
       }
       return token;
     });
+    const lenta = comTokenRenovado(chamadaLenta);
 
-    await expect(comTokenRenovado(emVoo)).resolves.toBe('mais-novo');
+    // Outra chamada leva o 401 antes e conclui a renovação.
+    await comTokenRenovado(
+      jest.fn().mockRejectedValueOnce(naoAutorizado()).mockResolvedValueOnce('ok'),
+    );
+    liberar401();
 
+    await expect(lenta).resolves.toBe('access-novo');
+    expect(renovarSessaoMock).toHaveBeenCalledTimes(1);
+  });
+
+  // Corrida: o refresh de uma sessão ainda está no ar quando o montador sai e uma
+  // sessão nova começa. A resposta tardia nunca pode derrubar nem alterar a nova.
+  describe('sessão trocada durante a renovação em voo', () => {
+    function refreshEmVoo() {
+      let recusar!: () => void;
+      let aceitar!: () => void;
+      renovarSessaoMock.mockImplementation(
+        () =>
+          new Promise((resolver, rejeitar) => {
+            recusar = () => rejeitar(new ErroNaoAutorizado('Refresh token inválido ou expirado'));
+            aceitar = () => resolver(sessaoDe(montador, '-antigo'));
+          }),
+      );
+      return { recusar: () => recusar(), aceitar: () => aceitar() };
+    }
+
+    test('refresh recusado da sessão antiga não encerra a sessão nova (logout + novo login)', async () => {
+      definirTokens(TOKENS);
+      const refresh = refreshEmVoo();
+      const aoExpirar = jest.fn();
+      aoSessaoExpirar(aoExpirar);
+      const chamada = jest.fn().mockRejectedValue(naoAutorizado());
+      const emVoo = comTokenRenovado(chamada);
+      await new Promise<void>((resolver) => setImmediate(() => resolver()));
+
+      definirTokens(null);
+      definirTokens({ accessToken: 'sessao-nova', refreshToken: 'refresh-novo' });
+      refresh.recusar();
+
+      await expect(emVoo).rejects.toBeInstanceOf(ErroSessaoExpirada);
+      expect(aoExpirar).not.toHaveBeenCalled();
+      await expect(obterTokenValido()).resolves.toBe('sessao-nova');
+      // A chamada da sessão antiga não é repetida sob o token da nova.
+      expect(chamada).toHaveBeenCalledTimes(1);
+    });
+
+    test('refresh aceito da sessão antiga não sobrescreve nem é gravado sobre a sessão nova', async () => {
+      definirTokens(TOKENS);
+      const refresh = refreshEmVoo();
+      const chamada = jest.fn().mockRejectedValue(naoAutorizado());
+      const emVoo = comTokenRenovado(chamada);
+      await new Promise<void>((resolver) => setImmediate(() => resolver()));
+
+      definirTokens({ accessToken: 'sessao-nova', refreshToken: 'refresh-novo' });
+      refresh.aceitar();
+
+      await expect(emVoo).rejects.toBeInstanceOf(ErroSessaoExpirada);
+      await expect(obterTokenValido()).resolves.toBe('sessao-nova');
+      expect(armazenamentoMock.salvarSessao).not.toHaveBeenCalled();
+      expect(chamada).toHaveBeenCalledTimes(1);
+    });
+  });
+});
+
+describe('geração da sessão', () => {
+  test('sobe a cada definirTokens (login, boot, logout) e não na renovação do token', async () => {
+    definirTokens(TOKENS);
+    const inicial = geracaoDaSessao();
+    renovarSessaoMock.mockResolvedValue(sessaoDe(montador, '-novo'));
+
+    await comTokenRenovado(
+      jest.fn().mockRejectedValueOnce(naoAutorizado()).mockResolvedValueOnce('ok'),
+    );
+    expect(geracaoDaSessao()).toBe(inicial);
+
+    definirTokens(null);
+    expect(geracaoDaSessao()).toBe(inicial + 1);
+  });
+
+  test('comTokenRenovado com geração esperada defasada falha sem chamar fn (nada sai sob a sessão nova)', async () => {
+    definirTokens(TOKENS);
+    const esperada = geracaoDaSessao();
+    definirTokens({ accessToken: 'sessao-nova', refreshToken: 'refresh-novo' });
+    const chamada = jest.fn().mockResolvedValue('ok');
+
+    await expect(comTokenRenovado(chamada, esperada)).rejects.toBeInstanceOf(ErroSessaoExpirada);
+
+    expect(chamada).not.toHaveBeenCalled();
+  });
+
+  test('comTokenRenovado com a geração esperada atual funciona normalmente', async () => {
+    definirTokens(TOKENS);
+    const chamada = jest.fn().mockResolvedValue('ok');
+
+    await expect(comTokenRenovado(chamada, geracaoDaSessao())).resolves.toBe('ok');
+
+    expect(chamada).toHaveBeenCalledWith('velho');
+  });
+
+  test('chamada comum em voo durante logout + novo login que recebe 401 não renova nem derruba a sessão nova', async () => {
+    definirTokens(TOKENS);
+    const aoExpirar = jest.fn();
+    aoSessaoExpirar(aoExpirar);
+    let liberar!: () => void;
+    const segurada = new Promise<void>((resolver) => {
+      liberar = resolver;
+    });
+    const chamada = jest.fn().mockImplementation(async () => {
+      await segurada;
+      throw naoAutorizado();
+    });
+    const emVoo = comTokenRenovado(chamada);
+    await new Promise<void>((resolver) => setImmediate(() => resolver()));
+
+    definirTokens(null);
+    definirTokens({ accessToken: 'sessao-nova', refreshToken: 'refresh-novo' });
+    liberar();
+
+    await expect(emVoo).rejects.toBeInstanceOf(ErroSessaoExpirada);
     expect(renovarSessaoMock).not.toHaveBeenCalled();
+    expect(aoExpirar).not.toHaveBeenCalled();
+    expect(chamada).toHaveBeenCalledTimes(1);
+    await expect(obterTokenValido()).resolves.toBe('sessao-nova');
   });
 });
 

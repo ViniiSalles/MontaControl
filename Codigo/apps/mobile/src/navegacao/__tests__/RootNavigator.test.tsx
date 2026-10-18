@@ -15,7 +15,13 @@ jest.mock('../../auth/armazenamentoSessao');
 // `arvore()` abaixo). Sem mock, `unsafeResetDatabase()` bateria no stub de
 // `SQLiteAdapter` do `jest.setup.js` (que só existe para o import não
 // quebrar) e derrubaria o teste de logout.
-jest.mock('../../db/database', () => ({ limparBancoLocal: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('../../db/database', () => ({
+  limparBancoLocal: jest.fn().mockResolvedValue(undefined),
+  limparEspelhoBancoLocal: jest.fn().mockResolvedValue(undefined),
+  contarAcoesNaFilaLocal: jest.fn().mockResolvedValue(0),
+  lerDonoNoBancoLocal: jest.fn().mockResolvedValue({ tipo: 'ausente' }),
+  registrarDonoNoBancoLocal: jest.fn().mockResolvedValue(true),
+}));
 
 const armazenamentoMock = jest.mocked(armazenamento);
 
@@ -68,6 +74,7 @@ beforeEach(() => {
   database = criarBancoDeTeste();
   definirTokens(null);
   armazenamentoMock.lerSessao.mockResolvedValue(null);
+  armazenamentoMock.lerDonoDaFila.mockResolvedValue({ tipo: 'ausente' });
   armazenamentoMock.salvarSessao.mockResolvedValue(undefined);
   armazenamentoMock.limparSessao.mockResolvedValue(undefined);
   // Default rejeitando: a aba Jornada busca `GET /api/jornadas/atual` assim

@@ -1,5 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 import type { UsuarioDTO } from '@montacontrol/shared';
+import type { LeituraDono } from '../db/donoDaFila';
 
 /**
  * Chave versionada: se o formato do que é guardado mudar, sobe a versão e a
@@ -81,4 +82,46 @@ export async function limparSessao(): Promise<void> {
       }
     }),
   );
+}
+
+/**
+ * Quem é o dono da fila de ações pendentes (`acoes_pendentes`) quando a sessão
+ * é encerrada à força (refresh recusado): a fila é mantida no aparelho para
+ * não perder marcações de ponto, e este marcador impede que ela seja enviada
+ * sob o token de outro montador. Só o id do usuário — nada sensível.
+ * Resolvido no próximo login (`AuthContext`); logout explícito apaga os dois.
+ */
+const CHAVE_DONO_DA_FILA = 'mc.fila.dono.v1';
+
+/** Tri-state (ver `LeituraDono`): marcador ilegível ou SecureStore com erro é `erro`, nunca `ausente`. */
+export async function lerDonoDaFila(): Promise<LeituraDono> {
+  try {
+    const bruto = await SecureStore.getItemAsync(CHAVE_DONO_DA_FILA);
+    if (!bruto) return { tipo: 'ausente' };
+
+    const analisado = JSON.parse(bruto) as { usuarioId?: unknown } | null;
+    return typeof analisado?.usuarioId === 'number'
+      ? { tipo: 'dono', usuarioId: analisado.usuarioId }
+      : { tipo: 'erro' };
+  } catch {
+    return { tipo: 'erro' };
+  }
+}
+
+/** `false` se não conseguiu gravar: sem o marcador a fila não pode ser preservada com segurança. */
+export async function registrarDonoDaFila(usuarioId: number): Promise<boolean> {
+  try {
+    await SecureStore.setItemAsync(CHAVE_DONO_DA_FILA, JSON.stringify({ usuarioId }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function limparDonoDaFila(): Promise<void> {
+  try {
+    await SecureStore.deleteItemAsync(CHAVE_DONO_DA_FILA);
+  } catch {
+    // Nada a fazer.
+  }
 }
