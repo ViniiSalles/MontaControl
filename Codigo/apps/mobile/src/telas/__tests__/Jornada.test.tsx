@@ -27,6 +27,7 @@ import {
 import { formatarHora } from '../../jornada/formatacao';
 import { periodoAtual } from '../../banco-horas/periodo';
 import { montador } from '../../auth/__tests__/apoio';
+import { AGORA_FIXO_ISO, AGORA_FIXO_MS, fixarRelogio, soltarRelogio } from '../../jornada/__tests__/relogioFixo';
 import { Jornada } from '../Jornada';
 
 const abrirHistorico = jest.fn();
@@ -77,12 +78,11 @@ const OUTRA_OBRA = {
 };
 
 /**
- * Check-in de duas horas atrás, e não uma data fixa: jornada aberta só conta
- * como "em andamento" dentro do limite de 24h (`estadoJornada`). Com data
- * congelada no passado a fixture nasceria vencida e o botão ofereceria
- * entrada em vez de saída.
+ * Check-in de duas horas antes do relógio fixo do teste, e não uma data
+ * qualquer: jornada aberta só conta como "em andamento" dentro do limite de
+ * 24h (`estadoJornada`) e a tela decide "hoje" pelo relógio.
  */
-const CHECKIN_RECENTE = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+const CHECKIN_RECENTE = new Date(AGORA_FIXO_MS - 2 * 60 * 60 * 1000).toISOString();
 const HORA_CHECKIN = formatarHora(CHECKIN_RECENTE);
 
 /** Jornada aberta que o servidor mandou no pull (réplica). */
@@ -102,7 +102,7 @@ const abertaNaReplica = (parcial: Parameters<typeof linhaDeJornada>[0] = {}) =>
     ...parcial,
   });
 
-const CHECKOUT_RECENTE = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+const CHECKOUT_RECENTE = new Date(AGORA_FIXO_MS - 30 * 60 * 1000).toISOString();
 const HORA_CHECKOUT = formatarHora(CHECKOUT_RECENTE);
 
 /** O que `executarAcaoJornada` devolve na tela; a jornada real vem da sobreposição, não daqui. */
@@ -164,9 +164,14 @@ function simularCheckoutNaFila() {
 const ROTULO_ENTRADA = 'Bater ponto de entrada';
 const ROTULO_SAIDA = 'Bater ponto de saída';
 
-const { mes: MES_ATUAL, ano: ANO_ATUAL } = periodoAtual(new Date().toISOString());
+const { mes: MES_ATUAL, ano: ANO_ATUAL } = periodoAtual(AGORA_FIXO_ISO);
+
+afterEach(() => {
+  soltarRelogio();
+});
 
 beforeEach(async () => {
+  fixarRelogio();
   // `clearAllMocks` e não `resetAllMocks`: as implementações que o preset
   // jest-expo instala para os componentes nativos precisam sobreviver.
   jest.clearAllMocks();
