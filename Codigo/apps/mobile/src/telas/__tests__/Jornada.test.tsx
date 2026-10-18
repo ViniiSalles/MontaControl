@@ -14,6 +14,7 @@ import { upsertJornadas } from '../../jornada/espelhoJornada';
 import { useAuth } from '../../auth/AuthContext';
 import { registrarCheckin, registrarCheckout } from '../../jornada/acoes';
 import { iniciarSincronizacao, puxarBancoHoras, puxarJornadas } from '../../sincronizacao/syncManager';
+import { ProvedorSincronizacao } from '../../sincronizacao/SincronizacaoContext';
 import { formatarHora } from '../../jornada/formatacao';
 import { periodoAtual } from '../../banco-horas/periodo';
 import { montador } from '../../auth/__tests__/apoio';
@@ -30,11 +31,13 @@ let database = criarBancoDeTeste();
 function renderizar() {
   return render(
     <DatabaseProvider database={database}>
-      <Jornada
-        aoAbrirHistorico={abrirHistorico}
-        aoAbrirBancoHoras={abrirBancoHoras}
-        aoLancarEmAtraso={lancarEmAtraso}
-      />
+      <ProvedorSincronizacao>
+        <Jornada
+          aoAbrirHistorico={abrirHistorico}
+          aoAbrirBancoHoras={abrirBancoHoras}
+          aoLancarEmAtraso={lancarEmAtraso}
+        />
+      </ProvedorSincronizacao>
     </DatabaseProvider>,
   );
 }
@@ -327,10 +330,31 @@ test('Atualizar também refaz a busca do banco de horas', async () => {
   await waitFor(() => expect(puxarBancoHorasMock).toHaveBeenCalledTimes(2));
 });
 
-test('a sincronização automática liga ao montar a tela, com o banco certo', async () => {
+// #107: a sincronização automática vive em `ProvedorSincronizacao` (app
+// autenticado), não na tela — montar Jornada não deve ligá-la de novo.
+test('a tela Jornada não liga a sincronização automática por conta própria', async () => {
+  await renderizar();
+  await waitFor(() => expect(screen.getByText(ROTULO_ENTRADA)).toBeTruthy());
+
+  // Uma única chamada: a do provider que envolve a tela neste teste.
+  expect(iniciarSincronizacaoMock).toHaveBeenCalledTimes(1);
+});
+
+test('ação pendente na fila marca o último ponto como sincronizando', async () => {
+  await upsertJornadas(database, [ABERTA]);
+  await database.write(() =>
+    database.get<AcaoPendente>('acoes_pendentes').create((registro) => {
+      registro.tipo = 'checkout';
+      registro.idCliente = 'id-1';
+      registro.payload = '{}';
+      registro.criadoEm = '2026-09-09T12:00:00.000Z';
+      registro.status = 'pendente';
+    }),
+  );
+
   await renderizar();
 
-  await waitFor(() => expect(iniciarSincronizacaoMock).toHaveBeenCalledWith(database));
+  await waitFor(() => expect(screen.getByText('SINCRONIZANDO')).toBeTruthy());
 });
 
 test('bater a saída também refaz a busca do banco de horas', async () => {

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
-import { Q } from '@nozbe/watermelondb';
 import { cores, espacamento, espacamentoNomeado } from '@montacontrol/design-tokens/native';
 import { estadoJornada } from '@montacontrol/shared';
 import type { JornadaDTO } from '@montacontrol/shared';
@@ -14,7 +13,6 @@ import { Texto } from '../ui/Texto';
 import { useAuth } from '../auth/AuthContext';
 import { useBancoHoras } from '../banco-horas/useBancoHoras';
 import { periodoAtual } from '../banco-horas/periodo';
-import { AcaoPendente } from '../db/AcaoPendente';
 import { useDatabaseOuFalha } from '../db/useDatabase';
 import { registrarCheckin, registrarCheckout } from '../jornada/acoes';
 import { diaCivilDe, formatarDataCompleta, formatarDuracao } from '../jornada/formatacao';
@@ -26,7 +24,7 @@ import { useHistoricoPontos } from '../jornada/useHistoricoPontos';
 import { useJornadaAtual } from '../jornada/useJornadaAtual';
 import { lembrarObraDaJornada, lerObraDaJornada } from '../pedidos/obrasLocais';
 import { useObrasDoMontador } from '../pedidos/useObrasDoMontador';
-import { iniciarSincronizacao } from '../sincronizacao/syncManager';
+import { useSincronizacao } from '../sincronizacao/SincronizacaoContext';
 import { BotaoAcaoPrincipal } from './jornada/BotaoAcaoPrincipal';
 import { CartaoBancoHoras } from './jornada/CartaoBancoHoras';
 import { CartaoUltimoPonto } from './jornada/CartaoUltimoPonto';
@@ -56,37 +54,9 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
 
   const database = useDatabaseOuFalha();
 
-  // `RootNavigator` só monta esta tela com sessão presente; o token vem da
-  // fonte única (`auth/tokenSessao`), buscado a cada sincronização.
-  useEffect(() => iniciarSincronizacao(database), [database]);
-
-  const [pendentes, setPendentes] = useState(0);
-  const [avisosDescartados, setAvisosDescartados] = useState<string[]>([]);
-
-  useEffect(() => {
-    const colecao = database.get<AcaoPendente>('acoes_pendentes');
-
-    const assinaturaPendentes = colecao
-      .query(Q.where('status', 'pendente'))
-      .observeCount()
-      .subscribe(setPendentes);
-
-    const assinaturaDescartadas = colecao
-      .query(Q.where('status', 'descartada'))
-      .observe()
-      .subscribe((registros) => {
-        if (registros.length === 0) return;
-        setAvisosDescartados(registros.map((registro) => registro.mensagemDescarte ?? ''));
-        void database.write(() =>
-          database.batch(...registros.map((registro) => registro.prepareDestroyPermanently())),
-        );
-      });
-
-    return () => {
-      assinaturaPendentes.unsubscribe();
-      assinaturaDescartadas.unsubscribe();
-    };
-  }, [database]);
+  // A sincronização automática e o status da fila vêm do provider do app
+  // autenticado (`ProvedorSincronizacao`), não desta tela.
+  const { pendentes, avisosDescartados, dispensarAvisos } = useSincronizacao();
 
   const { jornada, carregando, erro, recarregar } = useJornadaAtual();
   // Menor período válido (`PeriodoHistorico`): só precisa alcançar hoje, o
@@ -173,8 +143,9 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
     // quem manda é o servidor de novo.
     setJornadaRegistrada(null);
     setAviso(null);
+    dispensarAvisos();
     await Promise.all([recarregar(), recarregarHistorico(), recarregarBancoHoras(), recarregarObras()]);
-  }, [recarregar, recarregarHistorico, recarregarBancoHoras, recarregarObras]);
+  }, [dispensarAvisos, recarregar, recarregarHistorico, recarregarBancoHoras, recarregarObras]);
 
   return (
     <Tela rolavel>

@@ -6,6 +6,7 @@ import * as armazenamento from '../../auth/armazenamentoSessao';
 import { definirTokens } from '../../auth/tokenSessao';
 import { criarBancoDeTeste } from '../../db/__tests__/apoio';
 import { gestor, montador, respostaJson, sessaoDe } from '../../auth/__tests__/apoio';
+import { instalarGatilhosFalsos } from '../../sincronizacao/__tests__/gatilhosFalsos';
 
 jest.mock('../../auth/armazenamentoSessao');
 // `AuthContext#sair` chama `limparBancoLocal` no singleton real de
@@ -176,6 +177,28 @@ test('sair volta ao Login e limpa os tokens do aparelho', async () => {
 
   await waitFor(() => expect(screen.getByText('Entrar')).toBeTruthy());
   expect(armazenamentoMock.limparSessao).toHaveBeenCalled();
+});
+
+// #107: a sincronização é do app autenticado; sair precisa desligar os gatilhos
+// de rede e de primeiro plano, senão o app deslogado seguiria sincronizando.
+test('sair remove os listeners de rede e de primeiro plano', async () => {
+  const gatilhos = instalarGatilhosFalsos();
+  armazenamentoMock.lerSessao.mockResolvedValue(SESSAO_SALVA);
+  jest
+    .mocked(globalThis.fetch)
+    .mockResolvedValueOnce(respostaJson(200, montador))
+    .mockResolvedValueOnce(respostaJson(204, null));
+
+  await render(arvore());
+  await waitFor(() => expect(screen.getByText('Jornada de Trabalho')).toBeTruthy());
+  expect(gatilhos.rede.size).toBe(1);
+  expect(gatilhos.appState.size).toBe(1);
+
+  await fireEvent.press(screen.getByText('Sair'));
+
+  await waitFor(() => expect(screen.getByText('Entrar')).toBeTruthy());
+  expect(gatilhos.rede.size).toBe(0);
+  expect(gatilhos.appState.size).toBe(0);
 });
 
 test('a barra inferior traz as 5 abas, com Jornada, Avarias e Atestados habilitadas', async () => {
