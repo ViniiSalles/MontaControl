@@ -189,4 +189,57 @@ describe('drenarFila', () => {
 
     expect(enviarCheckin).not.toHaveBeenCalled();
   });
+
+  it('linha que deixou de estar pendente durante a drenagem (envio imediato da tela) não é reenviada', async () => {
+    const database = criarBancoDeTeste();
+    await criarAcaoPendente(database, {
+      tipo: 'checkin',
+      idCliente: 'id-1',
+      payload: CHECKIN_PAYLOAD('id-1', '2026-09-09T12:00:00.000Z'),
+      criadoEm: '2026-09-09T12:00:00.000Z',
+    });
+    const segunda = await criarAcaoPendente(database, {
+      tipo: 'checkin',
+      idCliente: 'id-2',
+      payload: CHECKIN_PAYLOAD('id-2', '2026-09-09T13:00:00.000Z'),
+      criadoEm: '2026-09-09T13:00:00.000Z',
+    });
+    // Enquanto a 1ª sobe, o envio imediato da tela confirma a 2ª.
+    (enviarCheckin as jest.Mock).mockImplementationOnce(async () => {
+      await database.write(() =>
+        segunda.update((registro) => {
+          registro.status = 'enviada';
+        }),
+      );
+      return {};
+    });
+
+    await drenarFila(database);
+
+    expect(enviarCheckin).toHaveBeenCalledTimes(1);
+  });
+
+  it('linha apagada durante a drenagem (recusa do envio imediato da tela) não é reenviada nem derruba a drenagem', async () => {
+    const database = criarBancoDeTeste();
+    await criarAcaoPendente(database, {
+      tipo: 'checkin',
+      idCliente: 'id-1',
+      payload: CHECKIN_PAYLOAD('id-1', '2026-09-09T12:00:00.000Z'),
+      criadoEm: '2026-09-09T12:00:00.000Z',
+    });
+    const segunda = await criarAcaoPendente(database, {
+      tipo: 'checkin',
+      idCliente: 'id-2',
+      payload: CHECKIN_PAYLOAD('id-2', '2026-09-09T13:00:00.000Z'),
+      criadoEm: '2026-09-09T13:00:00.000Z',
+    });
+    (enviarCheckin as jest.Mock).mockImplementationOnce(async () => {
+      await database.write(() => segunda.destroyPermanently());
+      return {};
+    });
+
+    await expect(drenarFila(database)).resolves.toBeUndefined();
+
+    expect(enviarCheckin).toHaveBeenCalledTimes(1);
+  });
 });

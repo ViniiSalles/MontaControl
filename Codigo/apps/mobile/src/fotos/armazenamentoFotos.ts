@@ -75,7 +75,10 @@ export function uriDaFoto(referencia: string): string {
  * app e devolve a referência (o nome do arquivo guardado) — é ela que vai para
  * a fila e para o rascunho do formulário.
  */
-export async function salvarFoto(uri: string, mimeType: MimeTypeFoto = 'image/jpeg'): Promise<string> {
+export async function salvarFoto(
+  uri: string,
+  mimeType: MimeTypeFoto = 'image/jpeg',
+): Promise<string> {
   pasta().create({ intermediates: true, idempotent: true });
   const nome = novoNomeDeArquivo(mimeType);
   const destino = new File(pasta(), nome);

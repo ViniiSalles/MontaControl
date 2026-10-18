@@ -120,6 +120,14 @@ export async function drenarFila(database: Database): Promise<void> {
 
   for (const acao of emOrdem) {
     if (geracaoDaSessao() !== geracao) break;
+    // A lista foi lida antes do laço: o envio imediato de uma tela pode ter
+    // confirmado (`enviada`) ou recusado (apagada) esta linha enquanto as
+    // anteriores subiam. Reenviá-la seria um POST à toa (ou uma escrita em
+    // registro apagado); só segue quem AINDA está pendente no banco.
+    const aindaPendente = await colecao
+      .query(Q.where('id', acao.id), Q.where('status', 'pendente'))
+      .fetchCount();
+    if (aindaPendente === 0) continue;
     const resultado = await reenviar(acao, geracao);
     // Sessão trocada durante a requisição: não grava nada com o resultado dela
     // (o banco já pode ser de outro usuário). A ação segue pendente; se o dono
