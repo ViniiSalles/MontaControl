@@ -60,7 +60,10 @@ function mimeTypeDoCaminho(caminho: string): MimeTypeFoto {
  * app e devolve o caminho do arquivo guardado — é ele que vai para a fila e
  * para o rascunho do formulário.
  */
-export async function salvarFoto(uri: string, mimeType: MimeTypeFoto = 'image/jpeg'): Promise<string> {
+export async function salvarFoto(
+  uri: string,
+  mimeType: MimeTypeFoto = 'image/jpeg',
+): Promise<string> {
   pasta().create({ intermediates: true, idempotent: true });
   const destino = new File(pasta(), novoNomeDeArquivo(mimeType));
   try {

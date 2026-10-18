@@ -76,7 +76,10 @@ describe('montarAtestadosExibidos', () => {
   });
 
   it('já aceito pelo servidor e aguardando o pull: continua na lista, sem o selo', () => {
-    const [atestado] = montarAtestadosExibidos({ replica: [], acoes: [naFila({ status: 'enviada' })] });
+    const [atestado] = montarAtestadosExibidos({
+      replica: [],
+      acoes: [naFila({ status: 'enviada' })],
+    });
 
     expect(atestado.aguardandoEnvio).toBe(false);
     expect(atestado.status).toBe(StatusAtestado.PENDENTE);

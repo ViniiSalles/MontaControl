@@ -53,7 +53,8 @@ let proximoUuid = 0;
 function pullDoServidor(): SyncPullResponse {
   const base = syncPullFixture.changes;
   return {
-    timestamp: syncPullFixture.timestamp + 60_000 * (servidor.avarias.length + servidor.atestados.length),
+    timestamp:
+      syncPullFixture.timestamp + 60_000 * (servidor.avarias.length + servidor.atestados.length),
     changes: {
       ...base,
       avarias: {
@@ -133,7 +134,9 @@ async function anexarFoto(rotuloDoBotao: string) {
   await fireEvent.press(screen.getByLabelText(rotuloDoBotao));
   const botoes = espiaAlerta.mock.calls[espiaAlerta.mock.calls.length - 1][2] ?? [];
   await act(async () => {
-    await botoes.find((botao) => botao.text === 'Escolher da galeria')?.onPress?.(undefined as never);
+    await botoes
+      .find((botao) => botao.text === 'Escolher da galeria')
+      ?.onPress?.(undefined as never);
   });
 }
 

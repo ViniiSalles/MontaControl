@@ -116,7 +116,9 @@ describe('apagarFotos', () => {
     const a = await salvarFoto(fotoDoPicker('picker-10.jpg', 'a'), 'image/jpeg');
 
     await apagarFotos([a]);
-    await expect(apagarFotos([a, 'file:///mock/document/fotos_pendentes/fantasma.jpg'])).resolves.toBeUndefined();
+    await expect(
+      apagarFotos([a, 'file:///mock/document/fotos_pendentes/fantasma.jpg']),
+    ).resolves.toBeUndefined();
     await expect(apagarFotos([])).resolves.toBeUndefined();
   });
 
