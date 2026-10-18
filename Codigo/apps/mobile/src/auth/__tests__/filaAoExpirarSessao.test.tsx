@@ -240,6 +240,7 @@ describe('expiração forçada da sessão (refresh recusado)', () => {
 
     expect(await contarAcoes()).toBe(1);
     expect(mockSecureStore.has(CHAVE_DONO)).toBe(false);
+    expect(await lerDonoNoBanco(mockBanco)).toEqual({ tipo: 'dono', usuarioId: montador.id });
 
     await drenarFila(mockBanco);
 
@@ -259,10 +260,35 @@ describe('expiração forçada da sessão (refresh recusado)', () => {
     expect(await contarAcoes()).toBe(0);
     expect(await contarJornadas()).toBe(0);
     expect(mockSecureStore.has(CHAVE_DONO)).toBe(false);
+    // Invariante: depois de autenticar, o dono do banco é quem autenticou.
+    expect(await lerDonoNoBanco(mockBanco)).toEqual({ tipo: 'dono', usuarioId: OUTRO_MONTADOR.id });
 
     await drenarFila(mockBanco);
 
     expect(chamadasAoCheckin).toEqual([]);
+  });
+});
+
+describe('réplica de outro usuário com a fila vazia', () => {
+  test('o wipe do logout falhou e deixou a réplica: outro usuário que entra com a fila vazia a encontra apagada', async () => {
+    // Estado que o logout deixaria se o wipe tivesse falhado: réplica do usuário 1, dono 1, fila vazia.
+    await registrarDonoNoBanco(mockBanco, montador.id);
+    await popularBanco(montador.id);
+    await mockBanco.write(async () => {
+      for (const acao of await mockBanco.get('acoes_pendentes').query().fetch()) {
+        await acao.destroyPermanently();
+      }
+    });
+    respostaDoLogin = respostaJson(200, sessaoDe(OUTRO_MONTADOR, '-b'));
+    await renderizar();
+
+    await fireEvent.press(screen.getByTestId('entrar'));
+    await waitFor(() =>
+      expect(screen.getByTestId('usuario')).toHaveTextContent(OUTRO_MONTADOR.nome),
+    );
+
+    expect(await contarJornadas()).toBe(0);
+    expect(await lerDonoNoBanco(mockBanco)).toEqual({ tipo: 'dono', usuarioId: OUTRO_MONTADOR.id });
   });
 });
 

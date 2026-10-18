@@ -302,6 +302,18 @@ describe('restauração de sessão no boot', () => {
     expect(databaseMock.registrarDonoNoBancoLocal).toHaveBeenCalledWith(montador.id);
   });
 
+  test('boot em que não dá para gravar o dono no banco não abre a sessão nem libera o token', async () => {
+    armazenamentoMock.lerSessao.mockResolvedValue(SESSAO_SALVA);
+    databaseMock.registrarDonoNoBancoLocal.mockResolvedValue(false);
+    jest.mocked(globalThis.fetch).mockRejectedValue(new TypeError('Network request failed'));
+
+    await renderizarComSonda();
+
+    expect(screen.getByTestId('usuario')).toHaveTextContent('sem-sessao');
+    await expect(obterTokenValido()).rejects.toThrow();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
   test('boot com fila sem dono conhecido (anterior à atualização) apaga a fila: custo único', async () => {
     armazenamentoMock.lerSessao.mockResolvedValue(SESSAO_SALVA);
     prepararFila({ acoes: 2 });
@@ -449,14 +461,62 @@ describe('entrar()', () => {
     await waitFor(() => expect(screen.getByTestId('usuario')).toHaveTextContent(montador.nome));
   }
 
-  test('fila vazia: nada é apagado, mesmo com dono de outro usuário, e o dono passa a ser quem entrou', async () => {
+  // A réplica (jornadas, banco de horas, obras) de outro usuário não pode ficar
+  // exposta a quem entra, mesmo com a fila vazia (o wipe do sair/expiração pode ter falhado).
+  test('fila vazia e dono de OUTRO usuário: apaga tudo, depois grava o dono novo', async () => {
     prepararFila({ acoes: 0, banco: dono(OUTRO_ID), marcador: dono(OUTRO_ID) });
+
+    await entrarComoMontador();
+
+    expect(databaseMock.limparBancoLocal).toHaveBeenCalledTimes(1);
+    expect(databaseMock.registrarDonoNoBancoLocal).toHaveBeenCalledWith(montador.id);
+    expect(armazenamentoMock.limparDonoDaFila).toHaveBeenCalled();
+    const ordemLimpeza = databaseMock.limparBancoLocal.mock.invocationCallOrder[0];
+    const ordemDono = databaseMock.registrarDonoNoBancoLocal.mock.invocationCallOrder[0];
+    expect(ordemLimpeza).toBeLessThan(ordemDono);
+  });
+
+  test('fila vazia e dono ilegível: apaga tudo', async () => {
+    prepararFila({ acoes: 0, banco: erro });
+
+    await entrarComoMontador();
+
+    expect(databaseMock.limparBancoLocal).toHaveBeenCalledTimes(1);
+  });
+
+  test('fila vazia e nenhum dono registrado: nada é apagado, mas o dono passa a ser quem entrou', async () => {
+    prepararFila({ acoes: 0 });
+
+    await entrarComoMontador();
+
+    expect(databaseMock.limparBancoLocal).not.toHaveBeenCalled();
+    expect(databaseMock.registrarDonoNoBancoLocal).toHaveBeenCalledWith(montador.id);
+  });
+
+  test('fila vazia e mesmo dono: mantém e regrava o dono', async () => {
+    prepararFila({ acoes: 0, banco: dono(montador.id), marcador: dono(montador.id) });
 
     await entrarComoMontador();
 
     expect(databaseMock.limparBancoLocal).not.toHaveBeenCalled();
     expect(databaseMock.registrarDonoNoBancoLocal).toHaveBeenCalledWith(montador.id);
     expect(armazenamentoMock.limparDonoDaFila).toHaveBeenCalled();
+  });
+
+  // Invariante: após qualquer autenticação bem-sucedida, o dono do banco é o usuário
+  // autenticado. Sem isso, um dono velho (X) venceria o marcador de Y e a fila de Y
+  // sairia com o token de X.
+  test('não conseguir gravar o dono no banco é fatal: o login falha e nenhum token é liberado', async () => {
+    databaseMock.registrarDonoNoBancoLocal.mockResolvedValue(false);
+    jest.mocked(globalThis.fetch).mockResolvedValueOnce(respostaJson(200, sessaoDe(montador)));
+    await renderizarComSonda();
+
+    await fireEvent.press(screen.getByTestId('entrar'));
+
+    await waitFor(() => expect(databaseMock.registrarDonoNoBancoLocal).toHaveBeenCalled());
+    expect(screen.getByTestId('usuario')).toHaveTextContent('sem-sessao');
+    expect(armazenamentoMock.salvarSessao).not.toHaveBeenCalled();
+    await expect(obterTokenValido()).rejects.toThrow();
   });
 
   test('sem marcador, a fila vazia não toca no SecureStore', async () => {

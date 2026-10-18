@@ -84,7 +84,11 @@ function exigirMontador(resposta: LoginResponse): void {
  * mesmo usuário — dono diferente, desconhecido, ilegível — apaga tudo; nunca
  * uma ação de um montador sai sob o token de outro. Roda ANTES de o token ser
  * liberado e falha fechado: se não der para apagar, o login não segue.
- * Depois, o dono da fila passa a ser quem autenticou.
+ *
+ * INVARIANTE: após qualquer autenticação bem-sucedida, o dono gravado no banco
+ * é o usuário autenticado. Por isso gravar o dono é FATAL (lança antes de
+ * liberar o token): um dono velho (X) prevalece sobre o marcador (regra de
+ * `decidirDestinoDaFila`) e a fila de Y sairia com o token de X.
  */
 async function reconciliarFilaCom(usuario: UsuarioDTO): Promise<void> {
   const [acoes, donoBanco, donoMarcador] = await Promise.all([
@@ -98,9 +102,11 @@ async function reconciliarFilaCom(usuario: UsuarioDTO): Promise<void> {
   ) {
     await limparBancoLocal();
   }
+  if (!(await registrarDonoNoBancoLocal(usuario.id))) {
+    throw new Error('Não foi possível registrar o dono da fila no aparelho.');
+  }
   // O marcador do SecureStore só existe entre a expiração forçada e este login.
   if (donoMarcador.tipo !== 'ausente') await limparDonoDaFila();
-  await registrarDonoNoBancoLocal(usuario.id);
 }
 
 export function ProvedorAuth({ children }: { children: ReactNode }) {

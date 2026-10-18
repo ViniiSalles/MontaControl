@@ -18,10 +18,29 @@ function decidir(
 
 // Fail-closed: a fila só é mantida quando há prova de que é do usuário que autentica.
 describe('decidirDestinoDaFila', () => {
-  test('fila vazia: nada a apagar, mesmo sem dono ou com dono ilegível', () => {
+  // O atalho da fila vazia só vale quando não há dono registrado ou o dono é o mesmo
+  // usuário: a réplica (jornadas, banco de horas, obras) de outro usuário não pode
+  // ficar exposta a quem entra, mesmo sem nenhuma ação na fila.
+  test('fila vazia e nenhum dono registrado: nada a apagar', () => {
     expect(decidir(0, AUSENTE, AUSENTE)).toBe('manter');
-    expect(decidir(0, ERRO, ERRO)).toBe('manter');
-    expect(decidir(0, dono(99), AUSENTE)).toBe('manter');
+  });
+
+  test('fila vazia e dono é o mesmo usuário (banco, marcador ou ambos): mantém', () => {
+    expect(decidir(0, dono(USUARIO), AUSENTE)).toBe('manter');
+    expect(decidir(0, AUSENTE, dono(USUARIO))).toBe('manter');
+    expect(decidir(0, dono(USUARIO), dono(2))).toBe('manter');
+  });
+
+  test('fila vazia e dono de OUTRO usuário: apaga (a réplica dele não pode ficar exposta)', () => {
+    expect(decidir(0, dono(99), AUSENTE)).toBe('apagar');
+    expect(decidir(0, AUSENTE, dono(99))).toBe('apagar');
+    expect(decidir(0, dono(99), dono(USUARIO))).toBe('apagar');
+  });
+
+  test('fila vazia e dono ilegível: não dá para provar que é o mesmo usuário, apaga', () => {
+    expect(decidir(0, ERRO, AUSENTE)).toBe('apagar');
+    expect(decidir(0, AUSENTE, ERRO)).toBe('apagar');
+    expect(decidir(0, ERRO, ERRO)).toBe('apagar');
   });
 
   test('fila não vazia e nenhuma fonte com dono (ex.: fila anterior a esta versão): apaga', () => {
