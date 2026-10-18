@@ -27,6 +27,7 @@ import { apagarTodasAsFotos } from '../../fotos/armazenamentoFotos';
 import { base64DeTexto, criarFotoDoPicker, fotosGuardadas } from '../../fotos/__tests__/apoio';
 import { instalarGatilhosFalsos } from '../../sincronizacao/__tests__/gatilhosFalsos';
 import { useSincronizacaoStore } from '../../estado/sincronizacaoStore';
+import { useUiStore } from '../../estado/uiStore';
 import { Atestados } from '../Atestados';
 import { Avarias } from '../Avarias';
 
@@ -180,6 +181,7 @@ beforeEach(async () => {
   globalThis.fetch = jest.fn(fetchDoServidor) as unknown as typeof fetch;
   definirTokens({ accessToken: 'token', refreshToken: 'refresh' });
   useSincronizacaoStore.getState().reiniciar();
+  useUiStore.getState().reiniciar();
   gatilhos = instalarGatilhosFalsos();
   database = criarBancoDeTeste();
   // Réplica preenchida por um pull anterior; agora o aparelho está sem rede.

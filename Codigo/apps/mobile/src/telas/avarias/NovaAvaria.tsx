@@ -13,7 +13,7 @@ import { Icone } from '../../ui/Icone';
 import { Texto } from '../../ui/Texto';
 import { useDatabaseOuFalha } from '../../db/useDatabase';
 import { mimeTypeSuportado, uriDaFoto } from '../../fotos/armazenamentoFotos';
-import { useFotosDoFormulario } from '../../fotos/useFotosDoFormulario';
+import { useRascunhoDeAvaria } from '../../avarias/useRascunhoDeAvaria';
 import { MAXIMO_FOTOS, validarReporteAvaria } from '../../avarias/validarReporteAvaria';
 import type { CamposReporteAvaria, ErrosReporteAvaria } from '../../avarias/validarReporteAvaria';
 import { ErroAoEnfileirar, executarAcaoAvaria } from '../../sincronizacao/outbox';
@@ -28,7 +28,6 @@ interface PropsNovaAvaria {
   aoIniciarEnvio?: () => void;
 }
 
-const CAMPOS_VAZIOS: CamposReporteAvaria = { pecaId: null, tipoAvariaId: null, descricao: '' };
 const TAMANHO_MINIATURA = espacamento[80];
 /** Sem `base64`: a foto vira arquivo no aparelho e só é convertida na hora do envio. */
 const OPCOES_PICKER = { quality: 0.7, allowsMultipleSelection: false } as const;
@@ -60,24 +59,34 @@ As fotos anexadas foram descartadas; anexe de novo se precisar.`
 /** Reporte de problema na peça pelo montador — entra na outbox, então funciona sem sinal. */
 export function NovaAvaria({ pedidos, tipos, aoEnviado, aoIniciarEnvio }: PropsNovaAvaria) {
   const database = useDatabaseOuFalha();
-  const [pedidoEscolhido, setPedidoEscolhido] = useState<number | null>(null);
-  const [campos, setCampos] = useState<CamposReporteAvaria>(CAMPOS_VAZIOS);
-  const fotos = useFotosDoFormulario();
+  // Pedido, campos e fotos vivem no rascunho persistido: sobrevivem a trocar de aba e a fechar o app.
+  const rascunho = useRascunhoDeAvaria();
   const [erros, setErros] = useState<ErrosReporteAvaria>({});
   const [enviando, setEnviando] = useState(false);
   const [falha, setFalha] = useState<string | null>(null);
 
+  // O rascunho pode ter ids de uma réplica anterior (pedido, peça ou tipo que
+  // deixou de existir): só vale o que ainda está na lista.
+  const pedidoEscolhido = pedidos.some((candidato) => candidato.id === rascunho.pedidoEscolhido)
+    ? rascunho.pedidoEscolhido
+    : null;
   // Com um pedido só, não há o que escolher.
   const pedidoId = pedidoEscolhido ?? (pedidos.length === 1 ? pedidos[0].id : null);
   const pedido = pedidos.find((candidato) => candidato.id === pedidoId) ?? null;
-
-  function escolherPedido(id: number) {
-    setPedidoEscolhido(id);
-    setCampos((atuais) => ({ ...atuais, pecaId: null }));
-  }
+  const campos: CamposReporteAvaria = {
+    ...rascunho.campos,
+    pecaId: pedido?.ambientes.some((ambiente) =>
+      ambiente.pecas.some((peca) => peca.id === rascunho.campos.pecaId),
+    )
+      ? rascunho.campos.pecaId
+      : null,
+    tipoAvariaId: tipos.some((tipo) => tipo.id === rascunho.campos.tipoAvariaId)
+      ? rascunho.campos.tipoAvariaId
+      : null,
+  };
 
   function alterar<C extends keyof CamposReporteAvaria>(campo: C, valor: CamposReporteAvaria[C]) {
-    setCampos((atuais) => ({ ...atuais, [campo]: valor }));
+    rascunho.alterar(campo, valor);
     const chaveErro = campo === 'pecaId' ? 'peca' : campo === 'tipoAvariaId' ? 'tipo' : 'descricao';
     setErros((atuais) => ({ ...atuais, [chaveErro]: undefined }));
   }
@@ -97,7 +106,8 @@ export function NovaAvaria({ pedidos, tipos, aoEnviado, aoIniciarEnvio }: PropsN
         ? await ImagePicker.launchCameraAsync(OPCOES_PICKER)
         : await ImagePicker.launchImageLibraryAsync({
             ...OPCOES_PICKER,
-            preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
+            preferredAssetRepresentationMode:
+              ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
           });
     if (resultado.canceled) return;
 
@@ -109,7 +119,7 @@ export function NovaAvaria({ pedidos, tipos, aoEnviado, aoIniciarEnvio }: PropsN
     }
 
     try {
-      await fotos.adicionar(asset.uri, mimeType);
+      await rascunho.adicionarFoto(asset.uri, mimeType);
     } catch {
       setFalha('Não foi possível guardar essa foto. Tente outra.');
       return;
@@ -126,7 +136,7 @@ export function NovaAvaria({ pedidos, tipos, aoEnviado, aoIniciarEnvio }: PropsN
   }
 
   async function enviar(): Promise<void> {
-    const { erros: encontrados, dados } = validarReporteAvaria(campos, fotos.caminhos);
+    const { erros: encontrados, dados } = validarReporteAvaria(campos, rascunho.caminhos);
     setErros(encontrados);
     if (!dados) return;
 
@@ -136,15 +146,15 @@ export function NovaAvaria({ pedidos, tipos, aoEnviado, aoIniciarEnvio }: PropsN
     // As fotos passam a ser da fila ao chamar o outbox: o formulário as solta
     // JÁ, antes da rede. Se a tela fechar com o envio pendurado, o cleanup do
     // formulário não pode apagar arquivos que a linha da fila referencia.
-    const tinhaFotos = fotos.caminhos.length > 0;
-    fotos.esquecer();
+    const tinhaFotos = rascunho.caminhos.length > 0;
+    rascunho.esquecerFotos();
     try {
       const resultado = await executarAcaoAvaria(database, { idCliente: randomUUID(), ...dados });
       if (resultado.tipo === 'recusado') {
         setFalha(comAvisoDeFotos(resultado.mensagem, tinhaFotos));
         return;
       }
-      setCampos(CAMPOS_VAZIOS);
+      rascunho.limparCampos();
       aoEnviado(
         resultado.tipo === 'enviada'
           ? 'Problema enviado. O gestor vai analisar.'
@@ -174,7 +184,7 @@ export function NovaAvaria({ pedidos, tipos, aoEnviado, aoIniciarEnvio }: PropsN
                 rotulo={`${candidato.numeroPedido} · ${candidato.cliente.nome}`}
                 detalhe={`${candidato.cliente.endereco} · ${candidato.cliente.cidade}/${candidato.cliente.estado}`}
                 selecionada={candidato.id === pedidoId}
-                aoPressionar={() => escolherPedido(candidato.id)}
+                aoPressionar={() => rascunho.escolherPedido(candidato.id)}
               />
             ))}
           </Secao>
@@ -197,7 +207,9 @@ export function NovaAvaria({ pedidos, tipos, aoEnviado, aoIniciarEnvio }: PropsN
                       key={peca.id}
                       forma="linha"
                       rotulo={peca.descricao}
-                      detalhe={[`${peca.quantidade} un.`, peca.codigoBarras].filter(Boolean).join(' · ')}
+                      detalhe={[`${peca.quantidade} un.`, peca.codigoBarras]
+                        .filter(Boolean)
+                        .join(' · ')}
                       selecionada={campos.pecaId === peca.id}
                       aoPressionar={() => alterar('pecaId', peca.id)}
                     />
@@ -230,7 +242,7 @@ export function NovaAvaria({ pedidos, tipos, aoEnviado, aoIniciarEnvio }: PropsN
             obrigatorio
           />
 
-          {fotos.caminhos.length < MAXIMO_FOTOS && (
+          {rascunho.caminhos.length < MAXIMO_FOTOS && (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Fotografar problema"
@@ -254,9 +266,9 @@ export function NovaAvaria({ pedidos, tipos, aoEnviado, aoIniciarEnvio }: PropsN
             </Pressable>
           )}
 
-          {fotos.caminhos.length > 0 && (
+          {rascunho.caminhos.length > 0 && (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: espacamento[8] }}>
-              {fotos.caminhos.map((caminho, indice) => (
+              {rascunho.caminhos.map((caminho, indice) => (
                 <View key={caminho} style={{ width: TAMANHO_MINIATURA, height: TAMANHO_MINIATURA }}>
                   <Image
                     source={{ uri: uriDaFoto(caminho) }}
@@ -266,7 +278,7 @@ export function NovaAvaria({ pedidos, tipos, aoEnviado, aoIniciarEnvio }: PropsN
                   <Pressable
                     accessibilityLabel={`Remover foto ${indice + 1}`}
                     disabled={enviando}
-                    onPress={() => void fotos.remover(indice)}
+                    onPress={() => void rascunho.remover(indice)}
                     style={{
                       position: 'absolute',
                       top: -espacamento[6],
@@ -298,6 +310,17 @@ export function NovaAvaria({ pedidos, tipos, aoEnviado, aoIniciarEnvio }: PropsN
             carregando={enviando}
             aoPressionar={() => void enviar()}
           />
+
+          {rascunho.temConteudo && !enviando && (
+            <Botao
+              variante="fantasma"
+              tamanho={40}
+              forma="pilula"
+              texto="Descartar rascunho"
+              larguraTotal
+              aoPressionar={() => void rascunho.descartar()}
+            />
+          )}
         </View>
       }
     />
