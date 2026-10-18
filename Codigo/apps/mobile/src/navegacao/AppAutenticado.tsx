@@ -5,6 +5,7 @@ import { cores } from '@montacontrol/design-tokens/native';
 import { BarraNavInferior } from '../ui/BarraNavInferior';
 import { Atestados } from '../telas/Atestados';
 import { Avarias } from '../telas/Avarias';
+import { IndicadorDeSincronizacao } from '../sincronizacao/IndicadorDeSincronizacao';
 import { useSincronizacaoDoApp } from '../sincronizacao/useSincronizacaoDoApp';
 import { PilhaJornada } from './PilhaJornada';
 import { ABA_PADRAO, ABAS } from './abas';
@@ -48,6 +49,8 @@ export function AppAutenticado() {
       <View style={{ flex: 1 }}>
         <TelaAtiva />
       </View>
+      {/* Acima da barra, fora do conteúdo da aba: o mesmo status em todas as telas. */}
+      <IndicadorDeSincronizacao />
       <BarraNavInferior itens={itens} />
     </View>
   );
