@@ -22,6 +22,23 @@ function envolver({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * Intercepta só o `batch` que apaga ações (o do provider); criar linhas segue
+ * usando o `batch` real. `resultado` decide o que o apagamento devolve.
+ */
+function interceptarApagamento(resultado: () => Promise<void>) {
+  const original = database.batch.bind(database) as (...args: unknown[]) => Promise<void>;
+  jest
+    .spyOn(database, 'batch')
+    .mockImplementation(((...args: unknown[]) =>
+      args.some(
+        (registro) =>
+          (registro as { _preparedState?: string })?._preparedState === 'destroyPermanently',
+      )
+        ? resultado()
+        : original(...args)) as never);
+}
+
 function criarAcao(status: 'pendente' | 'descartada', mensagemDescarte: string | null = null) {
   return database.write(() =>
     database.get<AcaoPendente>('acoes_pendentes').create((registro) => {
@@ -92,6 +109,61 @@ test('ação descartada vira aviso e sai da fila', async () => {
   await waitFor(async () =>
     expect(await database.get<AcaoPendente>('acoes_pendentes').query().fetchCount()).toBe(0),
   );
+});
+
+test('recusas em momentos diferentes se acumulam, sem perder a anterior', async () => {
+  const { result } = await renderHook(() => useSincronizacao(), { wrapper: envolver });
+
+  await act(async () => {
+    await criarAcao('descartada', 'Avaria recusada: A.');
+  });
+  await waitFor(() => expect(result.current.avisosDescartados).toEqual(['Avaria recusada: A.']));
+
+  await act(async () => {
+    await criarAcao('descartada', 'Check-out recusado: B.');
+  });
+  await waitFor(() =>
+    expect(result.current.avisosDescartados).toEqual([
+      'Avaria recusada: A.',
+      'Check-out recusado: B.',
+    ]),
+  );
+});
+
+test('o mesmo registro reemitido pelo observe não duplica o aviso', async () => {
+  // Sem o destroy a linha A continua na tabela e volta a ser emitida junto com B.
+  interceptarApagamento(() => Promise.resolve());
+  const { result } = await renderHook(() => useSincronizacao(), { wrapper: envolver });
+
+  await act(async () => {
+    await criarAcao('descartada', 'Avaria recusada: A.');
+  });
+  await waitFor(() => expect(result.current.avisosDescartados).toHaveLength(1));
+  await act(async () => {
+    await criarAcao('descartada', 'Check-out recusado: B.');
+  });
+
+  await waitFor(() => expect(result.current.avisosDescartados).toHaveLength(2));
+  expect(result.current.avisosDescartados).toEqual([
+    'Avaria recusada: A.',
+    'Check-out recusado: B.',
+  ]);
+});
+
+test('falha ao apagar a ação descartada não vira rejeição não tratada', async () => {
+  interceptarApagamento(() => Promise.reject(new Error('falha de disco')));
+  const naoTratada = jest.fn();
+  process.on('unhandledRejection', naoTratada);
+  const { result } = await renderHook(() => useSincronizacao(), { wrapper: envolver });
+
+  await act(async () => {
+    await criarAcao('descartada', 'Ação recusada: X.');
+  });
+  await waitFor(() => expect(result.current.avisosDescartados).toHaveLength(1));
+  await new Promise<void>((resolver) => setTimeout(resolver, 20));
+
+  process.off('unhandledRejection', naoTratada);
+  expect(naoTratada).not.toHaveBeenCalled();
 });
 
 test('dispensarAvisos limpa os avisos já mostrados', async () => {

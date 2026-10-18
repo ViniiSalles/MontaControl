@@ -14,6 +14,11 @@ export interface EstadoSincronizacao {
   dispensarAvisos: () => void;
 }
 
+interface AvisoDescartado {
+  id: string;
+  mensagem: string;
+}
+
 const SincronizacaoContext = createContext<EstadoSincronizacao | null>(null);
 
 /**
@@ -27,7 +32,7 @@ const SincronizacaoContext = createContext<EstadoSincronizacao | null>(null);
 export function ProvedorSincronizacao({ children }: { children: ReactNode }) {
   const database = useDatabaseOuFalha();
   const [pendentes, setPendentes] = useState(0);
-  const [avisosDescartados, setAvisosDescartados] = useState<string[]>([]);
+  const [avisos, setAvisos] = useState<AvisoDescartado[]>([]);
 
   useEffect(() => iniciarSincronizacao(database), [database]);
 
@@ -42,15 +47,28 @@ export function ProvedorSincronizacao({ children }: { children: ReactNode }) {
       .observeCount(false)
       .subscribe(setPendentes);
 
+    // `observe()` pode reemitir a mesma linha antes do apagamento terminar (ou se
+    // ele falhar); o id evita avisar duas vezes da mesma recusa.
+    const idsVistos = new Set<string>();
+
     const assinaturaDescartadas = colecao
       .query(Q.where('status', 'descartada'))
       .observe()
       .subscribe((registros) => {
         if (registros.length === 0) return;
-        setAvisosDescartados(registros.map((registro) => registro.mensagemDescarte ?? ''));
-        void database.write(() =>
-          database.batch(...registros.map((registro) => registro.prepareDestroyPermanently())),
-        );
+        const novos = registros
+          .filter((registro) => !idsVistos.has(registro.id))
+          .map((registro) => ({ id: registro.id, mensagem: registro.mensagemDescarte ?? '' }));
+        novos.forEach((aviso) => idsVistos.add(aviso.id));
+        // Acumula: um aviso ainda não dispensado não pode se perder porque outra
+        // ação foi recusada depois (a linha da primeira já foi apagada da fila).
+        if (novos.length > 0) setAvisos((anteriores) => [...anteriores, ...novos]);
+        // Sem o apagamento a linha só reaparece na próxima emissão (já deduplicada).
+        void database
+          .write(() =>
+            database.batch(...registros.map((registro) => registro.prepareDestroyPermanently())),
+          )
+          .catch(() => undefined);
       });
 
     return () => {
@@ -59,11 +77,15 @@ export function ProvedorSincronizacao({ children }: { children: ReactNode }) {
     };
   }, [database]);
 
-  const dispensarAvisos = useCallback(() => setAvisosDescartados([]), []);
+  const dispensarAvisos = useCallback(() => setAvisos([]), []);
 
   const valor = useMemo<EstadoSincronizacao>(
-    () => ({ pendentes, avisosDescartados, dispensarAvisos }),
-    [pendentes, avisosDescartados, dispensarAvisos],
+    () => ({
+      pendentes,
+      avisosDescartados: avisos.map((aviso) => aviso.mensagem),
+      dispensarAvisos,
+    }),
+    [pendentes, avisos, dispensarAvisos],
   );
 
   return <SincronizacaoContext.Provider value={valor}>{children}</SincronizacaoContext.Provider>;
