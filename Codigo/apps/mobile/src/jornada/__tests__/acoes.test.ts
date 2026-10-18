@@ -11,7 +11,7 @@ import { criarBancoDeTeste } from '../../db/__tests__/apoio';
 import { capturarLocalizacao } from '../../localizacao/localizacao';
 import { resolverEndereco } from '../../localizacao/nominatim';
 import { executarAcaoJornada } from '../../sincronizacao/outbox';
-import type { ObraDoPonto } from '../../pedidos/obrasLocais';
+import type { ObraDoPonto } from '../../pedidos/obras';
 import { registrarCheckin, registrarCheckout } from '../acoes';
 
 

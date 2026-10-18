@@ -1,41 +1,39 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Database } from '@nozbe/watermelondb';
-import { listarMeusPedidos } from './clientePedidos';
-import { guardarObras, lerObras } from './obrasLocais';
-import type { ObraDoPonto } from './obrasLocais';
+import { sincronizar } from '../sincronizacao/syncManager';
+import { COLUNAS_OBSERVADAS_DE_PEDIDO, paraObraDoPonto, queryPedidos } from './obras';
+import type { ObraDoPonto } from './obras';
 
 export interface EstadoObras {
   obras: ObraDoPonto[];
+  /** `true` até a primeira leitura do banco local. */
   carregando: boolean;
-  /** Não leu do servidor; `obras` é a última cópia local (pode estar vazia). */
-  erro: boolean;
+  /** Dispara uma sincronização e espera ela terminar. */
   recarregar: () => Promise<void>;
 }
 
-/** Obras em que o montador pode bater ponto: servidor quando há rede, cópia local quando não. */
+/**
+ * Obras em que o montador pode bater ponto: a tabela `pedidos` da réplica. É
+ * ela que faz o ponto funcionar sem sinal (a obra e o raio dela já estão no
+ * aparelho); pedido desalocado no servidor sai daqui no pull seguinte.
+ */
 export function useObrasDoMontador(database: Database): EstadoObras {
-  const [obras, setObras] = useState<ObraDoPonto[]>([]);
-  const [carregando, setCarregando] = useState(true);
-  const [erro, setErro] = useState(false);
-
-  const recarregar = useCallback(async () => {
-    setErro(false);
-    try {
-      const pedidos = await listarMeusPedidos();
-      setObras(pedidos);
-      // Sem a cópia local só se perde o ponto offline; a tela segue com a lista lida.
-      await guardarObras(database, pedidos).catch(() => undefined);
-    } catch {
-      setErro(true);
-      setObras(await lerObras(database).catch(() => []));
-    } finally {
-      setCarregando(false);
-    }
-  }, [database]);
+  const [obras, setObras] = useState<ObraDoPonto[] | null>(null);
 
   useEffect(() => {
-    void recarregar();
-  }, [recarregar]);
+    const assinatura = queryPedidos(database)
+      .observeWithColumns(COLUNAS_OBSERVADAS_DE_PEDIDO)
+      .subscribe((pedidos) =>
+        setObras(
+          pedidos
+            .map(paraObraDoPonto)
+            .sort((a, b) => a.numeroPedido.localeCompare(b.numeroPedido)),
+        ),
+      );
+    return () => assinatura.unsubscribe();
+  }, [database]);
 
-  return { obras, carregando, erro, recarregar };
+  const recarregar = useCallback(() => sincronizar(database), [database]);
+
+  return { obras: obras ?? [], carregando: obras === null, recarregar };
 }

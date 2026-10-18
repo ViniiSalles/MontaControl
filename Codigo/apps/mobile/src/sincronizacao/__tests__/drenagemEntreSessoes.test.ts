@@ -110,7 +110,13 @@ describe('drenarFila atravessando a troca de sessão', () => {
     await drenarFila(database);
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(await database.get('acoes_pendentes').query().fetchCount()).toBe(0);
+    // Aceitas, as duas ficam `enviada` (aguardando o pull); nenhuma segue pendente.
+    expect(
+      await database.get('acoes_pendentes').query(Q.where('status', 'pendente')).fetchCount(),
+    ).toBe(0);
+    expect(
+      await database.get('acoes_pendentes').query(Q.where('status', 'enviada')).fetchCount(),
+    ).toBe(2);
   });
 
   test('sessão trocada logo antes de começar a enviar: não envia a ação sob outro token', async () => {

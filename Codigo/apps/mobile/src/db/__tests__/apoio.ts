@@ -2,7 +2,16 @@ import { Database } from '@nozbe/watermelondb';
 import LokiJSAdapter from '@nozbe/watermelondb/adapters/lokijs';
 import { sanitizedRaw } from '@nozbe/watermelondb/RawRecord';
 import logger from '@nozbe/watermelondb/utils/common/logger';
-import { TABELAS_SYNC, type SyncPullResponse } from '@montacontrol/shared';
+import {
+  StatusJornada,
+  StatusPedido,
+  TABELAS_SYNC,
+  type SyncJornadaRow,
+  type SyncPedidoRow,
+  type SyncLinha,
+  type SyncPullResponse,
+  type TabelaSync,
+} from '@montacontrol/shared';
 import { schema } from '../schema';
 import { migrations } from '../migrations';
 import { Jornada } from '../Jornada';
@@ -63,4 +72,105 @@ export async function gravarPullNaReplica(database: Database, pull: SyncPullResp
     });
     await database.batch(...preparados);
   });
+}
+
+/**
+ * Grava linhas soltas (formato do contrato) na réplica, sem passar pelo
+ * `synchronize()` — semeia o estado "já sincronizado" de um teste. Como
+ * `gravarPullNaReplica`, grava com `_status: 'created'`; não serve para testar
+ * lógica de estado não sincronizado.
+ */
+export async function gravarLinhasNaReplica<T extends TabelaSync>(
+  database: Database,
+  tabela: T,
+  linhas: readonly SyncLinha<T>[],
+): Promise<void> {
+  await database.write(async () => {
+    const colecao = database.get(tabela);
+    await database.batch(
+      ...linhas.map((linha) =>
+        colecao.prepareCreate((registro) => {
+          registro._raw = sanitizedRaw({ ...linha }, colecao.schema);
+        }),
+      ),
+    );
+  });
+}
+
+let sequenciaJornada = 900;
+
+/** Linha de jornada do contrato: finalizada, com check-in e check-out; `parcial` sobrescreve. */
+export function linhaDeJornada(parcial: Partial<SyncJornadaRow> = {}): SyncJornadaRow {
+  sequenciaJornada += 1;
+  return {
+    id: String(sequenciaJornada),
+    usuario_id: 7,
+    pedido_id: '12',
+    status: StatusJornada.FINALIZADA,
+    checkin_at: '2026-10-15T11:00:00.000Z',
+    checkin_latitude: -19.9191,
+    checkin_longitude: -43.9386,
+    checkin_endereco: 'Rua das Acácias, 120',
+    checkin_id_cliente: `checkin-${sequenciaJornada}`,
+    checkout_at: '2026-10-15T20:00:00.000Z',
+    checkout_latitude: -19.9191,
+    checkout_longitude: -43.9386,
+    checkout_endereco: 'Rua das Acácias, 120',
+    checkout_id_cliente: `checkout-${sequenciaJornada}`,
+    lancado_em_atraso: false,
+    criado_em: '2026-10-15T11:00:01.000Z',
+    ...parcial,
+  };
+}
+
+interface DadosAcaoPendente {
+  tipo: string;
+  idCliente: string;
+  payload: unknown;
+  criadoEm?: string;
+  status?: 'pendente' | 'descartada' | 'enviada';
+}
+
+/** Linha da fila (`acoes_pendentes`), do jeito que a outbox grava. */
+export async function criarAcaoPendente(
+  database: Database,
+  { tipo, idCliente, payload, criadoEm = '2026-10-16T12:00:00.000Z', status = 'pendente' }: DadosAcaoPendente,
+): Promise<AcaoPendente> {
+  return database.write(() =>
+    database.get<AcaoPendente>('acoes_pendentes').create((registro) => {
+      registro.tipo = tipo;
+      registro.idCliente = idCliente;
+      registro.payload = JSON.stringify(payload);
+      registro.criadoEm = criadoEm;
+      registro.status = status;
+      registro.mensagemDescarte = null;
+    }),
+  );
+}
+
+/** Linha de pedido do contrato (obra de "Maria Souza", em BH); `parcial` sobrescreve. */
+export function linhaDePedido(parcial: Partial<SyncPedidoRow> = {}): SyncPedidoRow {
+  return {
+    id: '10',
+    numero_pedido: 'PED-000010',
+    status: StatusPedido.EM_ENTREGA,
+    cliente_id: '3',
+    cliente_nome: 'Maria Souza',
+    cliente_endereco: 'Av. Afonso Pena, 1000',
+    cliente_cidade: 'Belo Horizonte',
+    cliente_estado: 'MG',
+    cliente_latitude: -19.9325,
+    cliente_longitude: -43.9382,
+    ...parcial,
+  };
+}
+
+/** Resposta de pull sem nenhuma mudança (todas as tabelas vazias), com o `timestamp` pedido. */
+export function pullSemMudancas(timestamp: number): SyncPullResponse {
+  return {
+    changes: Object.fromEntries(
+      TABELAS_SYNC.map((tabela) => [tabela, { created: [], updated: [], deleted: [] }]),
+    ) as unknown as SyncPullResponse['changes'],
+    timestamp,
+  };
 }

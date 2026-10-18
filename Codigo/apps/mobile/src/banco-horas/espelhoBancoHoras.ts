@@ -3,34 +3,24 @@ import type { Database, Query } from '@nozbe/watermelondb';
 import type { BancoHorasDTO } from '@montacontrol/shared';
 import { BancoHoras } from '../db/BancoHoras';
 
-function preencherBancoHoras(registro: BancoHoras, dto: BancoHorasDTO): void {
-  registro.mes = dto.mes;
-  registro.ano = dto.ano;
-  registro.horasTrabalhadas = dto.horasTrabalhadas;
-  registro.horasPrevistas = dto.horasPrevistas;
-  registro.saldo = dto.saldo;
-}
-
-/** Upsert por (mes, ano) — cada mês consultado (corrente ou navegado) é sua própria linha. */
-export async function upsertBancoHoras(database: Database, dto: BancoHorasDTO): Promise<void> {
-  const colecao = database.get<BancoHoras>('banco_horas');
-  await database.write(async () => {
-    const existentes = await colecao.query(Q.where('mes', dto.mes), Q.where('ano', dto.ano)).fetch();
-    if (existentes.length > 0) {
-      await existentes[0].update((registro) => preencherBancoHoras(registro, dto));
-    } else {
-      await colecao.create((registro) => preencherBancoHoras(registro, dto));
-    }
-  });
-}
+/** Colunas que mudam in-place num `synchronize()` (o saldo do mês é recalculado no servidor). */
+export const COLUNAS_OBSERVADAS_DE_BANCO_HORAS = [
+  'horas_trabalhadas',
+  'horas_previstas',
+  'saldo',
+];
 
 export function queryBancoHoras(database: Database, mes: number, ano: number): Query<BancoHoras> {
   return database.get<BancoHoras>('banco_horas').query(Q.where('mes', mes), Q.where('ano', ano));
 }
 
+/**
+ * Linha da réplica → DTO. O id local é o do servidor; `usuarioId` não existe na
+ * réplica (a linha é sempre do montador logado) e fica no sentinela `-1`.
+ */
 export function paraBancoHorasDTO(registro: BancoHoras): BancoHorasDTO {
   return {
-    id: -1,
+    id: Number(registro.id),
     usuarioId: -1,
     mes: registro.mes,
     ano: registro.ano,

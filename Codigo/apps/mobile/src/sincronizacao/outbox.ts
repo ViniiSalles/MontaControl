@@ -1,4 +1,3 @@
-import { Q } from '@nozbe/watermelondb';
 import type { Database } from '@nozbe/watermelondb';
 import { StatusJornada } from '@montacontrol/shared';
 import type {
@@ -10,10 +9,9 @@ import type {
 } from '@montacontrol/shared';
 import { enviarAvaria } from '../avarias/clienteAvarias';
 import { AcaoPendente } from '../db/AcaoPendente';
-import { Jornada } from '../db/Jornada';
 import { ErroApi } from '../http/erroApi';
 import { enviarCheckin, enviarCheckout, enviarSolicitacaoPonto } from '../jornada/clienteJornadas';
-import { paraJornadaDTO } from '../jornada/espelhoJornada';
+import { lerJornadasComPendentes } from '../jornada/jornadasComPendentes';
 
 export type ResultadoEnvio<T> = { tipo: 'ok'; dado: T } | { tipo: 'recusado'; codigo: string };
 export type ResultadoPontoEmAtraso = { tipo: 'ok' } | { tipo: 'recusado'; codigo: string };
@@ -59,87 +57,57 @@ async function enfileirar(
   );
 }
 
-type ResultadoJornadaOtimista = { registro: Jornada; criouRegistroNovo: boolean };
-
-async function aplicarJornadaOtimista(
+/**
+ * A jornada que a tela mostra para a ação recém-enfileirada: a da sobreposição
+ * (réplica + fila), achada pelo `idCliente`. Um check-out sem jornada aberta
+ * conhecida não aparece na sobreposição; devolve só o que se sabe dele.
+ */
+async function jornadaDaAcao(
   database: Database,
   tipo: 'checkin' | 'checkout',
   payload: CheckinRequest | CheckoutRequest,
-): Promise<ResultadoJornadaOtimista> {
-  const colecao = database.get<Jornada>('jornadas');
-  return database.write(async () => {
-    if (tipo === 'checkin') {
-      const registro = await colecao.create((registro) => {
-        registro.remoteId = null;
-        registro.usuarioId = -1;
-        registro.status = StatusJornada.EM_ANDAMENTO;
-        registro.checkinAt = payload.registradoEm;
-        registro.checkinLatitude = payload.latitude;
-        registro.checkinLongitude = payload.longitude;
-        registro.checkinEndereco = payload.endereco ?? null;
-        registro.checkoutAt = null;
-        registro.checkoutLatitude = null;
-        registro.checkoutLongitude = null;
-        registro.checkoutEndereco = null;
-        registro.lancadoEmAtraso = false;
-        registro.criadoEm = payload.registradoEm;
-        registro.idClienteCheckin = payload.idCliente;
-        registro.idClienteCheckout = null;
-      });
-      return { registro, criouRegistroNovo: true };
-    }
+): Promise<JornadaDTO> {
+  const exibidas = await lerJornadasComPendentes(database);
+  const achada = exibidas.find((jornada) =>
+    tipo === 'checkin'
+      ? jornada.checkinIdCliente === payload.idCliente
+      : jornada.checkoutIdCliente === payload.idCliente,
+  );
+  if (achada) return achada;
 
-    const abertas = await colecao.query(Q.where('status', StatusJornada.EM_ANDAMENTO)).fetch();
-    const aberta = abertas[0];
-    if (!aberta) {
-      // Sem jornada aberta conhecida localmente (ex.: o check-in original
-      // aconteceu antes da primeira sincronização deste aparelho) — cria um
-      // registro só de checkout; o servidor decide o desfecho quando a fila
-      // for enviada.
-      const registro = await colecao.create((registro) => {
-        registro.remoteId = null;
-        registro.usuarioId = -1;
-        registro.status = StatusJornada.FINALIZADA;
-        registro.checkinAt = null;
-        registro.checkinLatitude = null;
-        registro.checkinLongitude = null;
-        registro.checkinEndereco = null;
-        registro.checkoutAt = payload.registradoEm;
-        registro.checkoutLatitude = payload.latitude;
-        registro.checkoutLongitude = payload.longitude;
-        registro.checkoutEndereco = payload.endereco ?? null;
-        registro.lancadoEmAtraso = false;
-        registro.criadoEm = payload.registradoEm;
-        registro.idClienteCheckin = null;
-        registro.idClienteCheckout = payload.idCliente;
-      });
-      return { registro, criouRegistroNovo: true };
-    }
-
-    await aberta.update((registro) => {
-      registro.status = StatusJornada.FINALIZADA;
-      registro.checkoutAt = payload.registradoEm;
-      registro.checkoutLatitude = payload.latitude;
-      registro.checkoutLongitude = payload.longitude;
-      registro.checkoutEndereco = payload.endereco ?? null;
-      registro.idClienteCheckout = payload.idCliente;
-    });
-    return { registro: aberta, criouRegistroNovo: false };
-  });
+  return {
+    id: -1,
+    usuarioId: -1,
+    status: StatusJornada.FINALIZADA,
+    checkinAt: null,
+    checkinLatitude: null,
+    checkinLongitude: null,
+    checkinEndereco: null,
+    checkoutAt: payload.registradoEm,
+    checkoutLatitude: payload.latitude,
+    checkoutLongitude: payload.longitude,
+    checkoutEndereco: payload.endereco ?? null,
+    lancadoEmAtraso: false,
+    criadoEm: payload.registradoEm,
+  };
 }
 
-/** Check-in ou check-out: grava localmente antes de tentar a rede — nunca perde a marcação. */
+/**
+ * Check-in ou check-out: entra na fila antes de tentar a rede — nunca perde a
+ * marcação — e a tela a mostra pela sobreposição (a réplica só é escrita pelo
+ * `synchronize()`).
+ *
+ * Aceito de imediato, a ação fica `enviada` até o pull trazer a jornada (ver
+ * `StatusAcao`). Sem rede ou com 401 ela segue `pendente` e a drenagem em
+ * segundo plano tenta de novo, já com a sessão renovada. Recusa de regra (4xx)
+ * apaga a ação, e a marcação some da tela junto.
+ */
 export async function executarAcaoJornada(
   database: Database,
   tipo: 'checkin' | 'checkout',
   payload: CheckinRequest | CheckoutRequest,
 ): Promise<ResultadoEnvio<JornadaDTO>> {
   const acao = await enfileirar(database, tipo, payload.idCliente, payload);
-  const { registro: registroLocal, criouRegistroNovo } = await aplicarJornadaOtimista(
-    database,
-    tipo,
-    payload,
-  );
 
   try {
     const jornadaServidor =
@@ -147,55 +115,22 @@ export async function executarAcaoJornada(
         ? await enviarCheckin(payload as CheckinRequest)
         : await enviarCheckout(payload as CheckoutRequest);
 
-    await database.write(async () => {
-      await acao.destroyPermanently();
-      await registroLocal.update((registro) => {
-        registro.remoteId = jornadaServidor.id;
-        registro.usuarioId = jornadaServidor.usuarioId;
-        registro.status = jornadaServidor.status;
-        registro.checkinAt = jornadaServidor.checkinAt;
-        registro.checkinLatitude = jornadaServidor.checkinLatitude;
-        registro.checkinLongitude = jornadaServidor.checkinLongitude;
-        registro.checkinEndereco = jornadaServidor.checkinEndereco;
-        registro.checkoutAt = jornadaServidor.checkoutAt;
-        registro.checkoutLatitude = jornadaServidor.checkoutLatitude;
-        registro.checkoutLongitude = jornadaServidor.checkoutLongitude;
-        registro.checkoutEndereco = jornadaServidor.checkoutEndereco;
-        registro.lancadoEmAtraso = jornadaServidor.lancadoEmAtraso;
-        registro.criadoEm = jornadaServidor.criadoEm;
-      });
-    });
+    await database.write(() =>
+      acao.update((registro) => {
+        registro.status = 'enviada';
+      }),
+    );
     return { tipo: 'ok', dado: jornadaServidor };
   } catch (erro) {
     if (ehRecusaDoServidor(erro)) {
-      await database.write(async () => {
-        await acao.destroyPermanently();
-        if (criouRegistroNovo) {
-          await registroLocal.destroyPermanently();
-        } else {
-          // Checkout recusado sobre uma jornada que já estava EM_ANDAMENTO
-          // localmente: reverte só os campos de checkout, que só podiam
-          // estar null antes (checkout só se aplica a jornada em andamento).
-          await registroLocal.update((registro) => {
-            registro.status = StatusJornada.EM_ANDAMENTO;
-            registro.checkoutAt = null;
-            registro.checkoutLatitude = null;
-            registro.checkoutLongitude = null;
-            registro.checkoutEndereco = null;
-            registro.idClienteCheckout = null;
-          });
-        }
-      });
+      await database.write(() => acao.destroyPermanently());
       return { tipo: 'recusado', codigo: erro.codigo };
     }
-    // Falha de rede ou sessão expirada (401): a linha da fila e o registro
-    // otimista ficam como estão — a drenagem em segundo plano tenta de novo
-    // depois, já com a sessão renovada.
-    return { tipo: 'ok', dado: paraJornadaDTO(registroLocal) };
+    return { tipo: 'ok', dado: await jornadaDaAcao(database, tipo, payload) };
   }
 }
 
-/** Ponto em atraso: mesma fila, sem espelho otimista (a tela já mostra "enviada" incondicionalmente). */
+/** Ponto em atraso: mesma fila, sem sobreposição (a tela já mostra "enviada" incondicionalmente). */
 export async function executarAcaoPontoEmAtraso(
   database: Database,
   payload: SolicitarPontoEmAtrasoRequest,

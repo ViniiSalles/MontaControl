@@ -42,7 +42,8 @@ export const database = new Database({
 });
 
 /**
- * Apaga TUDO, inclusive a fila de ações pendentes. Chamado no logout
+ * Apaga TUDO, inclusive a fila de ações pendentes e o `localStorage` do banco
+ * (o `lastPulledAt` do `synchronize()` e o dono da fila). Chamado no logout
  * explícito (`AuthContext.sair`) e quando outro usuário entra no aparelho —
  * sem isto, um segundo montador veria o espelho de jornada do anterior (ou
  * enviaria as ações dele).

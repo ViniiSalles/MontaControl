@@ -13,16 +13,20 @@ import { appSchema, tableSchema } from '@nozbe/watermelondb';
  * WatermelonDB — o id local é o id do servidor, como string).
  *
  * v2: acrescenta a réplica (`pedidos`…`atestados`) e as colunas de `jornadas`
- * que o contrato pede. `remote_id`, `id_cliente_checkin` e `id_cliente_checkout`
- * seguem até a v3 (#112).
+ * que o contrato pede.
+ *
+ * v3 (#112): a réplica só é escrita pelo `synchronize()`. Saem de `jornadas`
+ * `remote_id`, `id_cliente_checkin` e `id_cliente_checkout` (estado otimista:
+ * o que o montador marcou e ainda não subiu vive só em `acoes_pendentes`). O
+ * WatermelonDB não remove coluna em migração — nos aparelhos migrados a coluna
+ * física fica órfã, sem efeito (nenhuma coluna é `NOT NULL` no SQLite).
  */
 export const schema = appSchema({
-  version: 2,
+  version: 3,
   tables: [
     tableSchema({
       name: 'jornadas',
       columns: [
-        { name: 'remote_id', type: 'number', isOptional: true },
         { name: 'usuario_id', type: 'number' },
         { name: 'pedido_id', type: 'string', isOptional: true, isIndexed: true },
         { name: 'status', type: 'string', isIndexed: true },
@@ -38,8 +42,6 @@ export const schema = appSchema({
         { name: 'checkout_id_cliente', type: 'string', isOptional: true },
         { name: 'lancado_em_atraso', type: 'boolean' },
         { name: 'criado_em', type: 'string' },
-        { name: 'id_cliente_checkin', type: 'string', isOptional: true },
-        { name: 'id_cliente_checkout', type: 'string', isOptional: true },
       ],
     }),
     tableSchema({

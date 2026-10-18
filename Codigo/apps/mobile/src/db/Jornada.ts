@@ -2,14 +2,14 @@ import { Model } from '@nozbe/watermelondb';
 import { field, text } from '@nozbe/watermelondb/decorators';
 
 /**
- * Espelho local de `JornadaDTO` — hoje + histórico de 5 dias (issue #18).
- * Também é tabela da réplica (`SyncJornadaRow`); `remote_id` e
- * `id_cliente_checkin/checkout` saem na v3 (#112).
+ * Réplica local de `SyncJornadaRow` (contrato de pull de `@montacontrol/shared`).
+ * Só o `synchronize()` escreve aqui: o que o montador marcou e o servidor
+ * ainda não confirmou fica em `acoes_pendentes` e é sobreposto na leitura
+ * (`jornada/jornadasComPendentes`).
  */
 export class Jornada extends Model {
   static table = 'jornadas';
 
-  @field('remote_id') remoteId!: number | null;
   @field('usuario_id') usuarioId!: number;
   /** Obra do check-in (id do servidor); nula em jornada antiga ou em ponto em atraso. */
   @text('pedido_id') pedidoId!: string | null;
@@ -27,6 +27,4 @@ export class Jornada extends Model {
   @text('checkout_id_cliente') checkoutIdCliente!: string | null;
   @field('lancado_em_atraso') lancadoEmAtraso!: boolean;
   @text('criado_em') criadoEm!: string;
-  @text('id_cliente_checkin') idClienteCheckin!: string | null;
-  @text('id_cliente_checkout') idClienteCheckout!: string | null;
 }

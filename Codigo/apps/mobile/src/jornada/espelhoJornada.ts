@@ -1,81 +1,6 @@
-import { Q } from '@nozbe/watermelondb';
-import type { Database, Query } from '@nozbe/watermelondb';
 import { agruparJornadasPorDia, comporInstante, diaNoFuso, somarDias } from '@montacontrol/shared';
-import type { HistoricoJornadasDTO, JornadaDTO, PeriodoHistorico, StatusJornada } from '@montacontrol/shared';
-import { Jornada } from '../db/Jornada';
+import type { HistoricoJornadasDTO, JornadaDTO, PeriodoHistorico } from '@montacontrol/shared';
 import { FUSO_OPERACAO } from '../config/fuso';
-
-function preencherJornada(registro: Jornada, dto: JornadaDTO): void {
-  registro.remoteId = dto.id;
-  registro.usuarioId = dto.usuarioId;
-  registro.status = dto.status;
-  registro.checkinAt = dto.checkinAt;
-  registro.checkinLatitude = dto.checkinLatitude;
-  registro.checkinLongitude = dto.checkinLongitude;
-  registro.checkinEndereco = dto.checkinEndereco;
-  registro.checkoutAt = dto.checkoutAt;
-  registro.checkoutLatitude = dto.checkoutLatitude;
-  registro.checkoutLongitude = dto.checkoutLongitude;
-  registro.checkoutEndereco = dto.checkoutEndereco;
-  registro.lancadoEmAtraso = dto.lancadoEmAtraso;
-  registro.criadoEm = dto.criadoEm;
-}
-
-/** Upsert por `remoteId` — reenviar a mesma jornada não duplica a linha local. */
-export async function upsertJornadas(database: Database, dtos: readonly JornadaDTO[]): Promise<void> {
-  const colecao = database.get<Jornada>('jornadas');
-  await database.write(async () => {
-    for (const dto of dtos) {
-      const existentes = await colecao.query(Q.where('remote_id', dto.id)).fetch();
-      if (existentes.length > 0) {
-        await existentes[0].update((registro) => preencherJornada(registro, dto));
-      } else {
-        await colecao.create((registro) => preencherJornada(registro, dto));
-      }
-    }
-  });
-}
-
-/**
- * `remoteId` é `null` para uma jornada criada offline que ainda não
- * sincronizou — `-1` sinaliza isso no `id` do DTO. Nada no app hoje decide
- * comportamento a partir do valor de `id`, só o exibe/ignora.
- */
-export function paraJornadaDTO(registro: Jornada): JornadaDTO {
-  return {
-    id: registro.remoteId ?? -1,
-    usuarioId: registro.usuarioId,
-    status: registro.status as StatusJornada,
-    checkinAt: registro.checkinAt,
-    checkinLatitude: registro.checkinLatitude,
-    checkinLongitude: registro.checkinLongitude,
-    checkinEndereco: registro.checkinEndereco,
-    checkoutAt: registro.checkoutAt,
-    checkoutLatitude: registro.checkoutLatitude,
-    checkoutLongitude: registro.checkoutLongitude,
-    checkoutEndereco: registro.checkoutEndereco,
-    lancadoEmAtraso: registro.lancadoEmAtraso,
-    criadoEm: registro.criadoEm,
-  };
-}
-
-export function queryJornadaAtual(database: Database): Query<Jornada> {
-  return database.get<Jornada>('jornadas').query(Q.where('status', 'EM_ANDAMENTO'));
-}
-
-export function queryJornadasNoPeriodo(
-  database: Database,
-  inicioIso: string,
-  fimIso: string,
-): Query<Jornada> {
-  return database
-    .get<Jornada>('jornadas')
-    .query(
-      Q.where('checkin_at', Q.notEq(null)),
-      Q.where('checkin_at', Q.gte(inicioIso)),
-      Q.where('checkin_at', Q.lte(fimIso)),
-    );
-}
 
 /** Mesma janela usada pelo backend em `jornadas.service.ts#historico`. */
 export function janelaDoPeriodo(
@@ -91,14 +16,26 @@ export function janelaDoPeriodo(
   return { inicioPeriodo, fimPeriodo, inicioIso, fimIso };
 }
 
+/** Jornadas cujo check-in cai dentro do período (a janela de `janelaDoPeriodo`). */
+export function jornadasNoPeriodo<T extends JornadaDTO>(
+  jornadas: readonly T[],
+  dias: PeriodoHistorico,
+  agoraIso: string,
+): T[] {
+  const { inicioIso, fimIso } = janelaDoPeriodo(dias, agoraIso);
+  return jornadas.filter(
+    (jornada) =>
+      jornada.checkinAt !== null && jornada.checkinAt >= inicioIso && jornada.checkinAt <= fimIso,
+  );
+}
+
 export function construirHistoricoDTO(
-  registros: readonly Jornada[],
+  jornadas: readonly JornadaDTO[],
   dias: PeriodoHistorico,
   agoraIso: string,
 ): HistoricoJornadasDTO {
   const { inicioPeriodo, fimPeriodo } = janelaDoPeriodo(dias, agoraIso);
-  const dtos = registros.map(paraJornadaDTO);
-  const diasAgrupados = agruparJornadasPorDia(dtos, FUSO_OPERACAO);
+  const diasAgrupados = agruparJornadasPorDia([...jornadas], FUSO_OPERACAO);
   return {
     periodoDias: dias,
     inicioPeriodo,
@@ -106,51 +43,4 @@ export function construirHistoricoDTO(
     dias: diasAgrupados,
     totalMinutos: diasAgrupados.reduce((soma, dia) => soma + dia.minutosTrabalhados, 0),
   };
-}
-
-/**
- * Casa um registro otimista (criado por `outbox.aplicarJornadaOtimista`
- * enquanto uma ação de check-in/check-out estava só na fila, com
- * `remoteId: null`) pelo `idCliente` — não pelo `remote_id`, que ainda não
- * existe nesse registro. Usado por `syncManager.drenarFila` (Task 8) depois
- * que a ação enfileirada offline finalmente sincroniza; sem isto, o próximo
- * `upsertJornadas` (que casa por `remote_id`) criaria uma segunda linha
- * local para a mesma jornada.
- *
- * Também busca por `remote_id` porque um `puxarJornadas` (GET) pode ter
- * adiantado e criado a linha definitiva via `upsertJornadas` antes da
- * drenagem reenviar a ação — nesse caso existem DUAS linhas para a mesma
- * jornada (a otimista, achada pelo `idCliente`, e a definitiva, achada pelo
- * `remote_id`): atualiza a definitiva e apaga a otimista órfã, em vez de
- * deixar as duas (o que duplicaria minutos no histórico).
- */
-export async function reconciliarJornadaOtimista(
-  database: Database,
-  idCliente: string,
-  jornadaServidor: JornadaDTO,
-): Promise<void> {
-  const colecao = database.get<Jornada>('jornadas');
-  const porRemoteId = await colecao.query(Q.where('remote_id', jornadaServidor.id)).fetch();
-  const porCheckin = await colecao.query(Q.where('id_cliente_checkin', idCliente)).fetch();
-  const porCheckout = await colecao.query(Q.where('id_cliente_checkout', idCliente)).fetch();
-  const otimista = porCheckin[0] ?? porCheckout[0];
-  const doServidor = porRemoteId[0];
-
-  await database.write(async () => {
-    if (doServidor && otimista && doServidor.id !== otimista.id) {
-      // upsertJornadas (GET) já criou a linha definitiva antes da drenagem
-      // reconciliar — atualiza essa e apaga a otimista órfã, sem duplicar.
-      await doServidor.update((r) => preencherJornada(r, jornadaServidor));
-      await otimista.destroyPermanently();
-      return;
-    }
-    const registro = doServidor ?? otimista;
-    if (registro) {
-      await registro.update((r) => preencherJornada(r, jornadaServidor));
-    } else {
-      // Sem registro otimista correspondente (ex.: instalação nova que
-      // nunca chegou a gravar essa ação localmente) — cria direto.
-      await colecao.create((r) => preencherJornada(r, jornadaServidor));
-    }
-  });
 }
