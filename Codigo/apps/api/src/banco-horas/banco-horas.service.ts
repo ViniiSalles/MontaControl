@@ -59,6 +59,37 @@ export class BancoHorasService {
   }
 
   /**
+   * Recalcula o mês corrente do montador e só grava se o resultado mudou. É o
+   * que o pull de sincronização usa: o snapshot em `banco_horas` só é refeito
+   * por quem consulta o saldo, e o aparelho só recebe a linha quando o
+   * `updated_at` muda — regravar valores iguais reenviaria a linha em todo
+   * pull (o upsert sempre renova `calculado_at`, logo `updated_at`).
+   */
+  async atualizarMesCorrenteSeMudou(usuarioId: number): Promise<BancoHorasDTO> {
+    const [mes, ano] = this.resolverPeriodo(undefined, undefined);
+    const calculado = await this.computar(usuarioId, ano, mes);
+    const existente = await this.bancoHoras.buscar(usuarioId, mes, ano);
+
+    if (
+      existente &&
+      existente.horasTrabalhadas === calculado.horasTrabalhadas &&
+      existente.horasPrevistas === calculado.horasPrevistas &&
+      existente.saldo === calculado.saldo
+    ) {
+      return existente;
+    }
+
+    return this.bancoHoras.salvar({
+      usuarioId,
+      mes,
+      ano,
+      horasTrabalhadas: calculado.horasTrabalhadas,
+      horasPrevistas: calculado.horasPrevistas,
+      saldo: calculado.saldo,
+    });
+  }
+
+  /**
    * Mesmo cálculo de `calcular`, mas sem gravar — para quem consulta o
    * saldo de outra pessoa e não deve, como efeito colateral de uma leitura,
    * sobrescrever o registro calculado de outro usuário.
