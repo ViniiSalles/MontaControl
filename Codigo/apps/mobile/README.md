@@ -41,14 +41,24 @@ nativas e um prebuild novo empilhados sobre o do WatermelonDB.
 credencial correta, e o token **nunca** é persistido nesse caso. O espelho disso está em
 `apps/web/src/auth/AuthContext.tsx`, que recusa o MONTADOR.
 
-**O que é persistido são só os tokens** (`armazenamentoSessao.ts`, chave versionada `mc.sessao.v1`).
-O `usuario` não: é sempre recarregado de `GET /api/auth/me` no boot, então nome, perfil e `ativo`
-nunca ficam defasados — um montador desativado perde o acesso na próxima abertura do app, e não só
-quando o token expira.
+**O que é persistido** (`src/auth/armazenamentoSessao.ts`, chave versionada `mc.sessao.v2` no
+SecureStore) são os tokens **e** o `UsuarioDTO` do login (id, nome, e-mail, perfil, ativo). Com isso
+o app abre direto na Jornada mesmo sem rede, usando o usuário em cache; só depois de entrar ele
+revalida `GET /api/auth/me` em segundo plano (`src/auth/AuthContext.tsx`). Se o servidor responder
+que o perfil deixou de ser MONTADOR, a sessão local é encerrada; um montador desativado perde o
+acesso na primeira abertura com conexão, não só quando o token expira. Falha de **rede** na
+revalidação não apaga nada.
 
-No boot, um `401` (TI02) gasta o refresh token uma vez; se o refresh também falhar, os tokens são
-apagados e o app volta ao Login. Falha de **rede** não apaga nada: os tokens ficam para a próxima
-abertura.
+Um `401` na revalidação (ou em qualquer chamada autenticada) gasta o refresh token uma vez. Se o
+refresh for **recusado**, a sessão é encerrada à força: os tokens e a réplica local são apagados,
+mas a fila de ações pendentes (marcações de ponto ainda não enviadas) **é mantida**, com um marcador
+do dono (`mc.fila.dono.v1` no SecureStore e a chave `dono_da_fila` no banco local). No login
+seguinte, se quem autentica não for comprovadamente o mesmo dono, a fila e o resto do estado local
+são apagados antes de o token ser liberado — uma ação de um montador nunca sai sob o token de outro.
+O **logout explícito** apaga tudo: sessão, banco local, fila e marcador de dono.
+
+A decisão de arquitetura completa está em
+`Documentacao/offline-first/DECISAO-ARQUITETURA-OFFLINE-FIRST.md`.
 
 ## URL da API
 

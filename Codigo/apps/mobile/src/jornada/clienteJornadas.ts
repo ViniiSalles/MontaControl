@@ -9,10 +9,6 @@ import type {
 } from '@montacontrol/shared';
 import { requisitarAutenticado } from '../http/requisicao';
 
-// `ErroApi`/`lerErro` moram em `http/erroApi` (a camada de token precisa deles
-// sem importar um cliente de domínio); reexportados aqui por compatibilidade.
-export { ErroApi, lerErro } from '../http/erroApi';
-
 /** Opções dos envios feitos pela fila: `geracao` amarra a requisição à sessão que a enfileirou. */
 export interface OpcoesEnvio {
   geracao?: number;

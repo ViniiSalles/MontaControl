@@ -1,5 +1,6 @@
 import { definirTokens } from '../../auth/tokenSessao';
-import { ErroApi, buscarHistorico, buscarJornadaAtual, enviarCheckin } from '../clienteJornadas';
+import { ErroApi } from '../../http/erroApi';
+import { buscarHistorico, buscarJornadaAtual, enviarCheckin } from '../clienteJornadas';
 
 const PEDIDO = {
   idCliente: '11111111-1111-4111-8111-111111111111',

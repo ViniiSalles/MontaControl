@@ -250,6 +250,74 @@ describe('BancoHorasService', () => {
     });
   });
 
+  describe('atualizarMesCorrenteSeMudou', () => {
+    const duasJornadasDe4h = () => [
+      jornadaFake({
+        id: 1,
+        checkinAt: '2026-08-03T11:00:00.000Z',
+        checkoutAt: '2026-08-03T15:00:00.000Z',
+      }),
+      jornadaFake({
+        id: 2,
+        checkinAt: '2026-08-03T16:00:00.000Z',
+        checkoutAt: '2026-08-03T20:00:00.000Z',
+      }),
+    ];
+
+    it('grava o mês corrente (fuso de operação) quando ainda não há linha', async () => {
+      jornadas.listarNoPeriodo.mockResolvedValue(duasJornadasDe4h());
+
+      await service.atualizarMesCorrenteSeMudou(USUARIO_ID);
+
+      expect(bancoHoras.salvar).toHaveBeenCalledWith({
+        usuarioId: USUARIO_ID,
+        mes: 8,
+        ano: 2026,
+        horasTrabalhadas: 8,
+        horasPrevistas: 168,
+        saldo: 8 - 168,
+      });
+    });
+
+    it('grava de novo quando o cálculo difere da linha gravada', async () => {
+      jornadas.listarNoPeriodo.mockResolvedValue(duasJornadasDe4h());
+      bancoHoras.buscar.mockResolvedValue({
+        id: 5,
+        usuarioId: USUARIO_ID,
+        mes: 8,
+        ano: 2026,
+        horasTrabalhadas: 4,
+        horasPrevistas: 168,
+        saldo: 4 - 168,
+      });
+
+      const resultado = await service.atualizarMesCorrenteSeMudou(USUARIO_ID);
+
+      expect(bancoHoras.buscar).toHaveBeenCalledWith(USUARIO_ID, 8, 2026);
+      expect(bancoHoras.salvar).toHaveBeenCalledTimes(1);
+      expect(resultado.horasTrabalhadas).toBe(8);
+    });
+
+    it('não grava quando o cálculo é igual à linha gravada (não mexe em updated_at)', async () => {
+      jornadas.listarNoPeriodo.mockResolvedValue(duasJornadasDe4h());
+      const gravada = {
+        id: 5,
+        usuarioId: USUARIO_ID,
+        mes: 8,
+        ano: 2026,
+        horasTrabalhadas: 8,
+        horasPrevistas: 168,
+        saldo: 8 - 168,
+      };
+      bancoHoras.buscar.mockResolvedValue(gravada);
+
+      const resultado = await service.atualizarMesCorrenteSeMudou(USUARIO_ID);
+
+      expect(bancoHoras.salvar).not.toHaveBeenCalled();
+      expect(resultado).toEqual(gravada);
+    });
+  });
+
   describe('doMontador', () => {
     it('sem jornada e sem atestado, o saldo é o mês inteiro devendo', async () => {
       const resultado = await service.doMontador(USUARIO_ID, ANO, MES);

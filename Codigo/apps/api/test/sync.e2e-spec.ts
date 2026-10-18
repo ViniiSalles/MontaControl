@@ -4,6 +4,7 @@ import request from 'supertest';
 import { SYNC_SCHEMA_VERSION, TABELAS_SYNC } from '@montacontrol/shared';
 import type { SyncPullResponse, TabelaSync } from '@montacontrol/shared';
 import { Perfil, StatusAtestado, StatusAvaria, StatusJornada } from '../generated/prisma';
+import { BancoHorasService } from '../src/banco-horas/banco-horas.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { criarApp } from './setup/criar-app';
 import {
@@ -213,18 +214,11 @@ describe('GET /api/sync/pull (e2e)', () => {
         updatedAt: ANTIGO,
       },
     });
-    const atual = mesesAtras(0);
     const antigo = mesesAtras(6);
-    const banco = await prisma.bancoHoras.create({
-      data: {
-        usuarioId,
-        ...atual,
-        horasTrabalhadas: 72.25,
-        horasPrevistas: 88,
-        saldo: -15.75,
-        updatedAt: ANTIGO,
-      },
-    });
+    // Linha do mês corrente já no valor que o pull calcularia (o pull recalcula o mês corrente
+    // do montador): só muda se algo mudar de verdade, e fica datada de dois dias atrás.
+    const banco = await app.get(BancoHorasService).calcular(usuarioId);
+    await prisma.bancoHoras.update({ where: { id: banco.id }, data: { updatedAt: ANTIGO } });
     const bancoAntigo = await prisma.bancoHoras.create({
       data: {
         usuarioId,
@@ -431,10 +425,12 @@ describe('GET /api/sync/pull (e2e)', () => {
         descricao: 'Armário aéreo',
         quantidade: 2,
       });
+      const bancoGravado = await prisma.bancoHoras.findUniqueOrThrow({ where: { id: idsA.banco } });
       expect(changes.banco_horas.updated[0]).toMatchObject({
-        horas_trabalhadas: 72.25,
-        horas_previstas: 88,
-        saldo: -15.75,
+        id: String(idsA.banco),
+        horas_trabalhadas: bancoGravado.horasTrabalhadas.toNumber(),
+        horas_previstas: bancoGravado.horasPrevistas.toNumber(),
+        saldo: bancoGravado.saldo.toNumber(),
       });
       expect(changes.avarias.updated[0]).toMatchObject({
         peca_id: String(obraA.pecaId),
@@ -582,7 +578,9 @@ describe('GET /api/sync/pull (e2e)', () => {
       // As linhas do montador A foram datadas de dois dias atrás; só mudanças de outros testes podem aparecer.
       expect(atualizados(resposta, 'pedidos')).not.toContain(String(obraA.pedidoId));
       expect(atualizados(resposta, 'atestados')).not.toContain(String(idsA.atestado));
-      expect(atualizados(resposta, 'banco_horas')).not.toContain(String(idsA.banco));
+      // O mês corrente é recalculado a cada pull (e o teste anterior pode ter mexido nas jornadas
+      // de A), então só o mês antigo, que ninguém tocou, prova que linha intocada não volta.
+      expect(atualizados(resposta, 'banco_horas')).not.toContain(String(idsA.bancoAntigo));
     });
 
     it('check-in feito depois do timestamp aparece no pull seguinte', async () => {
@@ -747,6 +745,95 @@ describe('GET /api/sync/pull (e2e)', () => {
         expect.arrayContaining([
           expect.objectContaining({ id: String(idsA.bancoAntigo), saldo: 5 }),
         ]),
+      );
+    });
+  });
+
+  describe('saldo do mês corrente', () => {
+    let montadorC: UsuarioFixture;
+    let tokenC: string;
+    let obraC: ObraSync;
+
+    const linhaDoMes = async () => {
+      const atual = await app.get(BancoHorasService).calcularSemPersistir(montadorC.usuarioId);
+      return prisma.bancoHoras.findUniqueOrThrow({
+        where: {
+          usuarioId_mes_ano: { usuarioId: montadorC.usuarioId, mes: atual.mes, ano: atual.ano },
+        },
+      });
+    };
+
+    const registrarPonto = (rota: 'checkin' | 'checkout', registradoEm: Date) =>
+      request(app.getHttpServer())
+        .post(`/api/jornadas/${rota}`)
+        .set('Authorization', `Bearer ${tokenC}`)
+        .send({
+          idCliente: randomUUID(),
+          latitude: LATITUDE,
+          longitude: LONGITUDE,
+          registradoEm: registradoEm.toISOString(),
+          ...(rota === 'checkin' ? { pedidoId: obraC.pedidoId } : {}),
+        });
+
+    beforeAll(async () => {
+      montadorC = await criarFixture(Perfil.MONTADOR, 'Montador C Sync');
+      tokenC = await login(app, montadorC);
+      obraC = await criarObra([montadorC.usuarioId]);
+    });
+
+    it('check-in e check-out feitos depois do último pull chegam no pull seguinte com o saldo recalculado', async () => {
+      const primeiro = await puxar(tokenC);
+      const linhasPrimeiro = primeiro.changes.banco_horas.updated;
+      expect(linhasPrimeiro).toHaveLength(1);
+      expect(linhasPrimeiro[0].horas_trabalhadas).toBe(0);
+
+      await registrarPonto('checkin', new Date(Date.now() - 90 * 60 * 1000)).expect(201);
+      await registrarPonto('checkout', new Date()).expect(200);
+
+      const seguinte = await puxar(tokenC, primeiro.timestamp);
+
+      expect(seguinte.changes.banco_horas.updated).toEqual([
+        expect.objectContaining({
+          id: linhasPrimeiro[0].id,
+          horas_trabalhadas: 1.5,
+          horas_previstas: linhasPrimeiro[0].horas_previstas,
+          saldo: Math.round((linhasPrimeiro[0].saldo + 1.5) * 100) / 100,
+        }),
+      ]);
+    });
+
+    it('pull sem mudanças no mês não regrava a linha (updated_at e calculado_at intactos)', async () => {
+      const antes = await linhaDoMes();
+
+      await puxar(tokenC, Date.now());
+      await puxar(tokenC);
+
+      const depois = await linhaDoMes();
+      expect(depois.updatedAt).toEqual(antes.updatedAt);
+      expect(depois.calculadoAt).toEqual(antes.calculadoAt);
+    });
+
+    it('o pull de um montador não recalcula o mês de outro', async () => {
+      const antes = await linhaDoMes();
+      await prisma.jornada.create({
+        data: {
+          usuarioId: montadorC.usuarioId,
+          status: StatusJornada.FINALIZADA,
+          checkinAt: new Date(Date.now() - 4 * HORA_MS),
+          checkoutAt: new Date(Date.now() - 2 * HORA_MS),
+        },
+      });
+
+      await puxar(tokenA);
+
+      const depois = await linhaDoMes();
+      expect(depois.horasTrabalhadas.toNumber()).toBe(antes.horasTrabalhadas.toNumber());
+      expect(depois.updatedAt).toEqual(antes.updatedAt);
+
+      // O pull do próprio dono, sim, recalcula.
+      const proprio = await puxar(tokenC);
+      expect(proprio.changes.banco_horas.updated[0].horas_trabalhadas).toBe(
+        antes.horasTrabalhadas.toNumber() + 2,
       );
     });
   });

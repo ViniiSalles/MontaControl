@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import {
   SYNC_JANELA_ATESTADOS_DIAS,
   SYNC_JANELA_AVARIAS_DIAS,
@@ -15,6 +15,7 @@ import { AvariasRepository } from '../avarias/avarias.repository';
 import { TiposAvariaRepository } from '../avarias/tipos-avaria.repository';
 import { BancoHorasRepository } from '../banco-horas/banco-horas.repository';
 import type { CompetenciaInicial } from '../banco-horas/banco-horas.repository';
+import { BancoHorasService } from '../banco-horas/banco-horas.service';
 import { FUSO_OPERACAO } from '../common/fuso';
 import { JornadasRepository } from '../jornadas/jornadas.repository';
 import { PecasRepository } from '../pecas/pecas.repository';
@@ -58,9 +59,12 @@ function primeiraCompetencia(agoraMs: number): CompetenciaInicial {
 
 @Injectable()
 export class SyncService {
+  private readonly logger = new Logger(SyncService.name);
+
   constructor(
     private readonly jornadas: JornadasRepository,
     private readonly bancoHoras: BancoHorasRepository,
+    private readonly bancoHorasService: BancoHorasService,
     private readonly pedidos: PedidosRepository,
     private readonly ambientes: AmbientesRepository,
     private readonly pecas: PecasRepository,
@@ -86,9 +90,16 @@ export class SyncService {
    * O `timestamp` é o relógio do servidor lido ANTES das consultas: o cliente o
    * devolve como `lastPulledAt`, então uma escrita concorrente às consultas
    * tem `updated_at` posterior a ele e entra no pull seguinte.
+   *
+   * Antes das consultas, o saldo do mês corrente do usuário é recalculado: o
+   * snapshot em `banco_horas` só é refeito por quem consulta o saldo, e sem isso
+   * o aparelho ficaria com o saldo de quando a linha foi gravada pela última vez
+   * (check-ins, check-outs e atestados não o atualizam). Só grava se o valor mudou,
+   * então a linha só volta no pull quando há novidade.
    */
   async pull(usuarioId: number, lastPulledAt?: number): Promise<SyncPullResponse> {
     const timestamp = Date.now();
+    await this.atualizarSaldoDoMesCorrente(usuarioId);
     const alteradosDesde =
       lastPulledAt === undefined || lastPulledAt === 0
         ? undefined
@@ -147,6 +158,19 @@ export class SyncService {
 
     this.aplicarExclusoes(resposta, excluidos);
     return resposta;
+  }
+
+  /** Melhor esforço: se o recálculo falhar, o pull segue com as linhas já gravadas. */
+  private async atualizarSaldoDoMesCorrente(usuarioId: number): Promise<void> {
+    try {
+      await this.bancoHorasService.atualizarMesCorrenteSeMudou(usuarioId);
+    } catch (erro) {
+      this.logger.warn(
+        `Recálculo do banco de horas do usuário ${usuarioId} falhou; seguindo com o saldo gravado: ${
+          erro instanceof Error ? erro.message : String(erro)
+        }`,
+      );
+    }
   }
 
   /**

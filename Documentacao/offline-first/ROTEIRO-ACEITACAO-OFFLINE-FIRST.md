@@ -332,7 +332,7 @@ curl -s -X POST http://localhost:3000/api/auth/sair -H "Authorization: Bearer <a
 | Dado | Deve aparecer offline |
 | --- | --- |
 | Jornadas | as dos últimos 30 dias; mais antigas, não |
-| Banco de horas | mês atual e os 2 anteriores, se já calculados no servidor; mês mais antigo: "Sem dados offline para este mês" |
+| Banco de horas | mês atual (recalculado pelo servidor a cada sincronização) e os 2 anteriores, se já calculados no servidor; mês mais antigo: "Sem dados offline para este mês" |
 | Pedidos, ambientes e peças | todos os atribuídos ao montador |
 | Tipos de avaria | todos |
 | Avarias do montador | as dos últimos 30 dias |

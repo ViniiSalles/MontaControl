@@ -28,7 +28,7 @@ const chaveDoMes = (mes: number, ano: number) => `${ano}-${mes}`;
 
 /**
  * Saldo do banco de horas do mês/ano pedidos. A fonte é a réplica (o pull traz
- * o mês corrente e os 2 anteriores). Mês fora dela: com rede, busca no servidor
+ * o mês corrente, que o servidor recalcula a cada pull, e os 2 anteriores). Mês fora dela: com rede, busca no servidor
  * e guarda o resultado só neste hook (estado TRANSITÓRIO — a réplica só é
  * escrita pelo `synchronize()`); sem rede, `semDadosOffline`.
  */

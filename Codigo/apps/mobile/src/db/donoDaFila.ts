@@ -31,7 +31,11 @@ export async function lerDonoNoBanco(database: Database): Promise<LeituraDono> {
   }
 }
 
-/** `false` se não conseguiu gravar (não derruba o login: o marcador do SecureStore cobre a expiração forçada). */
+/**
+ * `false` se não conseguiu gravar. Quem chama trata como FATAL: o login não segue
+ * (`AuthContext.reconciliarFilaCom`), porque um dono antigo no banco prevaleceria
+ * sobre o marcador do SecureStore e a fila sairia sob o token de outro usuário.
+ */
 export async function registrarDonoNoBanco(
   database: Database,
   usuarioId: number,

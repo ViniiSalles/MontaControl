@@ -17,6 +17,7 @@ import { AtestadosRepository } from '../atestados/atestados.repository';
 import { AvariasRepository } from '../avarias/avarias.repository';
 import { TiposAvariaRepository } from '../avarias/tipos-avaria.repository';
 import { BancoHorasRepository } from '../banco-horas/banco-horas.repository';
+import { BancoHorasService } from '../banco-horas/banco-horas.service';
 import { JornadasRepository } from '../jornadas/jornadas.repository';
 import { PecasRepository } from '../pecas/pecas.repository';
 import { PedidosRepository } from '../pedidos/pedidos.repository';
@@ -33,6 +34,7 @@ describe('SyncService', () => {
   let service: SyncService;
   let jornadas: { listarParaSync: jest.Mock };
   let bancoHoras: { listarParaSync: jest.Mock };
+  let bancoHorasService: { atualizarMesCorrenteSeMudou: jest.Mock };
   let pedidos: { listarParaSync: jest.Mock };
   let ambientes: { listarParaSync: jest.Mock };
   let pecas: { listarParaSync: jest.Mock };
@@ -45,6 +47,7 @@ describe('SyncService', () => {
     jest.useFakeTimers().setSystemTime(AGORA);
     jornadas = { listarParaSync: jest.fn().mockResolvedValue([]) };
     bancoHoras = { listarParaSync: jest.fn().mockResolvedValue([]) };
+    bancoHorasService = { atualizarMesCorrenteSeMudou: jest.fn().mockResolvedValue(undefined) };
     pedidos = { listarParaSync: jest.fn().mockResolvedValue([]) };
     ambientes = { listarParaSync: jest.fn().mockResolvedValue([]) };
     pecas = { listarParaSync: jest.fn().mockResolvedValue([]) };
@@ -58,6 +61,7 @@ describe('SyncService', () => {
         SyncService,
         { provide: JornadasRepository, useValue: jornadas },
         { provide: BancoHorasRepository, useValue: bancoHoras },
+        { provide: BancoHorasService, useValue: bancoHorasService },
         { provide: PedidosRepository, useValue: pedidos },
         { provide: AmbientesRepository, useValue: ambientes },
         { provide: PecasRepository, useValue: pecas },
@@ -244,6 +248,63 @@ describe('SyncService', () => {
           criado_em: '2026-10-15T11:02:11.000Z',
         },
       ]);
+    });
+  });
+
+  describe('saldo do mês corrente', () => {
+    it('recalcula o mês corrente só do usuário logado, antes de ler o banco de horas', async () => {
+      const ordem: string[] = [];
+      bancoHorasService.atualizarMesCorrenteSeMudou.mockImplementation(async () => {
+        ordem.push('recalculo');
+      });
+      bancoHoras.listarParaSync.mockImplementation(async () => {
+        ordem.push('leitura');
+        return [];
+      });
+
+      await service.pull(USUARIO_ID);
+
+      expect(bancoHorasService.atualizarMesCorrenteSeMudou).toHaveBeenCalledTimes(1);
+      expect(bancoHorasService.atualizarMesCorrenteSeMudou).toHaveBeenCalledWith(USUARIO_ID);
+      expect(ordem).toEqual(['recalculo', 'leitura']);
+    });
+
+    it('recalcula também no pull incremental', async () => {
+      await service.pull(USUARIO_ID, AGORA - 60 * 60 * 1000);
+
+      expect(bancoHorasService.atualizarMesCorrenteSeMudou).toHaveBeenCalledWith(USUARIO_ID);
+    });
+
+    it('cada pull recalcula só o usuário que puxou', async () => {
+      await service.pull(USUARIO_ID);
+      await service.pull(USUARIO_ID + 1);
+
+      expect(bancoHorasService.atualizarMesCorrenteSeMudou.mock.calls).toEqual([
+        [USUARIO_ID],
+        [USUARIO_ID + 1],
+      ]);
+    });
+
+    it('falha no recálculo não derruba o pull: segue com as linhas gravadas', async () => {
+      bancoHorasService.atualizarMesCorrenteSeMudou.mockRejectedValue(new Error('banco fora'));
+      bancoHoras.listarParaSync.mockResolvedValue([
+        { id: 31, mes: 10, ano: 2026, horasTrabalhadas: 72.25, horasPrevistas: 88, saldo: -15.75 },
+      ]);
+
+      const resposta = await service.pull(USUARIO_ID);
+
+      expect(resposta.changes.banco_horas.updated).toHaveLength(1);
+      expect(resposta.timestamp).toBe(AGORA);
+    });
+
+    it('o timestamp continua sendo lido antes do recálculo', async () => {
+      bancoHorasService.atualizarMesCorrenteSeMudou.mockImplementation(async () => {
+        jest.setSystemTime(Date.now() + 5000);
+      });
+
+      const resposta = await service.pull(USUARIO_ID);
+
+      expect(resposta.timestamp).toBe(AGORA);
     });
   });
 

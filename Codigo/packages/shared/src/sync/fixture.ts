@@ -10,7 +10,7 @@ import type { SyncPullResponse } from './tipos';
 
 /**
  * Resposta completa e coerente de `GET /api/sync/pull` para o montador `7`,
- * usável como mock nos testes do mobile enquanto o endpoint não existe.
+ * usável como mock nos testes do mobile.
  *
  * Representa um pull incremental: o servidor manda tudo em `updated`
  * (o cliente usa `sendCreatedAsUpdated: true`) e `deleted` traz o que deixou

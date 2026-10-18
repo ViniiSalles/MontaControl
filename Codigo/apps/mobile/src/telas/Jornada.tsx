@@ -117,7 +117,8 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
       if (resultado.tipo === 'ok') {
         // A marcação já está na tela (a ação fica na fila e a sobreposição a
         // mostra); o pull traz a jornada definitiva, o histórico de hoje e o
-        // saldo do mês — sem rede, a tentativa falha e a fila segue pendente.
+        // saldo do mês corrente, que o servidor recalcula a cada pull — sem
+        // rede, a tentativa falha e a fila segue pendente.
         void sincronizarAgora();
       }
       setAviso(avisoDoResultado(resultado));
