@@ -8,6 +8,7 @@ import {
   atualizarUsuarioDaSessao,
   comTokenRenovado,
   definirTokens,
+  geracaoDaSessao,
   obterTokenValido,
 } from '../tokenSessao';
 import { gestor, montador, sessaoDe } from './apoio';
@@ -261,6 +262,68 @@ describe('comTokenRenovado', () => {
       expect(armazenamentoMock.salvarSessao).not.toHaveBeenCalled();
       expect(chamada).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+describe('geração da sessão', () => {
+  test('sobe a cada definirTokens (login, boot, logout) e não na renovação do token', async () => {
+    definirTokens(TOKENS);
+    const inicial = geracaoDaSessao();
+    renovarSessaoMock.mockResolvedValue(sessaoDe(montador, '-novo'));
+
+    await comTokenRenovado(
+      jest.fn().mockRejectedValueOnce(naoAutorizado()).mockResolvedValueOnce('ok'),
+    );
+    expect(geracaoDaSessao()).toBe(inicial);
+
+    definirTokens(null);
+    expect(geracaoDaSessao()).toBe(inicial + 1);
+  });
+
+  test('comTokenRenovado com geração esperada defasada falha sem chamar fn (nada sai sob a sessão nova)', async () => {
+    definirTokens(TOKENS);
+    const esperada = geracaoDaSessao();
+    definirTokens({ accessToken: 'sessao-nova', refreshToken: 'refresh-novo' });
+    const chamada = jest.fn().mockResolvedValue('ok');
+
+    await expect(comTokenRenovado(chamada, esperada)).rejects.toBeInstanceOf(ErroSessaoExpirada);
+
+    expect(chamada).not.toHaveBeenCalled();
+  });
+
+  test('comTokenRenovado com a geração esperada atual funciona normalmente', async () => {
+    definirTokens(TOKENS);
+    const chamada = jest.fn().mockResolvedValue('ok');
+
+    await expect(comTokenRenovado(chamada, geracaoDaSessao())).resolves.toBe('ok');
+
+    expect(chamada).toHaveBeenCalledWith('velho');
+  });
+
+  test('chamada comum em voo durante logout + novo login que recebe 401 não renova nem derruba a sessão nova', async () => {
+    definirTokens(TOKENS);
+    const aoExpirar = jest.fn();
+    aoSessaoExpirar(aoExpirar);
+    let liberar!: () => void;
+    const segurada = new Promise<void>((resolver) => {
+      liberar = resolver;
+    });
+    const chamada = jest.fn().mockImplementation(async () => {
+      await segurada;
+      throw naoAutorizado();
+    });
+    const emVoo = comTokenRenovado(chamada);
+    await new Promise<void>((resolver) => setImmediate(() => resolver()));
+
+    definirTokens(null);
+    definirTokens({ accessToken: 'sessao-nova', refreshToken: 'refresh-novo' });
+    liberar();
+
+    await expect(emVoo).rejects.toBeInstanceOf(ErroSessaoExpirada);
+    expect(renovarSessaoMock).not.toHaveBeenCalled();
+    expect(aoExpirar).not.toHaveBeenCalled();
+    expect(chamada).toHaveBeenCalledTimes(1);
+    await expect(obterTokenValido()).resolves.toBe('sessao-nova');
   });
 });
 

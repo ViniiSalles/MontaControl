@@ -20,6 +20,29 @@ jest.mock('../../db/database');
 const armazenamentoMock = jest.mocked(armazenamento);
 const databaseMock = jest.mocked(database);
 
+type Dono = { tipo: 'ausente' } | { tipo: 'dono'; usuarioId: number } | { tipo: 'erro' };
+const ausente: Dono = { tipo: 'ausente' };
+const erro: Dono = { tipo: 'erro' };
+const dono = (usuarioId: number): Dono => ({ tipo: 'dono', usuarioId });
+
+/** Estado da fila no aparelho quando alguém autentica: nº de ações e as duas fontes de dono. */
+function prepararFila({
+  acoes,
+  banco = ausente,
+  marcador = ausente,
+}: {
+  acoes: number | 'erro';
+  banco?: Dono;
+  marcador?: Dono;
+}) {
+  if (acoes === 'erro') databaseMock.contarAcoesNaFilaLocal.mockRejectedValue(new Error('banco'));
+  else databaseMock.contarAcoesNaFilaLocal.mockResolvedValue(acoes);
+  databaseMock.lerDonoNoBancoLocal.mockResolvedValue(banco);
+  armazenamentoMock.lerDonoDaFila.mockResolvedValue(marcador);
+}
+
+const OUTRO_ID = 101;
+
 const SESSAO_SALVA = { accessToken: 'access', refreshToken: 'refresh', usuario: montador };
 
 /** Espelha para a árvore o que só o contexto sabe, para os testes afirmarem sobre texto. */
@@ -73,7 +96,10 @@ beforeEach(() => {
   armazenamentoMock.lerSessao.mockResolvedValue(null);
   armazenamentoMock.salvarSessao.mockResolvedValue(undefined);
   armazenamentoMock.limparSessao.mockResolvedValue(undefined);
-  armazenamentoMock.lerDonoDaFila.mockResolvedValue(null);
+  armazenamentoMock.lerDonoDaFila.mockResolvedValue({ tipo: 'ausente' });
+  databaseMock.contarAcoesNaFilaLocal.mockResolvedValue(0);
+  databaseMock.lerDonoNoBancoLocal.mockResolvedValue({ tipo: 'ausente' });
+  databaseMock.registrarDonoNoBancoLocal.mockResolvedValue(true);
   armazenamentoMock.registrarDonoDaFila.mockResolvedValue(true);
   armazenamentoMock.limparDonoDaFila.mockResolvedValue(undefined);
   databaseMock.limparBancoLocal.mockResolvedValue(undefined);
@@ -265,15 +291,37 @@ describe('restauração de sessão no boot', () => {
     }
   });
 
-  test('boot com marcador de outro usuário apaga a fila antes de liberar a sessão', async () => {
+  test('boot com fila de outro usuário apaga tudo antes de liberar a sessão', async () => {
     armazenamentoMock.lerSessao.mockResolvedValue(SESSAO_SALVA);
-    armazenamentoMock.lerDonoDaFila.mockResolvedValue(montador.id + 100);
+    prepararFila({ acoes: 2, banco: dono(OUTRO_ID) });
     jest.mocked(globalThis.fetch).mockRejectedValue(new TypeError('Network request failed'));
 
     await renderizarComSonda();
 
     expect(databaseMock.limparBancoLocal).toHaveBeenCalledTimes(1);
-    expect(armazenamentoMock.limparDonoDaFila).toHaveBeenCalled();
+    expect(databaseMock.registrarDonoNoBancoLocal).toHaveBeenCalledWith(montador.id);
+  });
+
+  test('boot com fila sem dono conhecido (anterior à atualização) apaga a fila: custo único', async () => {
+    armazenamentoMock.lerSessao.mockResolvedValue(SESSAO_SALVA);
+    prepararFila({ acoes: 2 });
+    jest.mocked(globalThis.fetch).mockRejectedValue(new TypeError('Network request failed'));
+
+    await renderizarComSonda();
+
+    expect(databaseMock.limparBancoLocal).toHaveBeenCalledTimes(1);
+  });
+
+  test('boot do mesmo usuário com dono no banco mantém a fila e regrava o dono', async () => {
+    armazenamentoMock.lerSessao.mockResolvedValue(SESSAO_SALVA);
+    prepararFila({ acoes: 2, banco: dono(montador.id) });
+    jest.mocked(globalThis.fetch).mockRejectedValue(new TypeError('Network request failed'));
+
+    await renderizarComSonda();
+
+    expect(screen.getByTestId('usuario')).toHaveTextContent(montador.nome);
+    expect(databaseMock.limparBancoLocal).not.toHaveBeenCalled();
+    expect(databaseMock.registrarDonoNoBancoLocal).toHaveBeenCalledWith(montador.id);
   });
 
   test('perfil não-MONTADOR guardado no aparelho é descartado sem nem abrir o app', async () => {
@@ -394,46 +442,107 @@ describe('entrar()', () => {
     await expect(obterTokenValido()).resolves.toBe('access');
   });
 
-  test('sem dono de fila registrado, nada é apagado', async () => {
+  async function entrarComoMontador() {
     jest.mocked(globalThis.fetch).mockResolvedValueOnce(respostaJson(200, sessaoDe(montador)));
     await renderizarComSonda();
-
     await fireEvent.press(screen.getByTestId('entrar'));
-
     await waitFor(() => expect(screen.getByTestId('usuario')).toHaveTextContent(montador.nome));
+  }
+
+  test('fila vazia: nada é apagado, mesmo com dono de outro usuário, e o dono passa a ser quem entrou', async () => {
+    prepararFila({ acoes: 0, banco: dono(OUTRO_ID), marcador: dono(OUTRO_ID) });
+
+    await entrarComoMontador();
+
     expect(databaseMock.limparBancoLocal).not.toHaveBeenCalled();
-    expect(armazenamentoMock.limparDonoDaFila).not.toHaveBeenCalled();
+    expect(databaseMock.registrarDonoNoBancoLocal).toHaveBeenCalledWith(montador.id);
+    expect(armazenamentoMock.limparDonoDaFila).toHaveBeenCalled();
   });
 
-  test('mesmo usuário dono da fila: mantém a fila e remove o marcador', async () => {
-    armazenamentoMock.lerDonoDaFila.mockResolvedValue(montador.id);
-    jest.mocked(globalThis.fetch).mockResolvedValueOnce(respostaJson(200, sessaoDe(montador)));
-    await renderizarComSonda();
+  test('sem marcador, a fila vazia não toca no SecureStore', async () => {
+    await entrarComoMontador();
 
-    await fireEvent.press(screen.getByTestId('entrar'));
+    expect(databaseMock.limparBancoLocal).not.toHaveBeenCalled();
+    expect(armazenamentoMock.limparDonoDaFila).not.toHaveBeenCalled();
+    expect(databaseMock.registrarDonoNoBancoLocal).toHaveBeenCalledWith(montador.id);
+  });
 
-    await waitFor(() => expect(screen.getByTestId('usuario')).toHaveTextContent(montador.nome));
+  test('mesmo usuário com o dono guardado ao lado da fila (sem marcador): mantém a fila', async () => {
+    prepararFila({ acoes: 2, banco: dono(montador.id) });
+
+    await entrarComoMontador();
+
+    expect(databaseMock.limparBancoLocal).not.toHaveBeenCalled();
+    expect(databaseMock.registrarDonoNoBancoLocal).toHaveBeenCalledWith(montador.id);
+  });
+
+  test('mesmo usuário dono pelo marcador do SecureStore: mantém a fila e remove o marcador', async () => {
+    prepararFila({ acoes: 2, marcador: dono(montador.id) });
+
+    await entrarComoMontador();
+
     expect(databaseMock.limparBancoLocal).not.toHaveBeenCalled();
     expect(armazenamentoMock.limparDonoDaFila).toHaveBeenCalled();
   });
 
-  test('outro usuário: apaga tudo (fila inclusive) antes de liberar o token, e remove o marcador', async () => {
-    armazenamentoMock.lerDonoDaFila.mockResolvedValue(montador.id + 100);
-    jest.mocked(globalThis.fetch).mockResolvedValueOnce(respostaJson(200, sessaoDe(montador)));
-    await renderizarComSonda();
+  test('outro usuário: apaga tudo (fila inclusive) antes de liberar o token, depois grava o dono novo', async () => {
+    prepararFila({ acoes: 2, banco: dono(OUTRO_ID), marcador: dono(OUTRO_ID) });
 
-    await fireEvent.press(screen.getByTestId('entrar'));
+    await entrarComoMontador();
 
-    await waitFor(() => expect(screen.getByTestId('usuario')).toHaveTextContent(montador.nome));
     expect(databaseMock.limparBancoLocal).toHaveBeenCalledTimes(1);
     expect(armazenamentoMock.limparDonoDaFila).toHaveBeenCalled();
     const ordemLimpeza = databaseMock.limparBancoLocal.mock.invocationCallOrder[0];
     const ordemSessao = armazenamentoMock.salvarSessao.mock.invocationCallOrder[0];
+    const ordemDono = databaseMock.registrarDonoNoBancoLocal.mock.invocationCallOrder[0];
     expect(ordemLimpeza).toBeLessThan(ordemSessao);
+    expect(ordemLimpeza).toBeLessThan(ordemDono);
   });
 
-  test('se não conseguir apagar a fila do outro usuário, o login falha e nenhum token é liberado', async () => {
-    armazenamentoMock.lerDonoDaFila.mockResolvedValue(montador.id + 100);
+  test('fila não vazia e nenhuma fonte com dono: dono desconhecido, apaga', async () => {
+    prepararFila({ acoes: 2 });
+
+    await entrarComoMontador();
+
+    expect(databaseMock.limparBancoLocal).toHaveBeenCalledTimes(1);
+  });
+
+  test.each([
+    ['dono do banco ilegível', { banco: erro }],
+    ['marcador do SecureStore ilegível', { marcador: erro }],
+    [
+      'dono do banco ilegível mesmo com marcador do mesmo usuário',
+      { banco: erro, marcador: dono(montador.id) },
+    ],
+  ])('%s: fail-closed, apaga a fila', async (_nome, fontes) => {
+    prepararFila({ acoes: 2, ...fontes });
+
+    await entrarComoMontador();
+
+    expect(databaseMock.limparBancoLocal).toHaveBeenCalledTimes(1);
+  });
+
+  test('não conseguir contar a fila: trata como não vazia e, sem dono, apaga', async () => {
+    prepararFila({ acoes: 'erro' });
+
+    await entrarComoMontador();
+
+    expect(databaseMock.limparBancoLocal).toHaveBeenCalledTimes(1);
+  });
+
+  // O marcador do SecureStore que sobrou do wipe de outro usuário (limpeza falhou)
+  // não pode fazer o próximo boot apagar a fila do próprio usuário.
+  test('marcador velho de outro usuário não prevalece sobre o dono do banco (que é do mesmo usuário)', async () => {
+    prepararFila({ acoes: 2, banco: dono(montador.id), marcador: dono(OUTRO_ID) });
+
+    await entrarComoMontador();
+
+    expect(databaseMock.limparBancoLocal).not.toHaveBeenCalled();
+    expect(armazenamentoMock.limparDonoDaFila).toHaveBeenCalled();
+  });
+
+  test('se não conseguir apagar a fila de outro usuário, o login falha e nenhum token é liberado', async () => {
+    prepararFila({ acoes: 2, banco: dono(OUTRO_ID) });
     databaseMock.limparBancoLocal.mockRejectedValue(new Error('banco indisponível'));
     jest.mocked(globalThis.fetch).mockResolvedValueOnce(respostaJson(200, sessaoDe(montador)));
     await renderizarComSonda();
@@ -444,6 +553,7 @@ describe('entrar()', () => {
     expect(screen.getByTestId('usuario')).toHaveTextContent('sem-sessao');
     expect(armazenamentoMock.salvarSessao).not.toHaveBeenCalled();
     expect(armazenamentoMock.limparDonoDaFila).not.toHaveBeenCalled();
+    expect(databaseMock.registrarDonoNoBancoLocal).not.toHaveBeenCalled();
     await expect(obterTokenValido()).rejects.toThrow();
   });
 

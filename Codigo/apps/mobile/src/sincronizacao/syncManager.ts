@@ -14,6 +14,7 @@ import {
   enviarSolicitacaoPonto,
 } from '../jornada/clienteJornadas';
 import { reconciliarJornadaOtimista, upsertJornadas } from '../jornada/espelhoJornada';
+import { geracaoDaSessao } from '../auth/tokenSessao';
 import { AcaoPendente } from '../db/AcaoPendente';
 import { ehRecusaDoServidor } from './outbox';
 import type { JornadaDTO, PeriodoHistorico } from '@montacontrol/shared';
@@ -50,6 +51,7 @@ export async function puxarBancoHoras(database: Database, mes: number, ano: numb
  */
 async function reenviar(
   acao: AcaoPendente,
+  geracao: number,
 ): Promise<
   | { tipo: 'ok'; jornada: JornadaDTO | null }
   | { tipo: 'recusado'; codigo: string }
@@ -57,13 +59,13 @@ async function reenviar(
 > {
   const payload = JSON.parse(acao.payload);
   try {
-    if (acao.tipo === 'checkin') return { tipo: 'ok', jornada: await enviarCheckin(payload) };
-    if (acao.tipo === 'checkout') return { tipo: 'ok', jornada: await enviarCheckout(payload) };
+    if (acao.tipo === 'checkin') return { tipo: 'ok', jornada: await enviarCheckin(payload, { geracao }) };
+    if (acao.tipo === 'checkout') return { tipo: 'ok', jornada: await enviarCheckout(payload, { geracao }) };
     if (acao.tipo === 'avaria') {
-      await enviarAvaria(payload);
+      await enviarAvaria(payload, { geracao });
       return { tipo: 'ok', jornada: null };
     }
-    await enviarSolicitacaoPonto(payload);
+    await enviarSolicitacaoPonto(payload, { geracao });
     return { tipo: 'ok', jornada: null };
   } catch (erro) {
     if (ehRecusaDoServidor(erro)) {
@@ -86,12 +88,22 @@ async function reenviar(
  * `remote_id` não o encontraria).
  */
 export async function drenarFila(database: Database): Promise<void> {
+  // A fila é lida e enviada aos poucos; se a sessão trocar no meio (sair/expirar
+  // e outro usuário entrar), nada mais sai — as ações restantes são do usuário
+  // anterior e jamais podem ir com o token do novo. A geração é capturada ANTES
+  // de qualquer await.
+  const geracao = geracaoDaSessao();
   const colecao = database.get<AcaoPendente>('acoes_pendentes');
   const pendentes = await colecao.query(Q.where('status', 'pendente')).fetch();
   const emOrdem = [...pendentes].sort((a, b) => (a.criadoEm < b.criadoEm ? -1 : 1));
 
   for (const acao of emOrdem) {
-    const resultado = await reenviar(acao);
+    if (geracaoDaSessao() !== geracao) break;
+    const resultado = await reenviar(acao, geracao);
+    // Sessão trocada durante a requisição: não grava nada com o resultado dela
+    // (o banco já pode ser de outro usuário). A ação segue pendente; se o dono
+    // voltar, o reenvio é idempotente por `idCliente`.
+    if (geracaoDaSessao() !== geracao) break;
 
     if (resultado.tipo === 'ok') {
       if (resultado.jornada) {

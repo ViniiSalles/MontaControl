@@ -13,23 +13,39 @@ import { requisitarAutenticado } from '../http/requisicao';
 // sem importar um cliente de domínio); reexportados aqui por compatibilidade.
 export { ErroApi, lerErro } from '../http/erroApi';
 
-async function postar<T>(caminho: string, corpo: unknown): Promise<T> {
-  const resposta = await requisitarAutenticado(caminho, { metodo: 'POST', corpo });
+/** Opções dos envios feitos pela fila: `geracao` amarra a requisição à sessão que a enfileirou. */
+export interface OpcoesEnvio {
+  geracao?: number;
+}
+
+async function postar<T>(caminho: string, corpo: unknown, opcoes: OpcoesEnvio = {}): Promise<T> {
+  const resposta = await requisitarAutenticado(caminho, {
+    metodo: 'POST',
+    corpo,
+    geracao: opcoes.geracao,
+  });
   return (await resposta.json()) as T;
 }
 
-export async function enviarCheckin(dados: CheckinRequest): Promise<JornadaDTO> {
-  return postar<JornadaDTO>('/api/jornadas/checkin', dados);
+export async function enviarCheckin(
+  dados: CheckinRequest,
+  opcoes?: OpcoesEnvio,
+): Promise<JornadaDTO> {
+  return postar<JornadaDTO>('/api/jornadas/checkin', dados, opcoes);
 }
 
-export async function enviarCheckout(dados: CheckoutRequest): Promise<JornadaDTO> {
-  return postar<JornadaDTO>('/api/jornadas/checkout', dados);
+export async function enviarCheckout(
+  dados: CheckoutRequest,
+  opcoes?: OpcoesEnvio,
+): Promise<JornadaDTO> {
+  return postar<JornadaDTO>('/api/jornadas/checkout', dados, opcoes);
 }
 
 export async function enviarSolicitacaoPonto(
   dados: SolicitarPontoEmAtrasoRequest,
+  opcoes?: OpcoesEnvio,
 ): Promise<SolicitacaoPontoDTO> {
-  return postar<SolicitacaoPontoDTO>('/api/pontos-em-atraso', dados);
+  return postar<SolicitacaoPontoDTO>('/api/pontos-em-atraso', dados, opcoes);
 }
 
 /**

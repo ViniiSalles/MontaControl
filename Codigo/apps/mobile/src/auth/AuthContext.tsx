@@ -31,7 +31,14 @@ import {
   definirTokens,
   lerTokenAtual,
 } from './tokenSessao';
-import { limparBancoLocal, limparEspelhoBancoLocal } from '../db/database';
+import {
+  contarAcoesNaFilaLocal,
+  lerDonoNoBancoLocal,
+  limparBancoLocal,
+  limparEspelhoBancoLocal,
+  registrarDonoNoBancoLocal,
+} from '../db/database';
+import { decidirDestinoDaFila } from './destinoDaFila';
 
 export const CODIGO_PERFIL_EXCLUSIVO_WEB = 'PERFIL_EXCLUSIVO_WEB';
 
@@ -71,18 +78,29 @@ function exigirMontador(resposta: LoginResponse): void {
 }
 
 /**
- * A fila de ações pendentes sobrevive à expiração forçada da sessão, marcada
- * com o dono (`registrarDonoDaFila`). No login/boot seguinte: o mesmo usuário
- * mantém a fila (ela sobe com o token novo); outro usuário apaga tudo — nunca
- * uma ação de um montador sai sob o token de outro. Roda ANTES de o token
- * ser liberado e falha fechado: se não der para apagar, o login não segue.
+ * A fila de ações pendentes sobrevive à expiração forçada da sessão. No
+ * login/boot seguinte, `decidirDestinoDaFila` compara o dono dela (gravado ao
+ * lado da fila e no SecureStore) com quem autentica: sem prova de que é do
+ * mesmo usuário — dono diferente, desconhecido, ilegível — apaga tudo; nunca
+ * uma ação de um montador sai sob o token de outro. Roda ANTES de o token ser
+ * liberado e falha fechado: se não der para apagar, o login não segue.
+ * Depois, o dono da fila passa a ser quem autenticou.
  */
 async function reconciliarFilaCom(usuario: UsuarioDTO): Promise<void> {
-  const dono = await lerDonoDaFila();
-  if (dono == null) return;
+  const [acoes, donoBanco, donoMarcador] = await Promise.all([
+    contarAcoesNaFilaLocal().catch(() => 'erro' as const),
+    lerDonoNoBancoLocal(),
+    lerDonoDaFila(),
+  ]);
 
-  if (dono !== usuario.id) await limparBancoLocal();
-  await limparDonoDaFila();
+  if (
+    decidirDestinoDaFila({ acoes, donoBanco, donoMarcador, usuarioId: usuario.id }) === 'apagar'
+  ) {
+    await limparBancoLocal();
+  }
+  // O marcador do SecureStore só existe entre a expiração forçada e este login.
+  if (donoMarcador.tipo !== 'ausente') await limparDonoDaFila();
+  await registrarDonoNoBancoLocal(usuario.id);
 }
 
 export function ProvedorAuth({ children }: { children: ReactNode }) {

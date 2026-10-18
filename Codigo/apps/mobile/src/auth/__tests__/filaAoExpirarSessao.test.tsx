@@ -5,6 +5,7 @@ import type { JornadaDTO } from '@montacontrol/shared';
 import { criarBancoDeTeste } from '../../db/__tests__/apoio';
 import { AcaoPendente } from '../../db/AcaoPendente';
 import { Jornada } from '../../db/Jornada';
+import { lerDonoNoBanco, registrarDonoNoBanco } from '../../db/donoDaFila';
 import { drenarFila } from '../../sincronizacao/syncManager';
 import { ProvedorAuth, useAuth } from '../AuthContext';
 import { definirTokens } from '../tokenSessao';
@@ -32,6 +33,21 @@ jest.mock('../../db/database', () => ({
     jest
       .requireActual<typeof import('../../db/limparEspelho')>('../../db/limparEspelho')
       .limparEspelhoLocal(mockBanco),
+  ),
+  contarAcoesNaFilaLocal: jest.fn(() =>
+    jest
+      .requireActual<typeof import('../../db/donoDaFila')>('../../db/donoDaFila')
+      .contarAcoesNaFila(mockBanco),
+  ),
+  lerDonoNoBancoLocal: jest.fn(() =>
+    jest
+      .requireActual<typeof import('../../db/donoDaFila')>('../../db/donoDaFila')
+      .lerDonoNoBanco(mockBanco),
+  ),
+  registrarDonoNoBancoLocal: jest.fn((usuarioId: number) =>
+    jest
+      .requireActual<typeof import('../../db/donoDaFila')>('../../db/donoDaFila')
+      .registrarDonoNoBanco(mockBanco, usuarioId),
   ),
 }));
 
@@ -86,7 +102,9 @@ async function renderizar() {
   await waitFor(() => expect(screen.getByTestId('restaurando')).toHaveTextContent('false'));
 }
 
-async function popularBanco() {
+/** Banco como um login real deixa: a ação na fila e o dono gravado ao lado dela (`donoId`; `null` = fila antiga, sem dono). */
+async function popularBanco(donoId: number | null = montador.id) {
+  if (donoId !== null) await registrarDonoNoBanco(mockBanco, donoId);
   await mockBanco.write(async () => {
     await mockBanco.get<Jornada>('jornadas').create((registro) => {
       registro.remoteId = 1;
@@ -170,6 +188,48 @@ describe('expiração forçada da sessão (refresh recusado)', () => {
     expect(await contarJornadas()).toBe(0);
     expect(JSON.parse(mockSecureStore.get(CHAVE_DONO)!)).toEqual({ usuarioId: montador.id });
     expect(mockSecureStore.has(CHAVE_SESSAO)).toBe(false);
+    // O dono guardado ao lado da fila sobrevive junto com ela.
+    expect(await lerDonoNoBanco(mockBanco)).toEqual({ tipo: 'dono', usuarioId: montador.id });
+  });
+
+  test('mesmo usuário com o dono só no banco (marcador do SecureStore perdido): a fila é mantida e enviada', async () => {
+    await expirarSessaoComAcaoNaFila();
+    mockSecureStore.delete(CHAVE_DONO);
+
+    await fireEvent.press(screen.getByTestId('entrar'));
+    await waitFor(() => expect(screen.getByTestId('usuario')).toHaveTextContent(montador.nome));
+    await drenarFila(mockBanco);
+
+    expect(chamadasAoCheckin).toEqual([{ authorization: 'Bearer access-2' }]);
+    expect(await contarAcoes()).toBe(0);
+  });
+
+  test('fila sem nenhum dono conhecido (anterior à atualização): apagada no login, nada é enviado', async () => {
+    await expirarSessaoComAcaoNaFila();
+    await mockBanco.write(() => mockBanco.localStorage.remove('dono_da_fila'));
+    mockSecureStore.delete(CHAVE_DONO);
+
+    await fireEvent.press(screen.getByTestId('entrar'));
+    await waitFor(() => expect(screen.getByTestId('usuario')).toHaveTextContent(montador.nome));
+    await drenarFila(mockBanco);
+
+    expect(await contarAcoes()).toBe(0);
+    expect(chamadasAoCheckin).toEqual([]);
+  });
+
+  test('marcador velho de outro usuário no SecureStore não faz o boot apagar a fila do próprio dono', async () => {
+    mockSecureStore.set(CHAVE_DONO, JSON.stringify({ usuarioId: OUTRO_MONTADOR.id }));
+    mockSecureStore.set(
+      CHAVE_SESSAO,
+      JSON.stringify({ accessToken: 'access', refreshToken: 'refresh', usuario: montador }),
+    );
+    jest.mocked(globalThis.fetch).mockResolvedValue(respostaJson(200, montador));
+    await popularBanco(montador.id);
+
+    await renderizar();
+
+    expect(await contarAcoes()).toBe(1);
+    expect(mockSecureStore.has(CHAVE_DONO)).toBe(false);
   });
 
   test('novo login do MESMO usuário: a fila é mantida, o marcador some e a ação sobe com o token novo', async () => {
@@ -226,5 +286,7 @@ describe('logout explícito', () => {
     expect(await contarAcoes()).toBe(0);
     expect(await contarJornadas()).toBe(0);
     expect(mockSecureStore.has(CHAVE_SESSAO)).toBe(false);
+    // O dono guardado ao lado da fila morre junto com o banco.
+    expect(await lerDonoNoBanco(mockBanco)).toEqual({ tipo: 'ausente' });
   });
 });

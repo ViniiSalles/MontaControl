@@ -4,6 +4,7 @@ import { schema } from './schema';
 import { Jornada } from './Jornada';
 import { BancoHoras } from './BancoHoras';
 import { AcaoPendente } from './AcaoPendente';
+import { contarAcoesNaFila, lerDonoNoBanco, registrarDonoNoBanco } from './donoDaFila';
 import { limparEspelhoLocal } from './limparEspelho';
 
 const adapter = new SQLiteAdapter({
@@ -38,3 +39,9 @@ export async function limparBancoLocal(): Promise<void> {
 export async function limparEspelhoBancoLocal(): Promise<void> {
   await limparEspelhoLocal(database);
 }
+
+/** Dono e tamanho da fila no banco real (ver `db/donoDaFila`). */
+export const contarAcoesNaFilaLocal = () => contarAcoesNaFila(database);
+export const lerDonoNoBancoLocal = () => lerDonoNoBanco(database);
+export const registrarDonoNoBancoLocal = (usuarioId: number) =>
+  registrarDonoNoBanco(database, usuarioId);

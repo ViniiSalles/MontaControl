@@ -1,5 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 import type { UsuarioDTO } from '@montacontrol/shared';
+import type { LeituraDono } from '../db/donoDaFila';
 
 /**
  * Chave versionada: se o formato do que é guardado mudar, sobe a versão e a
@@ -92,15 +93,18 @@ export async function limparSessao(): Promise<void> {
  */
 const CHAVE_DONO_DA_FILA = 'mc.fila.dono.v1';
 
-export async function lerDonoDaFila(): Promise<number | null> {
+/** Tri-state (ver `LeituraDono`): marcador ilegível ou SecureStore com erro é `erro`, nunca `ausente`. */
+export async function lerDonoDaFila(): Promise<LeituraDono> {
   try {
     const bruto = await SecureStore.getItemAsync(CHAVE_DONO_DA_FILA);
-    if (!bruto) return null;
+    if (!bruto) return { tipo: 'ausente' };
 
     const analisado = JSON.parse(bruto) as { usuarioId?: unknown } | null;
-    return typeof analisado?.usuarioId === 'number' ? analisado.usuarioId : null;
+    return typeof analisado?.usuarioId === 'number'
+      ? { tipo: 'dono', usuarioId: analisado.usuarioId }
+      : { tipo: 'erro' };
   } catch {
-    return null;
+    return { tipo: 'erro' };
   }
 }
 

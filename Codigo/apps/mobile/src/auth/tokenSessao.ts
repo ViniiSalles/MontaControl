@@ -66,11 +66,21 @@ export function lerTokenAtual(): string | null {
   return tokens?.accessToken ?? null;
 }
 
-export async function obterTokenValido(): Promise<string> {
+/** Geração da sessão em memória; quem envia em lote (a drenagem da fila) a captura e a confere a cada passo. */
+export function geracaoDaSessao(): number {
+  return geracao;
+}
+
+/** Token e geração lidos no mesmo passo síncrono: nunca o token de uma sessão com a geração de outra. */
+async function lerTokenEGeracao(): Promise<{ token: string; geracaoDoToken: number }> {
   // Uma renovação em andamento troca o token; quem pede agora deve receber o novo.
   if (renovacaoEmCurso) await renovacaoEmCurso.catch(() => undefined);
   if (!tokens) throw new ErroSessaoExpirada();
-  return tokens.accessToken;
+  return { token: tokens.accessToken, geracaoDoToken: geracao };
+}
+
+export async function obterTokenValido(): Promise<string> {
+  return (await lerTokenEGeracao()).token;
 }
 
 function ehNaoAutorizado(erro: unknown): boolean {
@@ -80,10 +90,20 @@ function ehNaoAutorizado(erro: unknown): boolean {
 /**
  * Executa `fn` com o token atual; se o servidor responder 401, renova a
  * sessão e repete `fn` **uma** vez com o token novo.
+ *
+ * `geracaoEsperada` (opcional): quem envia algo que pertence a uma sessão
+ * específica — a fila de ações — passa a geração em que começou. Se a sessão
+ * já trocou, falha com `ErroSessaoExpirada` sem chamar `fn`: nada de um
+ * usuário sai sob o token de outro.
  */
-export async function comTokenRenovado<T>(fn: (token: string) => Promise<T>): Promise<T> {
-  const token = await obterTokenValido();
-  const geracaoDaChamada = geracao;
+export async function comTokenRenovado<T>(
+  fn: (token: string) => Promise<T>,
+  geracaoEsperada?: number,
+): Promise<T> {
+  const { token, geracaoDoToken: geracaoDaChamada } = await lerTokenEGeracao();
+  if (geracaoEsperada !== undefined && geracaoEsperada !== geracaoDaChamada) {
+    throw new ErroSessaoExpirada();
+  }
   try {
     return await fn(token);
   } catch (erro) {

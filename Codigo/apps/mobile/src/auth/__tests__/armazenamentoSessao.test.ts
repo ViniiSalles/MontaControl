@@ -89,21 +89,23 @@ describe('dono da fila', () => {
   test('lê de volta o id guardado', async () => {
     secureStore.getItemAsync.mockResolvedValue(JSON.stringify({ usuarioId: 7 }));
 
-    await expect(lerDonoDaFila()).resolves.toBe(7);
+    await expect(lerDonoDaFila()).resolves.toEqual({ tipo: 'dono', usuarioId: 7 });
     expect(secureStore.getItemAsync).toHaveBeenCalledWith('mc.fila.dono.v1');
   });
 
-  test('sem marcador, JSON corrompido ou SecureStore indisponível devolvem null', async () => {
-    await expect(lerDonoDaFila()).resolves.toBeNull();
+  test('sem marcador a leitura é "ausente"', async () => {
+    await expect(lerDonoDaFila()).resolves.toEqual({ tipo: 'ausente' });
+  });
 
+  test('marcador ilegível ou SecureStore indisponível é "erro" (nunca "ausente"): quem lê decide fail-closed', async () => {
     secureStore.getItemAsync.mockResolvedValue('{quebrado');
-    await expect(lerDonoDaFila()).resolves.toBeNull();
+    await expect(lerDonoDaFila()).resolves.toEqual({ tipo: 'erro' });
 
     secureStore.getItemAsync.mockResolvedValue(JSON.stringify({ usuarioId: 'x' }));
-    await expect(lerDonoDaFila()).resolves.toBeNull();
+    await expect(lerDonoDaFila()).resolves.toEqual({ tipo: 'erro' });
 
     secureStore.getItemAsync.mockRejectedValue(new Error('keystore indisponível'));
-    await expect(lerDonoDaFila()).resolves.toBeNull();
+    await expect(lerDonoDaFila()).resolves.toEqual({ tipo: 'erro' });
   });
 
   test('limpar apaga a chave; falha ao gravar (devolve false) ou limpar não derruba o app', async () => {
