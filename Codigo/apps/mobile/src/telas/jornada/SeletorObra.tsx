@@ -4,7 +4,7 @@ import { RAIO_TOLERANCIA_PONTO_METROS } from '@montacontrol/shared';
 import { Alerta } from '../../ui/Alerta';
 import { Cartao } from '../../ui/Cartao';
 import { Texto } from '../../ui/Texto';
-import type { ObraDoPonto } from '../../pedidos/obrasLocais';
+import type { ObraDoPonto } from '../../pedidos/obras';
 import { Opcao } from '../avarias/Opcao';
 
 interface PropsSeletorObra {

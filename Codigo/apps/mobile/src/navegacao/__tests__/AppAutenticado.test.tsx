@@ -1,5 +1,7 @@
 jest.mock('../../auth/AuthContext');
-jest.mock('../../jornada/clienteJornadas');
+jest.mock('../../auth/armazenamentoSessao', () => ({
+  salvarSessao: jest.fn().mockResolvedValue(undefined),
+}));
 jest.mock('../../banco-horas/clienteBancoHoras');
 jest.mock('../../pedidos/clientePedidos');
 jest.mock('../../avarias/clienteAvarias');
@@ -8,14 +10,14 @@ jest.mock('../../atestados/clienteAtestados');
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { DatabaseProvider } from '@nozbe/watermelondb/react';
 import { useAuth } from '../../auth/AuthContext';
-import { montador } from '../../auth/__tests__/apoio';
+import { montador, respostaJson } from '../../auth/__tests__/apoio';
+import { definirTokens } from '../../auth/tokenSessao';
 import { listarMeusAtestados } from '../../atestados/clienteAtestados';
 import { enviarAvaria, listarMinhasAvarias, listarTiposAvaria } from '../../avarias/clienteAvarias';
 import { buscarBancoHoras } from '../../banco-horas/clienteBancoHoras';
 import { periodoAtual } from '../../banco-horas/periodo';
 import { AcaoPendente } from '../../db/AcaoPendente';
-import { criarBancoDeTeste } from '../../db/__tests__/apoio';
-import { buscarHistorico, buscarJornadaAtual } from '../../jornada/clienteJornadas';
+import { criarBancoDeTeste, pullSemMudancas } from '../../db/__tests__/apoio';
 import { listarMeusPedidos } from '../../pedidos/clientePedidos';
 import { instalarGatilhosFalsos } from '../../sincronizacao/__tests__/gatilhosFalsos';
 import { AppAutenticado } from '../AppAutenticado';
@@ -66,14 +68,9 @@ beforeEach(() => {
     entrar: jest.fn(),
     sair: jest.fn(),
   });
-  jest.mocked(buscarJornadaAtual).mockResolvedValue(null);
-  jest.mocked(buscarHistorico).mockResolvedValue({
-    periodoDias: 5,
-    inicioPeriodo: '2026-09-05',
-    fimPeriodo: '2026-09-09',
-    totalMinutos: 0,
-    dias: [],
-  });
+  // O pull do `synchronize()` é o único download: sessão em memória + `fetch` falso.
+  definirTokens({ accessToken: 'token', refreshToken: 'refresh' });
+  globalThis.fetch = jest.fn().mockResolvedValue(respostaJson(200, pullSemMudancas(Date.now())));
   jest.mocked(buscarBancoHoras).mockResolvedValue({
     id: 1,
     usuarioId: montador.id,

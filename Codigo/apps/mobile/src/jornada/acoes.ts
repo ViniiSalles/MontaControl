@@ -5,7 +5,7 @@ import type { CheckinRequest, CheckoutRequest, JornadaDTO } from '@montacontrol/
 import { capturarLocalizacao } from '../localizacao/localizacao';
 import type { ResultadoLocalizacao } from '../localizacao/localizacao';
 import { resolverEndereco } from '../localizacao/nominatim';
-import type { ObraDoPonto } from '../pedidos/obrasLocais';
+import type { ObraDoPonto } from '../pedidos/obras';
 import { executarAcaoJornada } from '../sincronizacao/outbox';
 
 /**
