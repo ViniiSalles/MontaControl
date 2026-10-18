@@ -1,12 +1,14 @@
 import { Q } from '@nozbe/watermelondb';
+import { File, Paths } from 'expo-file-system';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Pressable, Text } from 'react-native';
 import { StatusJornada } from '@montacontrol/shared';
 import type { JornadaDTO } from '@montacontrol/shared';
-import { criarBancoDeTeste } from '../../db/__tests__/apoio';
+import { criarAcaoPendente, criarBancoDeTeste } from '../../db/__tests__/apoio';
 import { AcaoPendente } from '../../db/AcaoPendente';
 import { Jornada } from '../../db/Jornada';
 import { lerDonoNoBanco, registrarDonoNoBanco } from '../../db/donoDaFila';
+import { apagarTodasAsFotos, salvarFoto } from '../../fotos/armazenamentoFotos';
 import { drenarFila } from '../../sincronizacao/syncManager';
 import { ProvedorAuth, useAuth } from '../AuthContext';
 import { definirTokens } from '../tokenSessao';
@@ -28,7 +30,11 @@ jest.mock('expo-secure-store', () => ({
 
 let mockBanco: ReturnType<typeof criarBancoDeTeste>;
 jest.mock('../../db/database', () => ({
-  limparBancoLocal: jest.fn(() => mockBanco.write(() => mockBanco.unsafeResetDatabase())),
+  limparBancoLocal: jest.fn(() =>
+    jest
+      .requireActual<typeof import('../../db/limparBanco')>('../../db/limparBanco')
+      .limparBancoCompleto(mockBanco),
+  ),
   // `require` lazy: a fábrica do mock não pode referenciar imports do arquivo.
   limparEspelhoBancoLocal: jest.fn(() =>
     jest
@@ -317,5 +323,79 @@ describe('logout explícito', () => {
     expect(mockSecureStore.has(CHAVE_SESSAO)).toBe(false);
     // O dono guardado ao lado da fila morre junto com o banco.
     expect(await lerDonoNoBanco(mockBanco)).toEqual({ tipo: 'ausente' });
+  });
+});
+
+describe('fotos de atestado e avaria guardadas no aparelho (#113)', () => {
+  /** Uma ação da fila com foto em arquivo, além do check-in do `popularBanco`. */
+  async function popularComFoto(): Promise<string> {
+    await popularBanco();
+    const origem = new File(Paths.cache, `picker-${Math.random()}.jpg`);
+    origem.create({ intermediates: true });
+    origem.write('atestado');
+    const caminho = await salvarFoto(origem.uri, 'image/jpeg');
+    await criarAcaoPendente(mockBanco, {
+      tipo: 'atestado',
+      idCliente: 'atestado-1',
+      payload: { fotosCaminhos: [caminho] },
+    });
+    return caminho;
+  }
+
+  afterEach(async () => {
+    await apagarTodasAsFotos();
+  });
+
+  test('expiração forçada mantém a fila e, com ela, as fotos', async () => {
+    guardarSessaoExpirada();
+    const caminho = await popularComFoto();
+    await renderizar();
+    await waitFor(() => expect(mockSecureStore.has(CHAVE_DONO)).toBe(true));
+
+    expect(await contarAcoes()).toBe(2);
+    expect(new File(caminho).exists).toBe(true);
+  });
+
+  test('login do MESMO usuário depois da expiração mantém as fotos', async () => {
+    guardarSessaoExpirada();
+    const caminho = await popularComFoto();
+    await renderizar();
+    await waitFor(() => expect(mockSecureStore.has(CHAVE_DONO)).toBe(true));
+
+    await fireEvent.press(screen.getByTestId('entrar'));
+    await waitFor(() => expect(screen.getByTestId('usuario')).toHaveTextContent(montador.nome));
+
+    expect(new File(caminho).exists).toBe(true);
+  });
+
+  test('login de OUTRO usuário apaga a fila e as fotos do anterior', async () => {
+    guardarSessaoExpirada();
+    const caminho = await popularComFoto();
+    await renderizar();
+    await waitFor(() => expect(mockSecureStore.has(CHAVE_DONO)).toBe(true));
+    respostaDoLogin = respostaJson(200, sessaoDe(OUTRO_MONTADOR, '-b'));
+
+    await fireEvent.press(screen.getByTestId('entrar'));
+    await waitFor(() =>
+      expect(screen.getByTestId('usuario')).toHaveTextContent(OUTRO_MONTADOR.nome),
+    );
+
+    expect(await contarAcoes()).toBe(0);
+    expect(new File(caminho).exists).toBe(false);
+  });
+
+  test('logout explícito apaga as fotos', async () => {
+    mockSecureStore.set(
+      CHAVE_SESSAO,
+      JSON.stringify({ accessToken: 'access', refreshToken: 'refresh', usuario: montador }),
+    );
+    jest.mocked(globalThis.fetch).mockResolvedValue(respostaJson(200, montador));
+    const caminho = await popularComFoto();
+    await renderizar();
+
+    await fireEvent.press(screen.getByTestId('sair'));
+
+    await waitFor(() => expect(screen.getByTestId('usuario')).toHaveTextContent('sem-sessao'));
+    await waitFor(() => expect(new File(caminho).exists).toBe(false));
   });
 });
