@@ -51,7 +51,9 @@ async function anexarFotoDaGaleria() {
   const espiaAlerta = jest.spyOn(Alert, 'alert');
   await fireEvent.press(screen.getByLabelText('Fotografar problema'));
   const botoes = espiaAlerta.mock.calls[espiaAlerta.mock.calls.length - 1][2] ?? [];
-  await botoes.find((botao) => botao.text === 'Escolher da galeria')?.onPress?.(undefined as never);
+  await act(async () => {
+    await botoes.find((botao) => botao.text === 'Escolher da galeria')?.onPress?.(undefined as never);
+  });
 }
 
 async function preencherEEnviar(comFotos = 0) {

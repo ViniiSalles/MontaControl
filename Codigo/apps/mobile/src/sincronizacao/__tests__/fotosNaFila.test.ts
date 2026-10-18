@@ -17,6 +17,7 @@ import { enviarAvaria } from '../../avarias/clienteAvarias';
 import { criarAcaoPendente, criarBancoDeTeste } from '../../db/__tests__/apoio';
 import { AcaoPendente } from '../../db/AcaoPendente';
 import { apagarTodasAsFotos, salvarFoto } from '../../fotos/armazenamentoFotos';
+import { base64DeTexto } from '../../fotos/__tests__/apoio';
 import { ErroApi } from '../../http/erroApi';
 import { executarAcaoAtestado, executarAcaoAvaria } from '../outbox';
 import { drenarFila } from '../syncManager';
@@ -29,8 +30,8 @@ type Banco = ReturnType<typeof criarBancoDeTeste>;
 const enviarAvariaMock = jest.mocked(enviarAvaria);
 const enviarAtestadoMock = jest.mocked(enviarAtestado);
 
-const BASE64_A = Buffer.from('foto-a').toString('base64');
-const BASE64_B = Buffer.from('foto-b').toString('base64');
+const BASE64_A = base64DeTexto('foto-a');
+const BASE64_B = base64DeTexto('foto-b');
 
 async function novaFoto(conteudo: string): Promise<string> {
   const origem = new File(Paths.cache, `picker-${Math.random()}.jpg`);

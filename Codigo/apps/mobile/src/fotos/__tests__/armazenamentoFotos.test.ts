@@ -8,6 +8,7 @@ import {
   mimeTypeSuportado,
   salvarFoto,
 } from '../armazenamentoFotos';
+import { base64DeTexto } from './apoio';
 
 /** Foto como o picker a entrega: um arquivo temporário no cache do app. */
 function fotoDoPicker(nome: string, conteudo: string): string {
@@ -73,9 +74,9 @@ describe('salvarFoto', () => {
 
 describe('lerFotoBase64 / lerFotoParaEnvio', () => {
   it('converte o arquivo para base64 só na leitura', async () => {
-    const caminho = await salvarFoto(fotoDoPicker('picker-4.jpg', 'olá'), 'image/jpeg');
+    const caminho = await salvarFoto(fotoDoPicker('picker-4.jpg', 'ola'), 'image/jpeg');
 
-    expect(await lerFotoBase64(caminho)).toBe(Buffer.from('olá').toString('base64'));
+    expect(await lerFotoBase64(caminho)).toBe(base64DeTexto('ola'));
   });
 
   it('lerFotoParaEnvio monta o formato da API com o mime vindo da extensão', async () => {
@@ -83,11 +84,11 @@ describe('lerFotoBase64 / lerFotoParaEnvio', () => {
     const png = await salvarFoto(fotoDoPicker('picker-6.png', 'b'), 'image/png');
 
     expect(await lerFotoParaEnvio(jpeg)).toEqual({
-      conteudoBase64: Buffer.from('a').toString('base64'),
+      conteudoBase64: base64DeTexto('a'),
       mimeType: 'image/jpeg',
     });
     expect(await lerFotoParaEnvio(png)).toEqual({
-      conteudoBase64: Buffer.from('b').toString('base64'),
+      conteudoBase64: base64DeTexto('b'),
       mimeType: 'image/png',
     });
   });

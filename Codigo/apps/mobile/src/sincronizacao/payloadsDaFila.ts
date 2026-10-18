@@ -54,8 +54,11 @@ async function carregarFotos(payload: FotosNaFila): Promise<FotoBase64[]> {
   return fotos;
 }
 
+/** O corpo da API sem os campos de foto do payload da fila (as fotos entram prontas, em `fotos`). */
 function semCaminhos<T extends FotosNaFila>(payload: T): Omit<T, 'fotosCaminhos' | 'fotos'> {
-  const { fotosCaminhos: _caminhos, fotos: _fotos, ...resto } = payload;
+  const resto = { ...payload };
+  delete resto.fotosCaminhos;
+  delete resto.fotos;
   return resto;
 }
 

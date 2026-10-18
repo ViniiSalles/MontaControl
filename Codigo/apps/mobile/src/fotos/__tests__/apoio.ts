@@ -13,3 +13,8 @@ export function fotosGuardadas(): string[] {
   const pasta = new Directory(Paths.document, 'fotos_pendentes');
   return pasta.exists ? pasta.list().map((item) => item.uri) : [];
 }
+
+/** Base64 de um texto ASCII — o que `lerFotoBase64` deve devolver para a foto criada com esse conteúdo. */
+export function base64DeTexto(texto: string): string {
+  return (globalThis as unknown as { btoa: (texto: string) => string }).btoa(texto);
+}

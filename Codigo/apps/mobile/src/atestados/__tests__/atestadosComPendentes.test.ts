@@ -64,7 +64,8 @@ describe('montarAtestadosExibidos', () => {
   });
 
   it('sem observação no payload a observação é nula', () => {
-    const { observacao: _, ...semObservacao } = naFila().payload;
+    const { payload } = naFila();
+    const semObservacao = { ...payload, observacao: undefined };
 
     const [atestado] = montarAtestadosExibidos({
       replica: [],

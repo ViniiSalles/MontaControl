@@ -62,7 +62,7 @@ export function NovoAtestado({ aoEnviado, aoIniciarEnvio }: PropsNovoAtestado) {
         : await ImagePicker.launchImageLibraryAsync({
             ...OPCOES_PICKER,
             // Sem isto, uma foto HEIC da galeria (padrão de câmera iOS) chega
-            // sem `mimeType` compatível e `paraFotoBase64` a descarta.
+            // sem `mimeType` compatível e `mimeTypeSuportado` a recusa.
             preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
           });
     if (resultado.canceled) return;

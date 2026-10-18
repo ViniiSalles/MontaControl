@@ -10,14 +10,14 @@ jest.mock('../../../atestados/clienteAtestados', () => ({ enviarAtestado: jest.f
 
 import { Q } from '@nozbe/watermelondb';
 import { Alert } from 'react-native';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { enviarAtestado } from '../../../atestados/clienteAtestados';
 import { criarBancoDeTeste } from '../../../db/__tests__/apoio';
 import { comBanco } from '../../../db/__tests__/apoioReact';
 import { AcaoPendente } from '../../../db/AcaoPendente';
 import { apagarTodasAsFotos } from '../../../fotos/armazenamentoFotos';
-import { criarFotoDoPicker, fotosGuardadas } from '../../../fotos/__tests__/apoio';
+import { base64DeTexto, criarFotoDoPicker, fotosGuardadas } from '../../../fotos/__tests__/apoio';
 import { ErroApi } from '../../../http/erroApi';
 import { NovoAtestado } from '../NovoAtestado';
 
@@ -44,7 +44,9 @@ async function tirarFoto() {
   await fireEvent.press(screen.getByLabelText('Fotografar Atestado'));
   const botoes = espiaAlerta.mock.calls[espiaAlerta.mock.calls.length - 1][2] ?? [];
   const tirarFoto = botoes.find((botao) => botao.text === 'Tirar foto');
-  await tirarFoto?.onPress?.(undefined as never);
+  await act(async () => {
+    await tirarFoto?.onPress?.(undefined as never);
+  });
 }
 
 async function preencherEEnviar(fotos = 1) {
@@ -129,7 +131,7 @@ test('envia o atestado pela fila: datas em ISO, id do aparelho e a foto converti
     idCliente: '11111111-1111-4111-8111-111111111111',
     dataInicio: '2026-09-01',
     dataFim: '2026-09-03',
-    fotos: [{ conteudoBase64: Buffer.from('atestado').toString('base64'), mimeType: 'image/jpeg' }],
+    fotos: [{ conteudoBase64: base64DeTexto('atestado'), mimeType: 'image/jpeg' }],
   });
   // Aceito: fica `enviada` (aguardando o pull) e o arquivo da foto já foi apagado.
   const [acao] = await database.get<AcaoPendente>('acoes_pendentes').query().fetch();

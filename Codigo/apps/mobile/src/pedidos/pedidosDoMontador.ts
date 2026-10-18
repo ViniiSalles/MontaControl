@@ -87,8 +87,10 @@ export function montarPedidosDoMontador(
       ambientes: ambientes
         .filter((ambiente) => ambiente.pedidoId === pedido.id)
         .sort((a, b) => a.id - b.id)
-        .map(({ pedidoId: _pedidoId, ...ambiente }) => ({
-          ...ambiente,
+        .map((ambiente) => ({
+          id: ambiente.id,
+          nome: ambiente.nome,
+          status: ambiente.status,
           pecas: pecas
             .filter((peca) => peca.ambienteId === ambiente.id)
             .sort((a, b) => a.id - b.id),
