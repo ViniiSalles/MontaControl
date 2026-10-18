@@ -4,8 +4,11 @@ import type { ReactNode } from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { DatabaseProvider } from '@nozbe/watermelondb/react';
 import { Q } from '@nozbe/watermelondb';
+import { File, Paths } from 'expo-file-system';
 import { AcaoPendente } from '../../db/AcaoPendente';
 import { criarBancoDeTeste } from '../../db/__tests__/apoio';
+import { apagarTodasAsFotos, salvarFoto } from '../../fotos/armazenamentoFotos';
+import { existeFoto } from '../../fotos/__tests__/apoio';
 import { ProvedorSincronizacao, useSincronizacao } from '../SincronizacaoContext';
 import { iniciarSincronizacao } from '../syncManager';
 
@@ -182,4 +185,26 @@ test('useSincronizacao fora do provider falha alto', async () => {
   jest.spyOn(console, 'error').mockImplementation(() => undefined);
 
   await expect(renderHook(() => useSincronizacao())).rejects.toThrow(/ProvedorSincronizacao/);
+});
+
+test('ao apagar a ação descartada apaga também as fotos dela que ainda estejam no aparelho', async () => {
+  const origem = new File(Paths.cache, 'picker-descartada.jpg');
+  origem.create({ intermediates: true, overwrite: true });
+  origem.write('foto');
+  const caminho = await salvarFoto(origem.uri, 'image/jpeg');
+  await database.write(() =>
+    database.get<AcaoPendente>('acoes_pendentes').create((registro) => {
+      registro.tipo = 'atestado';
+      registro.idCliente = 'atestado-descartado';
+      registro.payload = JSON.stringify({ fotosCaminhos: [caminho] });
+      registro.criadoEm = '2026-09-09T12:00:00.000Z';
+      registro.status = 'descartada';
+      registro.mensagemDescarte = 'Ação recusada: X.';
+    }),
+  );
+
+  await renderHook(() => useSincronizacao(), { wrapper: envolver });
+
+  await waitFor(() => expect(existeFoto(caminho)).toBe(false));
+  await apagarTodasAsFotos();
 });

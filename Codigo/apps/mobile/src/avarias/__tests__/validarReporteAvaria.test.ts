@@ -1,17 +1,20 @@
 import { validarReporteAvaria } from '../validarReporteAvaria';
 
-const FOTO = { conteudoBase64: 'abc', mimeType: 'image/png' as const };
+const FOTO = 'file:///mock/document/fotos_pendentes/a.png';
 const VALIDO = { pecaId: 10, tipoAvariaId: 2, descricao: '  Porta riscada  ' };
 
-test('formulário completo vira corpo com descrição aparada e sem fotos quando não há', () => {
+test('formulário completo vira o que vai para a fila, com descrição aparada e sem fotos quando não há', () => {
   expect(validarReporteAvaria(VALIDO, [])).toEqual({
     erros: {},
     dados: { pecaId: 10, tipoAvariaId: 2, descricao: 'Porta riscada' },
   });
 });
 
-test('fotos anexadas vão no corpo', () => {
-  expect(validarReporteAvaria(VALIDO, [FOTO]).dados?.fotos).toEqual([FOTO]);
+test('as fotos anexadas vão como caminhos de arquivo, nunca como base64', () => {
+  const { dados } = validarReporteAvaria(VALIDO, [FOTO]);
+
+  expect(dados?.fotosCaminhos).toEqual([FOTO]);
+  expect(dados).not.toHaveProperty('fotos');
 });
 
 test('cobra peça, tipo e descrição', () => {

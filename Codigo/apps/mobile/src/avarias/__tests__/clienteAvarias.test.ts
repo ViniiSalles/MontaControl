@@ -1,6 +1,6 @@
 import { definirTokens } from '../../auth/tokenSessao';
 import { respostaJson } from '../../auth/__tests__/apoio';
-import { enviarAvaria, listarMinhasAvarias, listarTiposAvaria } from '../clienteAvarias';
+import { enviarAvaria } from '../clienteAvarias';
 
 const fetchMock = jest.fn();
 
@@ -29,17 +29,5 @@ describe('clienteAvarias', () => {
     expect(opcoes.method).toBe('POST');
     expect(opcoes.headers.Authorization).toBe('Bearer token-abc');
     expect(JSON.parse(opcoes.body)).toEqual(REPORTE);
-  });
-
-  test('listagens usam o token da sessão', async () => {
-    fetchMock.mockResolvedValue(respostaJson(200, []));
-
-    await listarMinhasAvarias();
-    await listarTiposAvaria();
-
-    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/api\/avarias\/minhas$/);
-    expect(String(fetchMock.mock.calls[1][0])).toMatch(/\/api\/avarias\/tipos$/);
-    expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer token-abc');
-    expect(fetchMock.mock.calls[1][1].headers.Authorization).toBe('Bearer token-abc');
   });
 });

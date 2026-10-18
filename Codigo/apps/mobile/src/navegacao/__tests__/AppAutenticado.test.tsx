@@ -3,7 +3,6 @@ jest.mock('../../auth/armazenamentoSessao', () => ({
   salvarSessao: jest.fn().mockResolvedValue(undefined),
 }));
 jest.mock('../../banco-horas/clienteBancoHoras');
-jest.mock('../../pedidos/clientePedidos');
 jest.mock('../../avarias/clienteAvarias');
 jest.mock('../../atestados/clienteAtestados');
 
@@ -12,13 +11,11 @@ import { DatabaseProvider } from '@nozbe/watermelondb/react';
 import { useAuth } from '../../auth/AuthContext';
 import { montador, respostaJson } from '../../auth/__tests__/apoio';
 import { definirTokens } from '../../auth/tokenSessao';
-import { listarMeusAtestados } from '../../atestados/clienteAtestados';
-import { enviarAvaria, listarMinhasAvarias, listarTiposAvaria } from '../../avarias/clienteAvarias';
+import { enviarAvaria } from '../../avarias/clienteAvarias';
 import { buscarBancoHoras } from '../../banco-horas/clienteBancoHoras';
 import { periodoAtual } from '../../banco-horas/periodo';
 import { AcaoPendente } from '../../db/AcaoPendente';
 import { criarBancoDeTeste, pullSemMudancas } from '../../db/__tests__/apoio';
-import { listarMeusPedidos } from '../../pedidos/clientePedidos';
 import { instalarGatilhosFalsos } from '../../sincronizacao/__tests__/gatilhosFalsos';
 import { AppAutenticado } from '../AppAutenticado';
 
@@ -80,10 +77,6 @@ beforeEach(() => {
     horasPrevistas: 168,
     saldo: -168,
   });
-  jest.mocked(listarMeusPedidos).mockResolvedValue([]);
-  jest.mocked(listarTiposAvaria).mockResolvedValue([]);
-  jest.mocked(listarMinhasAvarias).mockResolvedValue([]);
-  jest.mocked(listarMeusAtestados).mockResolvedValue([]);
 });
 
 describe.each([

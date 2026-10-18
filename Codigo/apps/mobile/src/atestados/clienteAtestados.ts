@@ -1,14 +1,16 @@
 import type { AtestadoDTO, EnviarAtestadoRequest } from '@montacontrol/shared';
 import { requisitarAutenticado } from '../http/requisicao';
+import type { OpcoesEnvio } from '../jornada/clienteJornadas';
 
-/** POST /api/atestados — envia o atestado com foto(s); idempotente por `idCliente`. */
-export async function enviarAtestado(dados: EnviarAtestadoRequest): Promise<AtestadoDTO> {
-  const resposta = await requisitarAutenticado('/api/atestados', { metodo: 'POST', corpo: dados });
+/** POST /api/atestados — envia o atestado com foto(s); idempotente por `idCliente` (outbox). */
+export async function enviarAtestado(
+  dados: EnviarAtestadoRequest,
+  opcoes: OpcoesEnvio = {},
+): Promise<AtestadoDTO> {
+  const resposta = await requisitarAutenticado('/api/atestados', {
+    metodo: 'POST',
+    corpo: dados,
+    geracao: opcoes.geracao,
+  });
   return (await resposta.json()) as AtestadoDTO;
-}
-
-/** GET /api/atestados/meus — os próprios atestados do montador, mais recente primeiro. */
-export async function listarMeusAtestados(): Promise<AtestadoDTO[]> {
-  const resposta = await requisitarAutenticado('/api/atestados/meus');
-  return (await resposta.json()) as AtestadoDTO[];
 }

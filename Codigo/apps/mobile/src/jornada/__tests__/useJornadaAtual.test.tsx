@@ -14,6 +14,7 @@ import {
   reiniciarStatusDaSincronizacao,
 } from '../../sincronizacao/statusDaSincronizacao';
 import { useJornadaAtual } from '../useJornadaAtual';
+import { AGORA_FIXO_MS, fixarRelogio, soltarRelogio } from './relogioFixo';
 
 jest.mock('../../auth/armazenamentoSessao', () => ({
   salvarSessao: jest.fn().mockResolvedValue(undefined),
@@ -21,11 +22,9 @@ jest.mock('../../auth/armazenamentoSessao', () => ({
 
 const fetchMock = jest.fn();
 
-// Instantes relativos ao relógio real: o hook decide "hoje" por ele. Meia-noite
-// em America/Sao_Paulo é 03:00Z; recuar horas cairia no dia anterior logo cedo,
-// então os turnos de teste ficam nos últimos minutos (janela de flake: 4 min/dia).
-const AGORA = Date.now();
-const minutosAtras = (minutos: number) => new Date(AGORA - minutos * 60_000).toISOString();
+// Instantes relativos ao relógio fixo do teste (14:00 em SP): o hook decide
+// "hoje" por ele, e o relógio real quebrava os testes logo depois da meia-noite.
+const minutosAtras = (minutos: number) => new Date(AGORA_FIXO_MS - minutos * 60_000).toISOString();
 const HA_4MIN = minutosAtras(4);
 const HA_3MIN = minutosAtras(3);
 const HA_2MIN = minutosAtras(2);
@@ -43,7 +42,12 @@ const abertaNaReplica = () =>
     checkout_id_cliente: null,
   });
 
+afterEach(() => {
+  soltarRelogio();
+});
+
 beforeEach(() => {
+  fixarRelogio();
   jest.clearAllMocks();
   fetchMock.mockReset();
   globalThis.fetch = fetchMock;

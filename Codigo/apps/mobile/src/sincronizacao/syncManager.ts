@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 import { Q } from '@nozbe/watermelondb';
 import type { Database } from '@nozbe/watermelondb';
 import { synchronize } from '@nozbe/watermelondb/sync';
+import { enviarAtestado } from '../atestados/clienteAtestados';
 import { enviarAvaria } from '../avarias/clienteAvarias';
 import {
   enviarCheckin,
@@ -13,6 +14,14 @@ import { ErroSessaoExpirada, geracaoDaSessao, lerTokenAtual } from '../auth/toke
 import { AcaoPendente } from '../db/AcaoPendente';
 import { ErroApi } from '../http/erroApi';
 import { ehRecusaDoServidor } from './outbox';
+import {
+  apagarFotosDaAcao,
+  caminhosDasFotosDaAcao,
+  CODIGO_ATESTADO_SEM_FOTOS,
+  MENSAGEM_ATESTADO_SEM_FOTOS,
+  montarCorpoAtestado,
+  montarCorpoAvaria,
+} from './payloadsDaFila';
 import { puxarMudancas } from './pullChanges';
 import { atualizarStatusDaSincronizacao } from './statusDaSincronizacao';
 import type { ErroDeSincronizacao } from './statusDaSincronizacao';
@@ -26,26 +35,63 @@ import type { ErroDeSincronizacao } from './statusDaSincronizacao';
 const VERSAO_INICIAL_DA_SINCRONIZACAO = 2;
 
 /**
+ * Ações cujo resultado aparece na tela como registro da réplica (jornada,
+ * avaria, atestado): aceitas, ficam `enviada` até o pull o trazer. O ponto em
+ * atraso não tem registro para sobrepor e sai da fila.
+ */
+const TIPOS_QUE_AGUARDAM_O_PULL = ['checkin', 'checkout', 'avaria', 'atestado'];
+
+/**
  * `sem_rede` cobre tudo o que não é uma decisão do servidor sobre a ação:
  * falha de rede, 5xx e também 401 (token expirado, ver `ehRecusaDoServidor`).
  */
 async function reenviar(
   acao: AcaoPendente,
   geracao: number,
-): Promise<{ tipo: 'ok' } | { tipo: 'recusado'; codigo: string } | { tipo: 'sem_rede' }> {
+): Promise<
+  | { tipo: 'ok' }
+  | { tipo: 'recusado'; codigo: string; mensagem?: string }
+  | { tipo: 'sem_rede' }
+> {
   const payload = JSON.parse(acao.payload);
   try {
     if (acao.tipo === 'checkin') await enviarCheckin(payload, { geracao });
     else if (acao.tipo === 'checkout') await enviarCheckout(payload, { geracao });
-    else if (acao.tipo === 'avaria') await enviarAvaria(payload, { geracao });
-    else await enviarSolicitacaoPonto(payload, { geracao });
+    else if (acao.tipo === 'avaria') {
+      await enviarAvaria(await montarCorpoAvaria(payload), { geracao });
+    } else if (acao.tipo === 'atestado') {
+      const corpo = await montarCorpoAtestado(payload);
+      // Sem nenhuma foto o servidor recusaria; as fotos não voltam, então nem tenta.
+      if (corpo === null) {
+        return {
+          tipo: 'recusado',
+          codigo: CODIGO_ATESTADO_SEM_FOTOS,
+          mensagem: MENSAGEM_ATESTADO_SEM_FOTOS,
+        };
+      }
+      await enviarAtestado(corpo, { geracao });
+    } else await enviarSolicitacaoPonto(payload, { geracao });
     return { tipo: 'ok' };
   } catch (erro) {
     if (ehRecusaDoServidor(erro)) {
-      return { tipo: 'recusado', codigo: erro.codigo };
+      return {
+        tipo: 'recusado',
+        codigo: erro.codigo,
+        mensagem: mensagemDeRecusa(acao.tipo, erro),
+      };
     }
     return { tipo: 'sem_rede' };
   }
+}
+
+/**
+ * Avaria e atestado são ações do próprio montador, que já saiu da tela: o aviso
+ * leva o texto do servidor (o motivo). Ponto segue com o código, como antes.
+ */
+function mensagemDeRecusa(tipo: string, erro: ErroApi): string | undefined {
+  if (tipo === 'avaria') return `Avaria recusada: ${erro.message}`;
+  if (tipo === 'atestado') return `Atestado recusado: ${erro.message}`;
+  return undefined;
 }
 
 /**
@@ -56,11 +102,11 @@ async function reenviar(
  * frente na ordem — a ação segue `pendente`. O token vem da fonte única
  * (`auth/tokenSessao`), buscado a cada chamada.
  *
- * Check-in/check-out aceitos viram `enviada` (não são apagados): a jornada só
- * entra na réplica no pull seguinte, e até lá a sobreposição precisa da ação
- * para a tela não perder o ponto — se o pull falhar logo depois do envio, o
- * montador não pode ver a jornada sumir e bater o ponto de novo. As demais
- * ações (avaria, ponto em atraso) não têm jornada para sobrepor e saem da fila.
+ * Check-in/check-out, avaria e atestado aceitos viram `enviada` (não são
+ * apagados): o registro só entra na réplica no pull seguinte, e até lá a
+ * sobreposição precisa da ação para a tela não perdê-lo — se o pull falhar logo
+ * depois do envio, o montador não pode ver o ponto (ou o atestado) sumir e
+ * enviar de novo. O ponto em atraso não tem registro para sobrepor e sai da fila.
  */
 export async function drenarFila(database: Database): Promise<void> {
   // A fila é lida e enviada aos poucos; se a sessão trocar no meio (sair/expirar
@@ -74,6 +120,14 @@ export async function drenarFila(database: Database): Promise<void> {
 
   for (const acao of emOrdem) {
     if (geracaoDaSessao() !== geracao) break;
+    // A lista foi lida antes do laço: o envio imediato de uma tela pode ter
+    // confirmado (`enviada`) ou recusado (apagada) esta linha enquanto as
+    // anteriores subiam. Reenviá-la seria um POST à toa (ou uma escrita em
+    // registro apagado); só segue quem AINDA está pendente no banco.
+    const aindaPendente = await colecao
+      .query(Q.where('id', acao.id), Q.where('status', 'pendente'))
+      .fetchCount();
+    if (aindaPendente === 0) continue;
     const resultado = await reenviar(acao, geracao);
     // Sessão trocada durante a requisição: não grava nada com o resultado dela
     // (o banco já pode ser de outro usuário). A ação segue pendente; se o dono
@@ -81,9 +135,9 @@ export async function drenarFila(database: Database): Promise<void> {
     if (geracaoDaSessao() !== geracao) break;
 
     if (resultado.tipo === 'ok') {
-      const deJornada = acao.tipo === 'checkin' || acao.tipo === 'checkout';
+      const aguardaOPull = TIPOS_QUE_AGUARDAM_O_PULL.includes(acao.tipo);
       await database.write(async () => {
-        if (deJornada) {
+        if (aguardaOPull) {
           await acao.update((registro) => {
             registro.status = 'enviada';
           });
@@ -91,13 +145,17 @@ export async function drenarFila(database: Database): Promise<void> {
           await acao.destroyPermanently();
         }
       });
+      // Só depois de a ação sair da fila: se o app morrer aqui sobra um arquivo
+      // órfão (apagado no logout), nunca uma ação pendente sem a foto.
+      await apagarFotosDaAcao(caminhosDasFotosDaAcao(acao.payload));
     } else if (resultado.tipo === 'recusado') {
       await database.write(() =>
         acao.update((registro) => {
           registro.status = 'descartada';
-          registro.mensagemDescarte = `Ação recusada: ${resultado.codigo}.`;
+          registro.mensagemDescarte = resultado.mensagem ?? `Ação recusada: ${resultado.codigo}.`;
         }),
       );
+      await apagarFotosDaAcao(caminhosDasFotosDaAcao(acao.payload));
     } else {
       break;
     }

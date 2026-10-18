@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 import { StatusAtestado } from '@montacontrol/shared';
-import type { AtestadoDTO } from '@montacontrol/shared';
 import type { NomeIcone } from '@montacontrol/design-tokens/icones';
 import { cores, espacamento, espacamentoNomeado } from '@montacontrol/design-tokens/native';
 import { Alerta } from '../ui/Alerta';
@@ -14,8 +13,10 @@ import { Carregando } from '../ui/Carregando';
 import { Tela } from '../ui/Tela';
 import { Texto } from '../ui/Texto';
 import { textoPeriodo } from '../atestados/formatarPeriodo';
+import type { AtestadoExibido } from '../atestados/atestadosComPendentes';
 import { atestadosRecentes } from '../atestados/recentes';
 import { useMeusAtestados } from '../atestados/useMeusAtestados';
+import { AvisosDeAcoesRecusadas } from './AvisosDeAcoesRecusadas';
 import { NovoAtestado } from './atestados/NovoAtestado';
 
 const VARIANTE_POR_STATUS: Record<StatusAtestado, VarianteBadge> = {
@@ -44,7 +45,7 @@ const COR_ICONE_POR_STATUS: Record<StatusAtestado, string> = {
 
 const LIMITE_HISTORICO = 5;
 
-function ItemHistorico({ atestado }: { atestado: AtestadoDTO }) {
+function ItemHistorico({ atestado }: { atestado: AtestadoExibido }) {
   return (
     <View style={{ gap: espacamento[8] }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: espacamento[12] }}>
@@ -55,7 +56,11 @@ function ItemHistorico({ atestado }: { atestado: AtestadoDTO }) {
             {textoPeriodo(atestado.dataInicio, atestado.dataFim)}
           </Texto>
         </View>
-        <Badge variante={VARIANTE_POR_STATUS[atestado.status]} texto={ROTULO_POR_STATUS[atestado.status]} />
+        {atestado.aguardandoEnvio ? (
+          <Badge variante="aviso" texto="Aguardando envio" />
+        ) : (
+          <Badge variante={VARIANTE_POR_STATUS[atestado.status]} texto={ROTULO_POR_STATUS[atestado.status]} />
+        )}
       </View>
       {atestado.status === StatusAtestado.REJEITADO && atestado.motivoRejeicao && (
         <Texto variante="bodyMd" cor={cores.onSurfaceVariant}>
@@ -73,8 +78,8 @@ export function Atestados() {
   const [mostrarTodos, setMostrarTodos] = useState<boolean>(false);
   const { visiveis, ocultos } = atestadosRecentes(atestados, LIMITE_HISTORICO, mostrarTodos);
 
-  function aoEnviado() {
-    setAviso('Atestado enviado. O RH vai analisar.');
+  function aoEnviado(mensagem: string) {
+    setAviso(mensagem);
     void recarregar();
   }
 
@@ -84,6 +89,7 @@ export function Atestados() {
         <Texto variante="headlineMd">Atestados Médicos</Texto>
 
         {aviso && <Alerta variante="sucesso" mensagem={aviso} />}
+        <AvisosDeAcoesRecusadas />
 
         <NovoAtestado aoEnviado={aoEnviado} aoIniciarEnvio={() => setAviso(null)} />
 
@@ -100,7 +106,7 @@ export function Atestados() {
             <Alerta
               variante="erro"
               titulo="Não foi possível carregar seus atestados"
-              mensagem="Verifique a internet e tente de novo."
+              mensagem="Ainda não há dados no aparelho. Conecte-se à internet e tente de novo."
             />
             <Botao
               variante="tonal"
@@ -119,7 +125,7 @@ export function Atestados() {
           <View style={{ gap: espacamento[12] }}>
             {visiveis.map((atestado) => (
               <Cartao
-                key={atestado.id}
+                key={atestado.chave}
                 elevacao="elev1"
                 tom="baixo"
                 conteudo={<ItemHistorico atestado={atestado} />}

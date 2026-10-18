@@ -4,20 +4,34 @@ import type {
   CheckinRequest,
   CheckoutRequest,
   JornadaDTO,
-  ReportarAvariaRequest,
   SolicitarPontoEmAtrasoRequest,
 } from '@montacontrol/shared';
+import { enviarAtestado } from '../atestados/clienteAtestados';
 import { enviarAvaria } from '../avarias/clienteAvarias';
 import { AcaoPendente } from '../db/AcaoPendente';
 import { ErroApi } from '../http/erroApi';
 import { enviarCheckin, enviarCheckout, enviarSolicitacaoPonto } from '../jornada/clienteJornadas';
 import { lerJornadasComPendentes } from '../jornada/jornadasComPendentes';
+import {
+  apagarFotosDaAcao,
+  caminhosDasFotos,
+  MENSAGEM_ATESTADO_SEM_FOTOS,
+  CODIGO_ATESTADO_SEM_FOTOS,
+  montarCorpoAtestado,
+  montarCorpoAvaria,
+} from './payloadsDaFila';
+import type { PayloadAtestadoNaFila, PayloadAvariaNaFila } from './payloadsDaFila';
 
 export type ResultadoEnvio<T> = { tipo: 'ok'; dado: T } | { tipo: 'recusado'; codigo: string };
 export type ResultadoPontoEmAtraso = { tipo: 'ok' } | { tipo: 'recusado'; codigo: string };
 /** `pendente`: sem rede agora, fica na fila e sobe sozinho quando a conexão voltar. */
 export type ResultadoAvaria =
   | { tipo: 'enviada' }
+  | { tipo: 'pendente' }
+  | { tipo: 'recusado'; codigo: string; mensagem: string };
+/** Mesma ideia da avaria: `pendente` = sem rede agora, sobe sozinho depois. */
+export type ResultadoAtestado =
+  | { tipo: 'enviado' }
   | { tipo: 'pendente' }
   | { tipo: 'recusado'; codigo: string; mensagem: string };
 
@@ -53,6 +67,66 @@ async function enfileirar(
       registro.criadoEm = new Date().toISOString();
       registro.status = 'pendente';
       registro.mensagemDescarte = null;
+    }),
+  );
+}
+
+/** O enfileiramento em si falhou: nenhuma linha existe (e as fotos já foram apagadas). */
+export class ErroAoEnfileirar extends Error {
+  constructor(causa: unknown) {
+    super(causa instanceof Error ? causa.message : 'Falha ao enfileirar a ação.');
+    this.name = 'ErroAoEnfileirar';
+  }
+}
+
+/**
+ * Enfileira uma ação que carrega fotos em arquivo. Quem chama entrega as fotos
+ * à fila ao chamar: a partir daqui o formulário não é mais dono delas. Se o
+ * enfileiramento falha nenhuma linha as referencia, então os arquivos são
+ * apagados aqui mesmo (e `ErroAoEnfileirar` sobe); depois de a linha existir, só a
+ * confirmação ou a recusa do servidor (ou o logout) as apaga.
+ */
+async function enfileirarComFotos(
+  database: Database,
+  tipo: 'avaria' | 'atestado',
+  payload: PayloadAvariaNaFila | PayloadAtestadoNaFila,
+): Promise<AcaoPendente> {
+  try {
+    return await enfileirar(database, tipo, payload.idCliente, payload);
+  } catch (erro) {
+    await apagarFotosDaAcao(caminhosDasFotos(payload));
+    throw new ErroAoEnfileirar(erro);
+  }
+}
+
+/**
+ * Marca como `enviada` e solta as fotos. Se a marcação falhar, a linha segue
+ * `pendente` — e dona das fotos: o reenvio é idempotente por `idCliente` —,
+ * então isso não é erro para a tela; devolve `false` (ela mostra "na fila").
+ */
+async function confirmarEnvio(
+  database: Database,
+  acao: AcaoPendente,
+  caminhos: readonly string[],
+): Promise<boolean> {
+  try {
+    await marcarComoEnviada(database, acao);
+  } catch {
+    return false;
+  }
+  await apagarFotosDaAcao(caminhos);
+  return true;
+}
+
+/**
+ * Aceita pelo servidor, a ação fica `enviada` até o pull trazer o registro
+ * (ver `StatusAcao`): a lista continua mostrando o item nesse intervalo e, se
+ * o pull falhar logo depois do envio, o montador não o vê sumir e reenvia.
+ */
+async function marcarComoEnviada(database: Database, acao: AcaoPendente): Promise<void> {
+  await database.write(() =>
+    acao.update((registro) => {
+      registro.status = 'enviada';
     }),
   );
 }
@@ -115,11 +189,7 @@ export async function executarAcaoJornada(
         ? await enviarCheckin(payload as CheckinRequest)
         : await enviarCheckout(payload as CheckoutRequest);
 
-    await database.write(() =>
-      acao.update((registro) => {
-        registro.status = 'enviada';
-      }),
-    );
+    await marcarComoEnviada(database, acao);
     return { tipo: 'ok', dado: jornadaServidor };
   } catch (erro) {
     if (ehRecusaDoServidor(erro)) {
@@ -152,24 +222,61 @@ export async function executarAcaoPontoEmAtraso(
 
 /**
  * Reporte de avaria: o montador está na casa do cliente, muitas vezes sem
- * sinal — o reporte entra na fila antes da rede e nunca se perde. Recusa do
- * servidor (4xx) sai da fila e volta para a tela com a mensagem.
+ * sinal — o reporte entra na fila antes da rede e nunca se perde. As fotos já
+ * são arquivos no aparelho (o payload leva só as referências, e **passam a ser
+ * da fila no instante da chamada**: quem chama as solta do formulário antes de
+ * esperar a rede); viram base64 aqui,
+ * no envio, e os arquivos somem quando o servidor confirma ou recusa. Recusa
+ * do servidor (4xx) sai da fila e volta para a tela com a mensagem.
  */
 export async function executarAcaoAvaria(
   database: Database,
-  payload: ReportarAvariaRequest,
+  payload: PayloadAvariaNaFila,
 ): Promise<ResultadoAvaria> {
-  const acao = await enfileirar(database, 'avaria', payload.idCliente, payload);
+  const acao = await enfileirarComFotos(database, 'avaria', payload);
 
   try {
-    await enviarAvaria(payload);
-    await database.write(() => acao.destroyPermanently());
-    return { tipo: 'enviada' };
+    await enviarAvaria(await montarCorpoAvaria(payload));
   } catch (erro) {
-    if (ehRecusaDoServidor(erro)) {
-      await database.write(() => acao.destroyPermanently());
-      return { tipo: 'recusado', codigo: erro.codigo, mensagem: erro.message };
-    }
-    return { tipo: 'pendente' };
+    if (!ehRecusaDoServidor(erro)) return { tipo: 'pendente' };
+    await database.write(() => acao.destroyPermanently());
+    await apagarFotosDaAcao(caminhosDasFotos(payload));
+    return { tipo: 'recusado', codigo: erro.codigo, mensagem: erro.message };
   }
+  return (await confirmarEnvio(database, acao, caminhosDasFotos(payload)))
+    ? { tipo: 'enviada' }
+    : { tipo: 'pendente' };
+}
+
+/**
+ * Atestado: mesmo caminho da avaria (fila antes da rede, fotos em arquivo,
+ * idempotente por `idCliente` no servidor). Sem nenhuma foto legível o envio
+ * seria recusado — atestado sem documento não é analisável —, então nem vai.
+ */
+export async function executarAcaoAtestado(
+  database: Database,
+  payload: PayloadAtestadoNaFila,
+): Promise<ResultadoAtestado> {
+  const acao = await enfileirarComFotos(database, 'atestado', payload);
+
+  try {
+    const corpo = await montarCorpoAtestado(payload);
+    if (corpo === null) {
+      await database.write(() => acao.destroyPermanently());
+      return {
+        tipo: 'recusado',
+        codigo: CODIGO_ATESTADO_SEM_FOTOS,
+        mensagem: MENSAGEM_ATESTADO_SEM_FOTOS,
+      };
+    }
+    await enviarAtestado(corpo);
+  } catch (erro) {
+    if (!ehRecusaDoServidor(erro)) return { tipo: 'pendente' };
+    await database.write(() => acao.destroyPermanently());
+    await apagarFotosDaAcao(caminhosDasFotos(payload));
+    return { tipo: 'recusado', codigo: erro.codigo, mensagem: erro.message };
+  }
+  return (await confirmarEnvio(database, acao, caminhosDasFotos(payload)))
+    ? { tipo: 'enviado' }
+    : { tipo: 'pendente' };
 }

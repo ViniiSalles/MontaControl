@@ -13,6 +13,7 @@ import {
   reiniciarStatusDaSincronizacao,
 } from '../../sincronizacao/statusDaSincronizacao';
 import { useHistoricoPontos } from '../useHistoricoPontos';
+import { AGORA_FIXO_MS, fixarRelogio, soltarRelogio } from './relogioFixo';
 
 jest.mock('../../auth/armazenamentoSessao', () => ({
   salvarSessao: jest.fn().mockResolvedValue(undefined),
@@ -22,11 +23,10 @@ const fetchMock = jest.fn();
 
 // Turno de 8h encerrado há poucas horas — precisa cair dentro da janela de
 // `janelaDoPeriodo` calculada a partir de "agora" (a leitura filtra pelo
-// relógio real), então a fixture não pode usar uma data fixa no passado.
+// relógio, fixo em 14:00 de SP no teste, então a fixture é relativa a ele.
 // Mesma base (`AGORA_MS`) pras duas pontas: `minutosDaJornada` descarta
-// segundos — com `Date.now()` chamado duas vezes, o jitter entre as chamadas
-// vira 479 em vez de 480 de tempos em tempos.
-const AGORA_MS = Date.now();
+// segundos.
+const AGORA_MS = AGORA_FIXO_MS;
 const CHECKOUT_HA_1H = new Date(AGORA_MS - 60 * 60 * 1000).toISOString();
 const CHECKIN_HA_9H = new Date(AGORA_MS - 9 * 60 * 60 * 1000).toISOString();
 const CHECKIN_HA_10_DIAS = new Date(AGORA_MS - 10 * 24 * 60 * 60 * 1000).toISOString();
@@ -34,7 +34,12 @@ const CHECKOUT_HA_10_DIAS = new Date(AGORA_MS - 10 * 24 * 60 * 60 * 1000 + 8 * 3
 
 const turnoDeHoje = () => linhaDeJornada({ checkin_at: CHECKIN_HA_9H, checkout_at: CHECKOUT_HA_1H });
 
+afterEach(() => {
+  soltarRelogio();
+});
+
 beforeEach(() => {
+  fixarRelogio();
   jest.clearAllMocks();
   fetchMock.mockReset();
   globalThis.fetch = fetchMock;

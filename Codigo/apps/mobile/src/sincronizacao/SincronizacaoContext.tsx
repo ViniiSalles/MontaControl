@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Q } from '@nozbe/watermelondb';
 import { AcaoPendente } from '../db/AcaoPendente';
 import { useDatabaseOuFalha } from '../db/useDatabase';
+import { apagarFotosDaAcao, caminhosDasFotosDaAcao } from './payloadsDaFila';
 import { iniciarSincronizacao } from './syncManager';
 
 export interface EstadoSincronizacao {
@@ -63,6 +64,11 @@ export function ProvedorSincronizacao({ children }: { children: ReactNode }) {
         // Acumula: um aviso ainda não dispensado não pode se perder porque outra
         // ação foi recusada depois (a linha da primeira já foi apagada da fila).
         if (novos.length > 0) setAvisos((anteriores) => [...anteriores, ...novos]);
+        // A drenagem já apaga as fotos ao descartar; aqui é a rede de segurança
+        // para um app que morreu entre marcar o descarte e apagar o arquivo.
+        void apagarFotosDaAcao(
+          registros.flatMap((registro) => caminhosDasFotosDaAcao(registro.payload)),
+        );
         // Sem o apagamento a linha só reaparece na próxima emissão (já deduplicada).
         void database
           .write(() =>

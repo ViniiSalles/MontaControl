@@ -1,4 +1,4 @@
-import type { EnviarAtestadoRequest, FotoBase64 } from '@montacontrol/shared';
+import type { PayloadAtestadoNaFila } from '../sincronizacao/payloadsDaFila';
 
 export { mascararData } from '../jornada/pontoEmAtraso';
 
@@ -18,8 +18,8 @@ export type ErrosNovoAtestado = Partial<Record<'dataInicio' | 'dataFim' | 'fotos
 
 export interface ResultadoValidacaoAtestado {
   erros: ErrosNovoAtestado;
-  /** Corpo pronto para `enviarAtestado`, sem o `idCliente` (é do aparelho). Nulo se inválido. */
-  dados: Omit<EnviarAtestadoRequest, 'idCliente'> | null;
+  /** O que vai para a fila, sem o `idCliente` (é do aparelho): fotos como caminhos de arquivo. Nulo se inválido. */
+  dados: Omit<PayloadAtestadoNaFila, 'idCliente' | 'fotos'> | null;
 }
 
 /** `"26/08/2026"` → `"2026-08-26"`, ou `null` se não for uma data de calendário real. */
@@ -43,7 +43,7 @@ function paraDataIso(texto: string): string | null {
  */
 export function validarEnvioAtestado(
   campos: CamposNovoAtestado,
-  fotos: readonly FotoBase64[],
+  fotosCaminhos: readonly string[],
 ): ResultadoValidacaoAtestado {
   const erros: ErrosNovoAtestado = {};
 
@@ -56,7 +56,7 @@ export function validarEnvioAtestado(
     erros.dataFim = 'A data final não pode ser anterior à inicial.';
   }
 
-  if (fotos.length === 0) erros.fotos = 'Anexe ao menos uma foto do atestado.';
+  if (fotosCaminhos.length === 0) erros.fotos = 'Anexe ao menos uma foto do atestado.';
 
   const observacao = campos.observacao.trim();
   if (observacao.length > LIMITE_OBSERVACAO) {
@@ -67,6 +67,11 @@ export function validarEnvioAtestado(
 
   return {
     erros,
-    dados: { dataInicio, dataFim, fotos: [...fotos], ...(observacao ? { observacao } : {}) },
+    dados: {
+      dataInicio,
+      dataFim,
+      fotosCaminhos: [...fotosCaminhos],
+      ...(observacao ? { observacao } : {}),
+    },
   };
 }
