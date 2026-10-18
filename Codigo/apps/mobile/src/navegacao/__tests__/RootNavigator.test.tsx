@@ -14,7 +14,10 @@ jest.mock('../../auth/armazenamentoSessao');
 // `arvore()` abaixo). Sem mock, `unsafeResetDatabase()` bateria no stub de
 // `SQLiteAdapter` do `jest.setup.js` (que só existe para o import não
 // quebrar) e derrubaria o teste de logout.
-jest.mock('../../db/database', () => ({ limparBancoLocal: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('../../db/database', () => ({
+  limparBancoLocal: jest.fn().mockResolvedValue(undefined),
+  limparEspelhoBancoLocal: jest.fn().mockResolvedValue(undefined),
+}));
 
 const armazenamentoMock = jest.mocked(armazenamento);
 

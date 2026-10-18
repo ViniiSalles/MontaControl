@@ -82,3 +82,42 @@ export async function limparSessao(): Promise<void> {
     }),
   );
 }
+
+/**
+ * Quem é o dono da fila de ações pendentes (`acoes_pendentes`) quando a sessão
+ * é encerrada à força (refresh recusado): a fila é mantida no aparelho para
+ * não perder marcações de ponto, e este marcador impede que ela seja enviada
+ * sob o token de outro montador. Só o id do usuário — nada sensível.
+ * Resolvido no próximo login (`AuthContext`); logout explícito apaga os dois.
+ */
+const CHAVE_DONO_DA_FILA = 'mc.fila.dono.v1';
+
+export async function lerDonoDaFila(): Promise<number | null> {
+  try {
+    const bruto = await SecureStore.getItemAsync(CHAVE_DONO_DA_FILA);
+    if (!bruto) return null;
+
+    const analisado = JSON.parse(bruto) as { usuarioId?: unknown } | null;
+    return typeof analisado?.usuarioId === 'number' ? analisado.usuarioId : null;
+  } catch {
+    return null;
+  }
+}
+
+/** `false` se não conseguiu gravar: sem o marcador a fila não pode ser preservada com segurança. */
+export async function registrarDonoDaFila(usuarioId: number): Promise<boolean> {
+  try {
+    await SecureStore.setItemAsync(CHAVE_DONO_DA_FILA, JSON.stringify({ usuarioId }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function limparDonoDaFila(): Promise<void> {
+  try {
+    await SecureStore.deleteItemAsync(CHAVE_DONO_DA_FILA);
+  } catch {
+    // Nada a fazer.
+  }
+}

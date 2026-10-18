@@ -1,5 +1,12 @@
 import * as SecureStore from 'expo-secure-store';
-import { lerSessao, limparSessao, salvarSessao } from '../armazenamentoSessao';
+import {
+  lerDonoDaFila,
+  lerSessao,
+  limparDonoDaFila,
+  limparSessao,
+  registrarDonoDaFila,
+  salvarSessao,
+} from '../armazenamentoSessao';
 import { montador } from './apoio';
 
 jest.mock('expo-secure-store', () => ({
@@ -66,5 +73,46 @@ describe('armazenamentoSessao', () => {
 
     await expect(salvarSessao(SESSAO)).resolves.toBeUndefined();
     await expect(limparSessao()).resolves.toBeUndefined();
+  });
+});
+
+describe('dono da fila', () => {
+  test('registra só o id do usuário, na chave versionada mc.fila.dono.v1', async () => {
+    await expect(registrarDonoDaFila(7)).resolves.toBe(true);
+
+    expect(secureStore.setItemAsync).toHaveBeenCalledWith(
+      'mc.fila.dono.v1',
+      JSON.stringify({ usuarioId: 7 }),
+    );
+  });
+
+  test('lê de volta o id guardado', async () => {
+    secureStore.getItemAsync.mockResolvedValue(JSON.stringify({ usuarioId: 7 }));
+
+    await expect(lerDonoDaFila()).resolves.toBe(7);
+    expect(secureStore.getItemAsync).toHaveBeenCalledWith('mc.fila.dono.v1');
+  });
+
+  test('sem marcador, JSON corrompido ou SecureStore indisponível devolvem null', async () => {
+    await expect(lerDonoDaFila()).resolves.toBeNull();
+
+    secureStore.getItemAsync.mockResolvedValue('{quebrado');
+    await expect(lerDonoDaFila()).resolves.toBeNull();
+
+    secureStore.getItemAsync.mockResolvedValue(JSON.stringify({ usuarioId: 'x' }));
+    await expect(lerDonoDaFila()).resolves.toBeNull();
+
+    secureStore.getItemAsync.mockRejectedValue(new Error('keystore indisponível'));
+    await expect(lerDonoDaFila()).resolves.toBeNull();
+  });
+
+  test('limpar apaga a chave; falha ao gravar (devolve false) ou limpar não derruba o app', async () => {
+    await limparDonoDaFila();
+    expect(secureStore.deleteItemAsync).toHaveBeenCalledWith('mc.fila.dono.v1');
+
+    secureStore.setItemAsync.mockRejectedValue(new Error('sem keystore'));
+    secureStore.deleteItemAsync.mockRejectedValue(new Error('sem keystore'));
+    await expect(registrarDonoDaFila(7)).resolves.toBe(false);
+    await expect(limparDonoDaFila()).resolves.toBeUndefined();
   });
 });

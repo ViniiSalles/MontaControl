@@ -31,3 +31,9 @@ export async function lembrarObraDaJornada(database: Database, pedidoId: number)
 export async function lerObraDaJornada(database: Database): Promise<number | null> {
   return (await database.localStorage.get(CHAVE_OBRA_DA_JORNADA)) ?? null;
 }
+
+/** Apaga a cópia local das obras e a obra da jornada aberta (réplica do servidor). */
+export async function limparObrasLocais(database: Database): Promise<void> {
+  await database.localStorage.remove(CHAVE_OBRAS);
+  await database.localStorage.remove(CHAVE_OBRA_DA_JORNADA);
+}

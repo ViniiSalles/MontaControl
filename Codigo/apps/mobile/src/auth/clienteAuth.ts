@@ -17,18 +17,29 @@ export class ErroAutenticacao extends Error {
 }
 
 /**
- * Teto de espera das chamadas feitas durante o boot (`/auth/me`, `/auth/refresh`).
- * A splash nativa só some quando a restauração termina, e o `fetch` do RN não
- * tem timeout próprio: contra um host inalcançável (API fora do ar, firewall
- * descartando pacotes, IP da rede mudou) ele espera o timeout do SO — minutos
- * de tela em branco. Estourar aqui cai no ramo de "falha de rede", que segue
- * para o Login preservando os tokens.
+ * Teto de espera da revalidação de `GET /auth/me` (boot e segundo plano). O
+ * `fetch` do RN não tem timeout próprio: contra um host inalcançável (API fora
+ * do ar, firewall descartando pacotes, IP da rede mudou) ele espera o timeout
+ * do SO, minutos. Estourar aqui cai no ramo de "falha de rede": a sessão
+ * guardada é mantida e o app segue usável (o boot já não espera pela rede).
  */
-export const TIMEOUT_REDE_BOOT_MS = 5000;
+export const TIMEOUT_REVALIDACAO_MS = 5000;
 
-async function fetchComTimeout(url: string, init: RequestInit = {}): Promise<Response> {
+/**
+ * Teto de espera de `POST /auth/refresh`. Roda em segundo plano, quando uma
+ * chamada autenticada tomou 401 — não segura nenhuma tela, e em rede ruim de
+ * campo ele precisa de mais fôlego que a revalidação. Estourar é falha de
+ * rede: a sessão fica e a ação segue pendente para a próxima tentativa.
+ */
+export const TIMEOUT_REFRESH_MS = 20000;
+
+async function fetchComTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
   const controlador = new AbortController();
-  const temporizador = setTimeout(() => controlador.abort(), TIMEOUT_REDE_BOOT_MS);
+  const temporizador = setTimeout(() => controlador.abort(), timeoutMs);
   try {
     return await fetch(url, { ...init, signal: controlador.signal });
   } finally {
@@ -67,9 +78,11 @@ export async function entrarComCredenciais(email: string, senha: string): Promis
  * só quando o token expirar.
  */
 export async function buscarUsuarioAtual(accessToken: string): Promise<UsuarioDTO> {
-  const resposta = await fetchComTimeout(`${urlBaseApi}/api/auth/me`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  const resposta = await fetchComTimeout(
+    `${urlBaseApi}/api/auth/me`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+    TIMEOUT_REVALIDACAO_MS,
+  );
 
   // TI02: token expirado devolve 401 e o app precisa distinguir isso de um
   // erro de rede, para tentar o refresh antes de exigir novo login.
@@ -87,14 +100,19 @@ export async function buscarUsuarioAtual(accessToken: string): Promise<UsuarioDT
  * — lançam um erro comum (tratado como falha de rede) e a sessão é mantida.
  */
 export async function renovarSessao(refreshToken: string): Promise<LoginResponse> {
-  const resposta = await fetchComTimeout(`${urlBaseApi}/api/auth/refresh`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refreshToken }),
-  });
+  const resposta = await fetchComTimeout(
+    `${urlBaseApi}/api/auth/refresh`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    },
+    TIMEOUT_REFRESH_MS,
+  );
 
   if (!resposta.ok) {
-    const recusado = resposta.status >= 400 && resposta.status < 500 && ![408, 429].includes(resposta.status);
+    const recusado =
+      resposta.status >= 400 && resposta.status < 500 && ![408, 429].includes(resposta.status);
     if (recusado) throw new ErroNaoAutorizado('Refresh token inválido ou expirado');
     throw new Error(`Não foi possível renovar a sessão agora (HTTP ${resposta.status}).`);
   }

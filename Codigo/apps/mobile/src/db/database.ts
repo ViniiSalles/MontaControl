@@ -4,6 +4,7 @@ import { schema } from './schema';
 import { Jornada } from './Jornada';
 import { BancoHoras } from './BancoHoras';
 import { AcaoPendente } from './AcaoPendente';
+import { limparEspelhoLocal } from './limparEspelho';
 
 const adapter = new SQLiteAdapter({
   schema,
@@ -21,10 +22,19 @@ export const database = new Database({
 });
 
 /**
- * Apaga todo o espelho local. Chamado no logout (`AuthContext.sair`) — sem
- * isto, um segundo montador que logar no mesmo aparelho veria o espelho de
- * jornada do anterior até a primeira sincronização.
+ * Apaga TUDO, inclusive a fila de ações pendentes. Chamado no logout
+ * explícito (`AuthContext.sair`) e quando outro usuário entra no aparelho —
+ * sem isto, um segundo montador veria o espelho de jornada do anterior (ou
+ * enviaria as ações dele).
  */
 export async function limparBancoLocal(): Promise<void> {
   await database.write(() => database.unsafeResetDatabase());
+}
+
+/**
+ * Apaga a réplica do servidor e mantém a fila de ações pendentes. Usado na
+ * expiração forçada da sessão (refresh recusado), ver `db/limparEspelho`.
+ */
+export async function limparEspelhoBancoLocal(): Promise<void> {
+  await limparEspelhoLocal(database);
 }
