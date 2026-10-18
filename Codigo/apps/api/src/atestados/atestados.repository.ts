@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import type { AtestadoDTO } from '@montacontrol/shared';
-import type { PeriodoAbonado } from '@montacontrol/shared';
+import type {
+  PeriodoAbonado,
+  StatusAtestado as StatusAtestadoCompartilhado,
+} from '@montacontrol/shared';
 import { StatusAtestado } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -33,6 +36,20 @@ export interface DadosAnalise {
 /** O detalhe do RH precisa dos caminhos do bucket; o DTO público, nunca. */
 export interface AtestadoComFotos extends AtestadoDTO {
   fotos: Array<{ id: number; storagePath: string }>;
+}
+
+/** Atestado como o pull de sincronização o consome (sem fotos, sem dados de terceiros). */
+export interface AtestadoParaSync {
+  id: number;
+  idCliente: string;
+  /** Coluna `DATE`: meia-noite UTC do dia civil. */
+  dataInicio: Date;
+  dataFim: Date;
+  observacao: string | null;
+  status: StatusAtestadoCompartilhado;
+  motivoRejeicao: string | null;
+  validadoEm: Date | null;
+  criadoEm: Date;
 }
 
 @Injectable()
@@ -132,5 +149,47 @@ export class AtestadosRepository {
       select: SELECAO_ATESTADO,
     });
     return paraAtestadoDTO(linha);
+  }
+
+  /**
+   * Linhas do pull de sincronização: atestados do usuário criados a partir de
+   * `janelaDesde` e, no pull incremental, alterados depois de `alteradosDesde`
+   * (a validação/rejeição do RH muda `updated_at`).
+   */
+  async listarParaSync(
+    usuarioId: number,
+    janelaDesde: Date,
+    alteradosDesde?: Date,
+  ): Promise<AtestadoParaSync[]> {
+    const linhas = await this.prisma.atestado.findMany({
+      where: {
+        usuarioId,
+        createdAt: { gte: janelaDesde },
+        updatedAt: alteradosDesde ? { gt: alteradosDesde } : undefined,
+      },
+      orderBy: { id: 'asc' },
+      select: {
+        id: true,
+        idCliente: true,
+        dataInicio: true,
+        dataFim: true,
+        observacao: true,
+        status: true,
+        motivoRejeicao: true,
+        validadoAt: true,
+        createdAt: true,
+      },
+    });
+    return linhas.map((linha) => ({
+      id: linha.id,
+      idCliente: linha.idCliente,
+      dataInicio: linha.dataInicio,
+      dataFim: linha.dataFim,
+      observacao: linha.observacao,
+      status: linha.status as unknown as StatusAtestadoCompartilhado,
+      motivoRejeicao: linha.motivoRejeicao,
+      validadoEm: linha.validadoAt,
+      criadoEm: linha.createdAt,
+    }));
   }
 }

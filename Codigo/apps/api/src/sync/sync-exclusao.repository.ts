@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { TABELAS_SYNC } from '@montacontrol/shared';
+import type { TabelaSync } from '@montacontrol/shared';
 import { PrismaTransacao } from '../prisma/prisma-transacao';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -8,9 +10,15 @@ import { PrismaService } from '../prisma/prisma.service';
  * texto e `usuarioId` o dono do aparelho (`null` = vale para todos).
  */
 export interface NovaExclusao {
-  entidade: string;
+  entidade: TabelaSync;
   registroId: string;
   usuarioId: number | null;
+}
+
+/** Exclusão como o pull a lê: o dono já foi filtrado na consulta. */
+export interface ExclusaoParaSync {
+  entidade: TabelaSync;
+  registroId: string;
 }
 
 /**
@@ -22,7 +30,7 @@ export class SyncExclusaoRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async registrar(
-    entidade: string,
+    entidade: TabelaSync,
     registroId: string,
     usuarioId: number | null,
     tx?: PrismaTransacao,
@@ -42,5 +50,23 @@ export class SyncExclusaoRepository {
         usuarioId,
       })),
     });
+  }
+
+  /**
+   * Exclusões que o aparelho do usuário ainda não viu: as dele e as globais
+   * (`usuario_id` nulo) gravadas depois de `desde`. Só tabelas replicadas.
+   */
+  async listarDesde(usuarioId: number, desde: Date): Promise<ExclusaoParaSync[]> {
+    const linhas = await this.prisma.syncExclusao.findMany({
+      where: {
+        excluidoEm: { gt: desde },
+        OR: [{ usuarioId }, { usuarioId: null }],
+        entidade: { in: [...TABELAS_SYNC] },
+      },
+      orderBy: { id: 'asc' },
+      select: { entidade: true, registroId: true },
+    });
+    // O filtro `in` garante o valor; a coluna é `String` no schema.
+    return linhas as ExclusaoParaSync[];
   }
 }

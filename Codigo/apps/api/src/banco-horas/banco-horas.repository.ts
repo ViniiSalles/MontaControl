@@ -12,6 +12,22 @@ export interface DadosBancoHoras {
   saldo: number;
 }
 
+/** Saldo mensal como o pull de sincronização o consome. */
+export interface BancoHorasParaSync {
+  id: number;
+  mes: number;
+  ano: number;
+  horasTrabalhadas: number;
+  horasPrevistas: number;
+  saldo: number;
+}
+
+/** Primeira competência (mês/ano) que a réplica carrega. */
+export interface CompetenciaInicial {
+  ano: number;
+  mes: number;
+}
+
 @Injectable()
 export class BancoHorasRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -44,5 +60,33 @@ export class BancoHorasRepository {
       select: SELECAO_BANCO_HORAS,
     });
     return paraBancoHorasDTO(linha);
+  }
+
+  /**
+   * Linhas do pull de sincronização: competências do usuário de `inicial` em
+   * diante e, no pull incremental, alteradas depois de `alteradosDesde`.
+   */
+  async listarParaSync(
+    usuarioId: number,
+    inicial: CompetenciaInicial,
+    alteradosDesde?: Date,
+  ): Promise<BancoHorasParaSync[]> {
+    const linhas = await this.prisma.bancoHoras.findMany({
+      where: {
+        usuarioId,
+        OR: [{ ano: { gt: inicial.ano } }, { ano: inicial.ano, mes: { gte: inicial.mes } }],
+        updatedAt: alteradosDesde ? { gt: alteradosDesde } : undefined,
+      },
+      orderBy: [{ ano: 'asc' }, { mes: 'asc' }],
+      select: SELECAO_BANCO_HORAS,
+    });
+    return linhas.map((linha) => ({
+      id: linha.id,
+      mes: linha.mes,
+      ano: linha.ano,
+      horasTrabalhadas: linha.horasTrabalhadas.toNumber(),
+      horasPrevistas: linha.horasPrevistas.toNumber(),
+      saldo: linha.saldo.toNumber(),
+    }));
   }
 }

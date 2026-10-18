@@ -18,6 +18,7 @@ import { PecasModule } from './pecas/pecas.module';
 import { PedidosModule } from './pedidos/pedidos.module';
 import { PontosEmAtrasoModule } from './pontos-em-atraso/pontos-em-atraso.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { SyncModule } from './sync/sync.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { PrismaModule } from './prisma/prisma.module';
     PecasModule,
     AvariasModule,
     EquipesModule,
+    SyncModule,
   ],
   controllers: [HealthController],
   providers: [

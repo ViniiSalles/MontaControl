@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { AvariaDTO } from '@montacontrol/shared';
+import type { AvariaDTO, StatusAvaria as StatusAvariaCompartilhado } from '@montacontrol/shared';
 import { Perfil, StatusAvaria } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 import { paraAvariaDTO, SELECAO_AVARIA, SELECAO_AVARIA_DETALHADA } from './avaria-mapper';
@@ -37,6 +37,26 @@ export interface DadosAnaliseAvaria {
 export interface AvariaComFotos extends AvariaDTO {
   analisadaPorNome: string | null;
   fotos: Array<{ id: number; storagePath: string }>;
+}
+
+/**
+ * Avaria do próprio registrador como o pull de sincronização a consome. Os
+ * rótulos da peça, do ambiente e do pedido são cópia (snapshot): a avaria
+ * continua na réplica depois que o montador perde o acesso ao pedido.
+ */
+export interface AvariaParaSync {
+  id: number;
+  idCliente: string | null;
+  pecaId: number;
+  pecaDescricao: string;
+  ambienteNome: string;
+  numeroPedido: string;
+  tipoAvariaId: number;
+  descricao: string;
+  status: StatusAvariaCompartilhado;
+  analisadaEm: Date | null;
+  parecer: string | null;
+  criadoEm: Date;
 }
 
 @Injectable()
@@ -124,5 +144,56 @@ export class AvariasRepository {
       select: SELECAO_AVARIA,
     });
     return paraAvariaDTO(linha);
+  }
+
+  /**
+   * Linhas do pull de sincronização: avarias registradas por `usuarioId`
+   * (nunca as de outros) criadas a partir de `janelaDesde` e, no pull
+   * incremental, alteradas depois de `alteradosDesde`. Sem fotos.
+   */
+  async listarParaSync(
+    usuarioId: number,
+    janelaDesde: Date,
+    alteradosDesde?: Date,
+  ): Promise<AvariaParaSync[]> {
+    const linhas = await this.prisma.avaria.findMany({
+      where: {
+        registradaPor: usuarioId,
+        createdAt: { gte: janelaDesde },
+        updatedAt: alteradosDesde ? { gt: alteradosDesde } : undefined,
+      },
+      orderBy: { id: 'asc' },
+      select: {
+        id: true,
+        idCliente: true,
+        pecaId: true,
+        tipoAvariaId: true,
+        descricao: true,
+        status: true,
+        analisadaAt: true,
+        parecer: true,
+        createdAt: true,
+        peca: {
+          select: {
+            descricao: true,
+            ambiente: { select: { nome: true, pedido: { select: { numeroPedido: true } } } },
+          },
+        },
+      },
+    });
+    return linhas.map((linha) => ({
+      id: linha.id,
+      idCliente: linha.idCliente,
+      pecaId: linha.pecaId,
+      pecaDescricao: linha.peca.descricao,
+      ambienteNome: linha.peca.ambiente.nome,
+      numeroPedido: linha.peca.ambiente.pedido.numeroPedido,
+      tipoAvariaId: linha.tipoAvariaId,
+      descricao: linha.descricao,
+      status: linha.status as unknown as StatusAvariaCompartilhado,
+      analisadaEm: linha.analisadaAt,
+      parecer: linha.parecer,
+      criadoEm: linha.createdAt,
+    }));
   }
 }

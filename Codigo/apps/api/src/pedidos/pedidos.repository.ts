@@ -50,6 +50,35 @@ function vinculoDoMontador(usuarioId: number) {
   };
 }
 
+/** Pedido atribuído ao montador, com o cliente (local da obra) desnormalizado, como o pull o consome. */
+export interface PedidoParaSync {
+  id: number;
+  numeroPedido: string;
+  status: StatusPedido;
+  clienteId: number;
+  clienteNome: string;
+  clienteEndereco: string;
+  clienteCidade: string;
+  clienteEstado: string;
+  clienteLatitude: number;
+  clienteLongitude: number;
+}
+
+/**
+ * Pedidos que a réplica do montador contém: SOMENTE os atribuídos a ele
+ * (`pedido_montador`). Diferente de `vinculoDoMontador`, uma jornada não dá
+ * visibilidade — o pull e as exclusões (tombstones da desalocação) precisam
+ * concordar sobre quando um pedido some da réplica.
+ */
+function atribuidoAoMontador(usuarioId: number) {
+  return { montadores: { some: { usuarioId } } };
+}
+
+/** O montador foi atribuído depois de `desde`: o pedido antigo passa a ficar visível. */
+function atribuidoDepoisDe(usuarioId: number, desde: Date) {
+  return { montadores: { some: { usuarioId, createdAt: { gt: desde } } } };
+}
+
 @Injectable()
 export class PedidosRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -249,6 +278,11 @@ export class PedidosRepository {
     tx?: PrismaTransacao,
   ): Promise<number[]> {
     const executar = async (cliente: PrismaTransacao): Promise<number[]> => {
+      // Corrida aceita (READ COMMITTED): a leitura de `saindo` e o `deleteMany` não
+      // são atômicos entre si. Duas atribuições simultâneas ao mesmo pedido podem
+      // deixar o conjunto final de uma delas e perder o tombstone de quem a outra
+      // removeu; o gestor reabre a tela e reatribui. Sem trava de linha de propósito:
+      // atribuir montador é ação rara e manual de um único gestor por vez.
       const saindo = await cliente.pedidoMontador.findMany({
         where: { pedidoId, usuarioId: { notIn: usuarioIds } },
         select: { usuarioId: true },
@@ -293,5 +327,56 @@ export class PedidosRepository {
       where: { id, status: StatusPedidoPrisma.AGUARDANDO },
       data: { status: StatusPedidoPrisma.EM_TRIAGEM },
     });
+  }
+
+  /**
+   * Linhas do pull de sincronização: pedidos atribuídos ao montador. No pull
+   * incremental, só os que mudaram depois de `alteradosDesde`: o próprio
+   * pedido, o cliente ou a atribuição (`pedido_montador.created_at`).
+   */
+  async listarParaSync(usuarioId: number, alteradosDesde?: Date): Promise<PedidoParaSync[]> {
+    const linhas = await this.prisma.pedido.findMany({
+      where: {
+        ...atribuidoAoMontador(usuarioId),
+        ...(alteradosDesde
+          ? {
+              OR: [
+                { updatedAt: { gt: alteradosDesde } },
+                { cliente: { updatedAt: { gt: alteradosDesde } } },
+                atribuidoDepoisDe(usuarioId, alteradosDesde),
+              ],
+            }
+          : {}),
+      },
+      orderBy: { id: 'asc' },
+      select: {
+        id: true,
+        numeroPedido: true,
+        status: true,
+        cliente: {
+          select: {
+            id: true,
+            nome: true,
+            endereco: true,
+            cidade: true,
+            estado: true,
+            latitude: true,
+            longitude: true,
+          },
+        },
+      },
+    });
+    return linhas.map((linha) => ({
+      id: linha.id,
+      numeroPedido: linha.numeroPedido,
+      status: linha.status as unknown as StatusPedido,
+      clienteId: linha.cliente.id,
+      clienteNome: linha.cliente.nome,
+      clienteEndereco: linha.cliente.endereco,
+      clienteCidade: linha.cliente.cidade,
+      clienteEstado: linha.cliente.estado,
+      clienteLatitude: linha.cliente.latitude.toNumber(),
+      clienteLongitude: linha.cliente.longitude.toNumber(),
+    }));
   }
 }
