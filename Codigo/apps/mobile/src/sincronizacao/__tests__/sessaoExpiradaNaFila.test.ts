@@ -16,7 +16,7 @@ import { criarBancoDeTeste } from '../../db/__tests__/apoio';
 import { AcaoPendente } from '../../db/AcaoPendente';
 import { ErroApi } from '../../http/erroApi';
 import { enviarCheckin, enviarSolicitacaoPonto } from '../../jornada/clienteJornadas';
-import { queryJornadaAtual } from '../../jornada/espelhoJornada';
+import { lerJornadasComPendentes } from '../../jornada/jornadasComPendentes';
 import { executarAcaoAvaria, executarAcaoJornada, executarAcaoPontoEmAtraso } from '../outbox';
 import { drenarFila } from '../syncManager';
 
@@ -169,7 +169,7 @@ describe('drenarFila com 401', () => {
 });
 
 describe('envio imediato (outbox) com 401', () => {
-  test('check-in com 401 não perde a marcação: fica na fila e o registro otimista permanece', async () => {
+  test('check-in com 401 não perde a marcação: fica na fila e continua aparecendo na tela', async () => {
     const database = criarBancoDeTeste();
     enviarCheckinMock.mockRejectedValue(erro401());
 
@@ -177,7 +177,7 @@ describe('envio imediato (outbox) com 401', () => {
 
     expect(resultado.tipo).toBe('ok');
     expect(await acoesComStatus(database, 'pendente')).toHaveLength(1);
-    expect(await queryJornadaAtual(database).fetch()).toHaveLength(1);
+    expect(await lerJornadasComPendentes(database)).toHaveLength(1);
   });
 
   test('ponto em atraso com 401 fica na fila', async () => {
@@ -196,7 +196,7 @@ describe('envio imediato (outbox) com 401', () => {
     expect(await acoesComStatus(database, 'pendente')).toHaveLength(1);
   });
 
-  test('check-in recusado com 422 continua descartando a ação e revertendo o registro otimista', async () => {
+  test('check-in recusado com 422 continua descartando a ação, que também some da tela', async () => {
     const database = criarBancoDeTeste();
     enviarCheckinMock.mockRejectedValue(new ErroApi('FORA_DO_RAIO', 'Fora do raio.', 422));
 
@@ -204,7 +204,7 @@ describe('envio imediato (outbox) com 401', () => {
 
     expect(resultado).toEqual({ tipo: 'recusado', codigo: 'FORA_DO_RAIO' });
     expect(await acoesComStatus(database, 'pendente')).toHaveLength(0);
-    expect(await queryJornadaAtual(database).fetch()).toHaveLength(0);
+    expect(await lerJornadasComPendentes(database)).toHaveLength(0);
   });
 
   test('avaria recusada com 422 continua saindo da fila, com a mensagem do servidor', async () => {

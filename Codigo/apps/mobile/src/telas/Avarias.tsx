@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { View } from 'react-native';
-import type { AvariaDTO } from '@montacontrol/shared';
 import { cores, espacamento, espacamentoNomeado } from '@montacontrol/design-tokens/native';
 import { Alerta } from '../ui/Alerta';
 import { Badge } from '../ui/Badge';
@@ -10,20 +9,27 @@ import { Carregando } from '../ui/Carregando';
 import { Tela } from '../ui/Tela';
 import { Texto } from '../ui/Texto';
 import { ROTULO_STATUS_AVARIA, VARIANTE_STATUS_AVARIA } from '../avarias/rotulos';
+import type { AvariaExibida } from '../avarias/avariasComPendentes';
 import { useDadosAvarias } from '../avarias/useDadosAvarias';
+import { useSincronizacaoStore } from '../estado/sincronizacaoStore';
+import { AvisosDeAcoesRecusadas } from './AvisosDeAcoesRecusadas';
 import { NovaAvaria } from './avarias/NovaAvaria';
 
-function ItemHistorico({ avaria }: { avaria: AvariaDTO }) {
+function ItemHistorico({ avaria }: { avaria: AvariaExibida }) {
   return (
     <View style={{ gap: espacamento[8] }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: espacamento[12] }}>
         <View style={{ flex: 1 }}>
           <Texto variante="titleMd">{avaria.descricaoPeca}</Texto>
           <Texto variante="bodySm" cor={cores.onSurfaceVariant}>
-            {avaria.tipoAvaria} · {avaria.numeroPedido} · {avaria.ambiente}
+            {[avaria.tipoAvaria, avaria.numeroPedido, avaria.ambiente].filter(Boolean).join(' · ')}
           </Texto>
         </View>
-        <Badge variante={VARIANTE_STATUS_AVARIA[avaria.status]} texto={ROTULO_STATUS_AVARIA[avaria.status]} />
+        {avaria.aguardandoEnvio ? (
+          <Badge variante="aviso" texto="Aguardando envio" />
+        ) : (
+          <Badge variante={VARIANTE_STATUS_AVARIA[avaria.status]} texto={ROTULO_STATUS_AVARIA[avaria.status]} />
+        )}
       </View>
       {avaria.parecer && (
         <Texto variante="bodyMd" cor={cores.onSurfaceVariant}>
@@ -37,6 +43,7 @@ function ItemHistorico({ avaria }: { avaria: AvariaDTO }) {
 /** Reporte de problemas com peças pelo montador em campo e acompanhamento da análise do gestor. */
 export function Avarias() {
   const { pedidos, tipos, avarias, carregando, erro, recarregar } = useDadosAvarias();
+  const sincronizando = useSincronizacaoStore((estado) => estado.sincronizando);
   const [aviso, setAviso] = useState<string | null>(null);
 
   function aoEnviado(mensagem: string) {
@@ -57,12 +64,13 @@ export function Avarias() {
             forma="pilula"
             icone="sync"
             rotuloAcessivel="Atualizar"
-            carregando={carregando}
+            carregando={sincronizando}
             aoPressionar={() => void recarregar()}
           />
         </View>
 
         {aviso && <Alerta variante="sucesso" mensagem={aviso} />}
+        <AvisosDeAcoesRecusadas />
 
         {carregando ? (
           <View style={{ alignItems: 'center', paddingVertical: espacamento[32] }}>
@@ -73,7 +81,7 @@ export function Avarias() {
             <Alerta
               variante="erro"
               titulo="Não foi possível carregar"
-              mensagem="Verifique a internet e tente de novo."
+              mensagem="Ainda não há dados no aparelho. Conecte-se à internet e tente de novo."
             />
             <Botao
               variante="tonal"
@@ -111,7 +119,7 @@ export function Avarias() {
             ) : (
               <View style={{ gap: espacamento[12] }}>
                 {avarias.map((avaria) => (
-                  <Cartao key={avaria.id} elevacao="elev1" tom="baixo" conteudo={<ItemHistorico avaria={avaria} />} />
+                  <Cartao key={avaria.chave} elevacao="elev1" tom="baixo" conteudo={<ItemHistorico avaria={avaria} />} />
                 ))}
               </View>
             )}

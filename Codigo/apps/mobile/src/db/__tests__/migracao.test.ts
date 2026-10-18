@@ -11,8 +11,8 @@ import { AcaoPendente } from '../AcaoPendente';
 import { Pedido } from '../Pedido';
 
 /**
- * Cópia congelada do schema v1 (o que está nos aparelhos hoje). NÃO editar:
- * é a "versão antiga" do teste de migração.
+ * Cópia congelada do schema v1 (o primeiro que foi para os aparelhos). NÃO
+ * editar: é a "versão antiga" do teste de migração.
  */
 const schemaV1 = appSchema({
   version: 1,
@@ -61,11 +61,155 @@ const schemaV1 = appSchema({
   ],
 });
 
+/**
+ * Cópia congelada do schema v2 (aparelhos que já tinham a réplica, antes da
+ * v3 da #112). NÃO editar: é a "versão antiga" do teste de migração v2 → v3.
+ */
+const schemaV2 = appSchema({
+  version: 2,
+  tables: [
+    tableSchema({
+      name: 'jornadas',
+      columns: [
+        { name: 'remote_id', type: 'number', isOptional: true },
+        { name: 'usuario_id', type: 'number' },
+        { name: 'pedido_id', type: 'string', isOptional: true, isIndexed: true },
+        { name: 'status', type: 'string', isIndexed: true },
+        { name: 'checkin_at', type: 'string', isOptional: true, isIndexed: true },
+        { name: 'checkin_latitude', type: 'number', isOptional: true },
+        { name: 'checkin_longitude', type: 'number', isOptional: true },
+        { name: 'checkin_endereco', type: 'string', isOptional: true },
+        { name: 'checkin_id_cliente', type: 'string', isOptional: true },
+        { name: 'checkout_at', type: 'string', isOptional: true },
+        { name: 'checkout_latitude', type: 'number', isOptional: true },
+        { name: 'checkout_longitude', type: 'number', isOptional: true },
+        { name: 'checkout_endereco', type: 'string', isOptional: true },
+        { name: 'checkout_id_cliente', type: 'string', isOptional: true },
+        { name: 'lancado_em_atraso', type: 'boolean' },
+        { name: 'criado_em', type: 'string' },
+        { name: 'id_cliente_checkin', type: 'string', isOptional: true },
+        { name: 'id_cliente_checkout', type: 'string', isOptional: true },
+      ],
+    }),
+    tableSchema({
+      name: 'banco_horas',
+      columns: [
+        { name: 'mes', type: 'number', isIndexed: true },
+        { name: 'ano', type: 'number', isIndexed: true },
+        { name: 'horas_trabalhadas', type: 'number' },
+        { name: 'horas_previstas', type: 'number' },
+        { name: 'saldo', type: 'number' },
+      ],
+    }),
+    tableSchema({
+      name: 'pedidos',
+      columns: [
+        { name: 'numero_pedido', type: 'string' },
+        { name: 'status', type: 'string', isIndexed: true },
+        { name: 'cliente_id', type: 'string' },
+        { name: 'cliente_nome', type: 'string' },
+        { name: 'cliente_endereco', type: 'string' },
+        { name: 'cliente_cidade', type: 'string' },
+        { name: 'cliente_estado', type: 'string' },
+        { name: 'cliente_latitude', type: 'number' },
+        { name: 'cliente_longitude', type: 'number' },
+      ],
+    }),
+    tableSchema({
+      name: 'ambientes',
+      columns: [
+        { name: 'pedido_id', type: 'string', isIndexed: true },
+        { name: 'nome', type: 'string' },
+        { name: 'status', type: 'string' },
+      ],
+    }),
+    tableSchema({
+      name: 'pecas',
+      columns: [
+        { name: 'ambiente_id', type: 'string', isIndexed: true },
+        { name: 'codigo_barras', type: 'string', isOptional: true },
+        { name: 'descricao', type: 'string' },
+        { name: 'quantidade', type: 'number' },
+        { name: 'status', type: 'string' },
+      ],
+    }),
+    tableSchema({
+      name: 'tipos_avaria',
+      columns: [
+        { name: 'nome', type: 'string' },
+        { name: 'descricao', type: 'string' },
+      ],
+    }),
+    tableSchema({
+      name: 'avarias',
+      columns: [
+        { name: 'id_cliente', type: 'string', isOptional: true },
+        { name: 'peca_id', type: 'string' },
+        { name: 'peca_descricao', type: 'string' },
+        { name: 'ambiente_nome', type: 'string' },
+        { name: 'numero_pedido', type: 'string' },
+        { name: 'tipo_avaria_id', type: 'string' },
+        { name: 'descricao', type: 'string' },
+        { name: 'status', type: 'string', isIndexed: true },
+        { name: 'analisada_em', type: 'string', isOptional: true },
+        { name: 'parecer', type: 'string', isOptional: true },
+        { name: 'criado_em', type: 'string' },
+      ],
+    }),
+    tableSchema({
+      name: 'atestados',
+      columns: [
+        { name: 'id_cliente', type: 'string' },
+        { name: 'data_inicio', type: 'string' },
+        { name: 'data_fim', type: 'string' },
+        { name: 'observacao', type: 'string', isOptional: true },
+        { name: 'status', type: 'string', isIndexed: true },
+        { name: 'motivo_rejeicao', type: 'string', isOptional: true },
+        { name: 'validado_em', type: 'string', isOptional: true },
+        { name: 'criado_em', type: 'string' },
+      ],
+    }),
+    tableSchema({
+      name: 'acoes_pendentes',
+      columns: [
+        { name: 'tipo', type: 'string' },
+        { name: 'id_cliente', type: 'string' },
+        { name: 'payload', type: 'string' },
+        { name: 'criado_em', type: 'string' },
+        { name: 'status', type: 'string' },
+        { name: 'mensagem_descarte', type: 'string', isOptional: true },
+      ],
+    }),
+  ],
+});
+
 const TABELAS_NOVAS = ['pedidos', 'ambientes', 'pecas', 'tipos_avaria', 'avarias', 'atestados'];
+const COLUNAS_FORA_NA_V3 = ['remote_id', 'id_cliente_checkin', 'id_cliente_checkout'];
+
+/** Reabre o mesmo armazenamento em memória com outro schema — o app "atualizado". */
+async function atualizarPara(adapter: LokiJSAdapter, opcoes: object): Promise<Database> {
+  const novo = await (
+    adapter as unknown as { testClone(opcoes: object): Promise<LokiJSAdapter> }
+  ).testClone(opcoes);
+  return new Database({ adapter: novo, modelClasses });
+}
+
+function criarAcaoPendente(banco: Database) {
+  return banco.write(() =>
+    banco.get<AcaoPendente>('acoes_pendentes').create((acao) => {
+      acao.tipo = 'checkin';
+      acao.idCliente = 'id-pendente-1';
+      acao.payload = '{"latitude":-19.9}';
+      acao.criadoEm = '2026-10-16T12:00:00.000Z';
+      acao.status = 'pendente';
+      acao.mensagemDescarte = null;
+    }),
+  );
+}
 
 describe('migrações do banco local', () => {
-  it('o schema atual está na v2 e as migrações cobrem até a versão do schema', () => {
-    expect(schema.version).toBe(2);
+  it('o schema atual está na v3 e as migrações cobrem até a versão do schema', () => {
+    expect(schema.version).toBe(3);
     expect(migrations.maxVersion).toBe(schema.version);
   });
 
@@ -82,7 +226,7 @@ describe('migrações do banco local', () => {
     expect(colunasNovas.sort()).toEqual(['checkin_id_cliente', 'checkout_id_cliente', 'pedido_id']);
   });
 
-  it('as tabelas criadas pela migração têm as mesmas colunas do schema v2', () => {
+  it('as tabelas criadas pela migração v2 têm as mesmas colunas do schema atual', () => {
     const passos = stepsForMigration({ migrations, fromVersion: 1, toVersion: 2 })!;
     for (const passo of passos) {
       if (passo.type !== 'create_table') continue;
@@ -90,7 +234,33 @@ describe('migrações do banco local', () => {
     }
   });
 
-  it('banco v1 real migra para v2 preservando acoes_pendentes e jornadas', async () => {
+  it('v3: as colunas do estado otimista saem do schema de jornadas (e só elas)', () => {
+    const colunasV2 = Object.keys(schemaV2.tables.jornadas.columns);
+    const colunasV3 = Object.keys(schema.tables.jornadas.columns);
+
+    expect(colunasV2.filter((nome) => !colunasV3.includes(nome)).sort()).toEqual(
+      [...COLUNAS_FORA_NA_V3].sort(),
+    );
+    expect(colunasV3.filter((nome) => !colunasV2.includes(nome))).toEqual([]);
+  });
+
+  it('v2 → v3 só limpa a réplica antiga por SQL: sem recriar nem apagar a fila', () => {
+    const passos = stepsForMigration({ migrations, fromVersion: 2, toVersion: 3 });
+    expect(passos).not.toBeNull();
+
+    // O WatermelonDB não remove coluna: a física de `remote_id` e afins fica órfã.
+    expect(passos!.map((p) => p.type)).toEqual(['sql']);
+    const { sql } = passos![0] as { type: 'sql'; sql: string };
+    expect(sql).toContain('delete from "jornadas"');
+    expect(sql).toContain('delete from "banco_horas"');
+    // Dados pessoais legados (cliente da obra) guardados pelo app v2 no localStorage.
+    expect(sql).toContain('delete from "local_storage" where "key" in');
+    expect(sql).toContain("'obras_do_montador'");
+    expect(sql).toContain("'obra_da_jornada_aberta'");
+    expect(sql).not.toMatch(/acoes_pendentes|drop /i);
+  });
+
+  it('banco v1 real migra até a v3 preservando acoes_pendentes e aceitando o pull do contrato', async () => {
     const adapterV1 = new LokiJSAdapter({
       dbName: `migracao-${Math.random()}`,
       schema: schemaV1,
@@ -98,57 +268,61 @@ describe('migrações do banco local', () => {
       useIncrementalIndexedDB: false,
     });
     const bancoV1 = new Database({ adapter: adapterV1, modelClasses: [Jornada, BancoHoras, AcaoPendente] });
+    await criarAcaoPendente(bancoV1);
 
-    await bancoV1.write(async () => {
-      await bancoV1.get<AcaoPendente>('acoes_pendentes').create((acao) => {
-        acao.tipo = 'checkin';
-        acao.idCliente = 'id-pendente-1';
-        acao.payload = '{"latitude":-19.9}';
-        acao.criadoEm = '2026-10-16T12:00:00.000Z';
-        acao.status = 'pendente';
-        acao.mensagemDescarte = null;
-      });
-      await bancoV1.get<Jornada>('jornadas').create((j) => {
-        j.remoteId = 9;
-        j.usuarioId = 7;
-        j.status = 'EM_ANDAMENTO';
-        j.checkinAt = '2026-10-16T11:00:03.000Z';
-        j.lancadoEmAtraso = false;
-        j.criadoEm = '2026-10-16T11:00:03.000Z';
-        j.idClienteCheckin = 'id-pendente-1';
-      });
-    });
+    const bancoAtual = await atualizarPara(adapterV1, { schema, migrations });
 
-    // `testClone` reabre o mesmo armazenamento (em memória) com outro schema —
-    // é como o WatermelonDB simula, nos próprios testes, o app atualizado.
-    const adapterV2 = await (
-      adapterV1 as unknown as { testClone(opcoes: object): Promise<LokiJSAdapter> }
-    ).testClone({ schema, migrations });
-    const bancoV2 = new Database({ adapter: adapterV2, modelClasses });
-
-    const acoes = await bancoV2.get<AcaoPendente>('acoes_pendentes').query().fetch();
+    const acoes = await bancoAtual.get<AcaoPendente>('acoes_pendentes').query().fetch();
     expect(acoes).toHaveLength(1);
     expect(acoes[0].idCliente).toBe('id-pendente-1');
     expect(acoes[0].payload).toBe('{"latitude":-19.9}');
     expect(acoes[0].status).toBe('pendente');
 
-    const jornadas = await bancoV2.get<Jornada>('jornadas').query().fetch();
-    expect(jornadas).toHaveLength(1);
-    expect(jornadas[0].remoteId).toBe(9);
-    expect(jornadas[0].idClienteCheckin).toBe('id-pendente-1');
-    expect(jornadas[0].pedidoId).toBeNull();
-    expect(jornadas[0].checkinIdCliente).toBeNull();
-    expect(jornadas[0].checkoutIdCliente).toBeNull();
-
     for (const tabela of TABELAS_NOVAS) {
-      expect(await bancoV2.get(tabela).query().fetchCount()).toBe(0);
+      expect(await bancoAtual.get(tabela).query().fetchCount()).toBe(0);
     }
 
-    // E o banco migrado aceita o pull do contrato nas tabelas novas.
-    await gravarPullNaReplica(bancoV2, syncPullFixture);
-    expect(await bancoV2.get<Pedido>('pedidos').query().fetchCount()).toBe(
+    await gravarPullNaReplica(bancoAtual, syncPullFixture);
+    expect(await bancoAtual.get<Pedido>('pedidos').query().fetchCount()).toBe(
       syncPullFixture.changes.pedidos.updated.length,
     );
-    expect(await bancoV2.get<AcaoPendente>('acoes_pendentes').query().fetchCount()).toBe(1);
+    expect(await bancoAtual.get<AcaoPendente>('acoes_pendentes').query().fetchCount()).toBe(1);
+  });
+
+  it('banco v2 real migra para v3 preservando a ação pendente (check-in na fila)', async () => {
+    const adapterV2 = new LokiJSAdapter({
+      dbName: `migracao-v2-${Math.random()}`,
+      schema: schemaV2,
+      useWebWorker: false,
+      useIncrementalIndexedDB: false,
+    });
+    const bancoV2 = new Database({ adapter: adapterV2, modelClasses });
+    await criarAcaoPendente(bancoV2);
+    await bancoV2.write(() =>
+      bancoV2.get<Jornada>('jornadas').create((jornada) => {
+        jornada._setRaw('remote_id', 9);
+        jornada.usuarioId = 7;
+        jornada.status = 'EM_ANDAMENTO';
+        jornada.checkinAt = '2026-10-16T11:00:03.000Z';
+        jornada.lancadoEmAtraso = false;
+        jornada.criadoEm = '2026-10-16T11:00:03.000Z';
+        jornada._setRaw('id_cliente_checkin', 'id-pendente-1');
+      }),
+    );
+
+    // O banco migra pelas migrações reais, passo a passo, até o schema atual.
+    const bancoV3 = await atualizarPara(adapterV2, { schema, migrations });
+
+    const acoes = await bancoV3.get<AcaoPendente>('acoes_pendentes').query().fetch();
+    expect(acoes).toHaveLength(1);
+    expect(acoes[0].tipo).toBe('checkin');
+    expect(acoes[0].idCliente).toBe('id-pendente-1');
+    expect(acoes[0].payload).toBe('{"latitude":-19.9}');
+    expect(acoes[0].status).toBe('pendente');
+
+    // O banco migrado aceita o pull do contrato (que não conhece `remote_id`).
+    await gravarPullNaReplica(bancoV3, syncPullFixture);
+    expect(await bancoV3.get<Jornada>('jornadas').find('502')).toBeDefined();
+    expect(await bancoV3.get<AcaoPendente>('acoes_pendentes').query().fetchCount()).toBe(1);
   });
 });

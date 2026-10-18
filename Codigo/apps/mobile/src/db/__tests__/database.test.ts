@@ -10,7 +10,6 @@ describe('banco local', () => {
 
     await database.write(async () => {
       await database.get<Jornada>('jornadas').create((registro) => {
-        registro.remoteId = 1;
         registro.usuarioId = 3;
         registro.status = 'EM_ANDAMENTO';
         registro.checkinAt = '2026-09-09T12:00:00.000Z';
@@ -23,8 +22,6 @@ describe('banco local', () => {
         registro.checkoutEndereco = null;
         registro.lancadoEmAtraso = false;
         registro.criadoEm = '2026-09-09T12:00:00.000Z';
-        registro.idClienteCheckin = 'id-1';
-        registro.idClienteCheckout = null;
       });
       await database.get<BancoHoras>('banco_horas').create((registro) => {
         registro.mes = 9;

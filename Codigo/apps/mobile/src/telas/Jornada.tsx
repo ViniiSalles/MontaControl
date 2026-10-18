@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { View } from 'react-native';
 import { cores, espacamento, espacamentoNomeado } from '@montacontrol/design-tokens/native';
 import { estadoJornada } from '@montacontrol/shared';
-import type { JornadaDTO } from '@montacontrol/shared';
 import { Alerta } from '../ui/Alerta';
+import { AvisosDeAcoesRecusadas } from './AvisosDeAcoesRecusadas';
 import { Botao } from '../ui/Botao';
 import { Cartao } from '../ui/Cartao';
 import { Carregando } from '../ui/Carregando';
@@ -22,9 +22,9 @@ import { minutosTrabalhadosHoje, proximaAcao } from '../jornada/ultimoPonto';
 import type { TipoPonto } from '../jornada/ultimoPonto';
 import { useHistoricoPontos } from '../jornada/useHistoricoPontos';
 import { useJornadaAtual } from '../jornada/useJornadaAtual';
-import { lembrarObraDaJornada, lerObraDaJornada } from '../pedidos/obrasLocais';
 import { useObrasDoMontador } from '../pedidos/useObrasDoMontador';
-import { useSincronizacao } from '../sincronizacao/SincronizacaoContext';
+import { useSincronizacaoStore } from '../estado/sincronizacaoStore';
+import { useUiStore } from '../estado/uiStore';
 import { BotaoAcaoPrincipal } from './jornada/BotaoAcaoPrincipal';
 import { CartaoBancoHoras } from './jornada/CartaoBancoHoras';
 import { CartaoUltimoPonto } from './jornada/CartaoUltimoPonto';
@@ -54,54 +54,48 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
 
   const database = useDatabaseOuFalha();
 
-  // A sincronização automática e o status da fila vêm do provider do app
-  // autenticado (`ProvedorSincronizacao`), não desta tela.
-  const { pendentes, avisosDescartados, dispensarAvisos } = useSincronizacao();
+  // A sincronização automática (`useSincronizacaoDoApp`) e o status da fila vêm
+  // do app autenticado; esta tela só lê o store.
+  const pendentes = useSincronizacaoStore((estado) => estado.pendentes);
+  const dispensarAvisos = useSincronizacaoStore((estado) => estado.dispensarAvisos);
+  const erroDeSincronizacao = useSincronizacaoStore((estado) => estado.ultimoErro);
 
-  const { jornada, carregando, erro, recarregar } = useJornadaAtual();
+  const { jornada, carregando, erro } = useJornadaAtual();
   // Menor período válido (`PeriodoHistorico`): só precisa alcançar hoje, o
   // resto da janela não é usado aqui — quem quer mais dias vai pro Histórico.
-  const { dias: diasHistorico, recarregar: recarregarHistorico } = useHistoricoPontos(5);
+  const { dias: diasHistorico } = useHistoricoPontos(5);
 
-  // A jornada devolvida pelo próprio check-in/check-out é mais nova que a do
-  // GET e tem precedência até a próxima atualização manual: recarregar logo
-  // depois de um check-out traria `null` (não há mais jornada aberta) e
-  // apagaria da tela justamente o ponto que o montador acabou de bater.
-  const [jornadaRegistrada, setJornadaRegistrada] = useState<JornadaDTO | null>(null);
-
-  const {
-    obras,
-    carregando: carregandoObras,
-    recarregar: recarregarObras,
-  } = useObrasDoMontador(database);
-  const [obraEscolhidaId, setObraEscolhidaId] = useState<number | null>(null);
+  const { obras, carregando: carregandoObras } = useObrasDoMontador(database);
+  // A escolha mora no store persistido: sobrevive a trocar de aba e a fechar o app.
+  const obraEscolhidaId = useUiStore((estado) => estado.obraEscolhidaId);
+  const escolherObra = useUiStore((estado) => estado.escolherObra);
+  // Só vale a escolha que ainda está entre as obras do montador (a atribuição pode ter mudado).
+  const obraEscolhidaValidaId = obras.some((obra) => obra.id === obraEscolhidaId)
+    ? obraEscolhidaId
+    : null;
   // Com uma obra só, não há o que escolher.
-  const obraEntradaId = obraEscolhidaId ?? (obras.length === 1 ? obras[0].id : null);
+  const obraEntradaId = obraEscolhidaValidaId ?? (obras.length === 1 ? obras[0].id : null);
   const obraEntrada = obras.find((obra) => obra.id === obraEntradaId) ?? null;
 
-  // Obra do check-in da jornada aberta, guardada no aparelho para a saída.
-  const [obraDaJornadaId, setObraDaJornadaId] = useState<number | null>(null);
-  const obraDaJornada = obras.find((obra) => obra.id === obraDaJornadaId) ?? null;
-  useEffect(() => {
-    void lerObraDaJornada(database)
-      .then(setObraDaJornadaId)
-      .catch(() => undefined);
-  }, [database]);
+  // Obra do check-in da jornada aberta (`jornadas.pedido_id`, ou o pedido da
+  // ação ainda na fila): a saída é validada contra ela, também sem rede.
+  const obraDaJornada = obras.find((obra) => obra.id === jornada?.pedidoId) ?? null;
 
   const [aviso, setAviso] = useState<AvisoAcao | null>(null);
   const [registrando, setRegistrando] = useState(false);
 
-  const jornadaExibida = jornadaRegistrada ?? jornada;
   // Um único `agora` por render: calcular de novo dentro do cartão poderia
   // deixá-lo em desacordo com o rótulo do botão na virada do limite.
   const agoraIso = new Date().toISOString();
   const hojeCivil = diaCivilDe(agoraIso);
   const { mes: mesAtual, ano: anoAtual } = periodoAtual(agoraIso);
-  const { bancoHoras, recarregar: recarregarBancoHoras } = useBancoHoras(mesAtual, anoAtual);
+  // Todos os dados da tela saem do mesmo pull: o `recarregar` do banco de horas
+  // sincroniza (e refaz a consulta do mês, se ele não estiver na réplica).
+  const { bancoHoras, recarregar: sincronizarAgora } = useBancoHoras(mesAtual, anoAtual);
   const diaHoje = diasHistorico.find((dia) => dia.data === hojeCivil) ?? null;
-  const estado = jornadaExibida ? estadoJornada(jornadaExibida, agoraIso) : 'finalizada';
-  const acao = proximaAcao(jornadaExibida, agoraIso);
-  const trabalhadasMin = minutosTrabalhadosHoje(diaHoje, jornadaExibida, estado, agoraIso);
+  const estado = jornada ? estadoJornada(jornada, agoraIso) : 'finalizada';
+  const acao = proximaAcao(jornada, agoraIso);
+  const trabalhadasMin = minutosTrabalhadosHoje(diaHoje, jornada, estado, agoraIso);
 
   const baterPonto = useCallback(async () => {
     const registrar =
@@ -121,31 +115,22 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
     try {
       const resultado = await registrar();
       if (resultado.tipo === 'ok') {
-        setJornadaRegistrada(resultado.jornada);
-        if (acao === 'entrada' && obraEntrada) {
-          setObraDaJornadaId(obraEntrada.id);
-          void lembrarObraDaJornada(database, obraEntrada.id).catch(() => undefined);
-        }
-        // O turno que acabou de fechar/abrir precisa entrar na soma de hoje
-        // assim que o histórico for consultado de novo — sem isto, o próximo
-        // turno recalcularia "trabalhadas hoje" com um histórico desatualizado.
-        void recarregarHistorico();
-        void recarregarBancoHoras();
+        // A marcação já está na tela (a ação fica na fila e a sobreposição a
+        // mostra); o pull traz a jornada definitiva, o histórico de hoje e o
+        // saldo do mês — sem rede, a tentativa falha e a fila segue pendente.
+        void sincronizarAgora();
       }
       setAviso(avisoDoResultado(resultado));
     } finally {
       setRegistrando(false);
     }
-  }, [acao, database, obraDaJornada, obraEntrada, recarregarHistorico, recarregarBancoHoras]);
+  }, [acao, database, obraDaJornada, obraEntrada, sincronizarAgora]);
 
   const atualizar = useCallback(async () => {
-    // Descartar o registro local é o ponto da atualização: a partir daqui
-    // quem manda é o servidor de novo.
-    setJornadaRegistrada(null);
     setAviso(null);
     dispensarAvisos();
-    await Promise.all([recarregar(), recarregarHistorico(), recarregarBancoHoras(), recarregarObras()]);
-  }, [dispensarAvisos, recarregar, recarregarHistorico, recarregarBancoHoras, recarregarObras]);
+    await sincronizarAgora();
+  }, [dispensarAvisos, sincronizarAgora]);
 
   return (
     <Tela rolavel>
@@ -169,13 +154,13 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
           />
         </View>
 
-        {carregando && !jornadaExibida ? (
+        {carregando && !jornada ? (
           <View style={{ alignItems: 'center', paddingVertical: espacamento[32] }}>
             <Carregando tamanho={espacamento[32]} />
           </View>
         ) : (
           <CartaoUltimoPonto
-            jornada={jornadaExibida}
+            jornada={jornada}
             estado={estado}
             pendenteSincronizacao={pendentes > 0}
           />
@@ -188,6 +173,14 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
           errado (havia jornada aberta), a API recusa com
           `JORNADA_EM_ANDAMENTO` e o aviso explica o que fazer.
         */}
+        {erroDeSincronizacao === 'versao_incompativel' && (
+          <Alerta
+            variante="aviso"
+            titulo="Atualize o aplicativo"
+            mensagem="Esta versão do app não sincroniza mais com o servidor. Atualize o aplicativo; os pontos que você marcar continuam guardados no aparelho."
+          />
+        )}
+
         {erro && (
           <Alerta
             variante="aviso"
@@ -200,20 +193,13 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
           <Alerta variante={aviso.variante} titulo={aviso.titulo} mensagem={aviso.mensagem} />
         )}
 
-        {avisosDescartados.map((mensagem, indice) => (
-          <Alerta
-            key={`${mensagem}-${indice}`}
-            variante="erro"
-            titulo="Uma ação não foi sincronizada"
-            mensagem={mensagem}
-          />
-        ))}
+        <AvisosDeAcoesRecusadas />
 
         {acao === 'entrada' ? (
           <SeletorObra
             obras={obras}
             selecionadaId={obraEntradaId}
-            aoSelecionar={setObraEscolhidaId}
+            aoSelecionar={escolherObra}
             carregando={carregandoObras}
           />
         ) : (

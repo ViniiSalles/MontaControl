@@ -28,7 +28,10 @@ function SeloSaldo({ saldo }: { saldo: number }) {
 export function BancoHoras({ aoVoltar }: PropsBancoHoras) {
   const agoraIso = new Date().toISOString();
   const [periodo, setPeriodo] = useState<Periodo>(() => periodoAtual(agoraIso));
-  const { bancoHoras, carregando, erro, recarregar } = useBancoHoras(periodo.mes, periodo.ano);
+  const { bancoHoras, carregando, semDadosOffline, recarregar } = useBancoHoras(
+    periodo.mes,
+    periodo.ano,
+  );
   const noMesCorrente = ehMesCorrente(periodo, agoraIso);
 
   return (
@@ -66,12 +69,12 @@ export function BancoHoras({ aoVoltar }: PropsBancoHoras) {
           <View style={{ alignItems: 'center', paddingVertical: espacamento[32] }}>
             <Carregando tamanho={espacamento[32]} />
           </View>
-        ) : erro ? (
+        ) : semDadosOffline ? (
           <>
             <Alerta
-              variante="erro"
-              titulo="Não foi possível carregar o banco de horas"
-              mensagem="Verifique a internet e tente de novo."
+              variante="info"
+              titulo="Sem dados offline para este mês"
+              mensagem="Este mês não está salvo no aparelho. Conecte-se à internet e tente de novo."
             />
             <Botao
               variante="tonal"

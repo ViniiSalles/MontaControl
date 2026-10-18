@@ -5,6 +5,7 @@ import { ProvedorAuth, useAuth } from '../AuthContext';
 import { TIMEOUT_REFRESH_MS, TIMEOUT_REVALIDACAO_MS } from '../clienteAuth';
 import * as armazenamento from '../armazenamentoSessao';
 import * as database from '../../db/database';
+import { reiniciarSessaoStore } from '../../estado/sessaoStore';
 import { comTokenRenovado, definirTokens, obterTokenValido } from '../tokenSessao';
 import { gestor, montador, respostaJson, sessaoDe } from './apoio';
 
@@ -93,6 +94,8 @@ beforeEach(() => {
   // implementacoes, que e o que estes testes precisam.
   jest.clearAllMocks();
   definirTokens(null);
+  // O store de sessão é global (como no app): sem isto o usuário de um teste vaza para o seguinte.
+  reiniciarSessaoStore();
   armazenamentoMock.lerSessao.mockResolvedValue(null);
   armazenamentoMock.salvarSessao.mockResolvedValue(undefined);
   armazenamentoMock.limparSessao.mockResolvedValue(undefined);

@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Alert, Image, Pressable, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { randomUUID } from 'expo-crypto';
-import type { FotoBase64 } from '@montacontrol/shared';
 import { cores, espacamento, raio } from '@montacontrol/design-tokens/native';
 import { Alerta } from '../../ui/Alerta';
 import { Botao } from '../../ui/Botao';
@@ -10,15 +9,16 @@ import { Cartao } from '../../ui/Cartao';
 import { CampoTexto } from '../../ui/CampoTexto';
 import { Icone } from '../../ui/Icone';
 import { Texto } from '../../ui/Texto';
-import { ErroApi } from '../../jornada/clienteJornadas';
-import { enviarAtestado } from '../../atestados/clienteAtestados';
-import { paraFotoBase64 } from '../../atestados/fotoParaBase64';
+import { useDatabaseOuFalha } from '../../db/useDatabase';
+import { mimeTypeSuportado, uriDaFoto } from '../../fotos/armazenamentoFotos';
+import { useFotosDoFormulario } from '../../fotos/useFotosDoFormulario';
+import { ErroAoEnfileirar, executarAcaoAtestado } from '../../sincronizacao/outbox';
 import { mascararData, validarEnvioAtestado } from '../../atestados/validarEnvioAtestado';
 import type { CamposNovoAtestado, ErrosNovoAtestado } from '../../atestados/validarEnvioAtestado';
 
 interface PropsNovoAtestado {
-  /** Atestado criado com sucesso — o pai avisa e recarrega a lista. */
-  aoEnviado: () => void;
+  /** Atestado aceito (enviado ou na fila) — o pai mostra o aviso e recarrega a lista. */
+  aoEnviado: (aviso: string) => void;
   /** Um novo envio começou (validação ok) — o pai limpa avisos anteriores. */
   aoIniciarEnvio?: () => void;
 }
@@ -26,14 +26,23 @@ interface PropsNovoAtestado {
 const CAMPOS_VAZIOS: CamposNovoAtestado = { dataInicio: '', dataFim: '', observacao: '' };
 const TAMANHO_MINIATURA = espacamento[80];
 
-/** `quality` reduz o peso do upload; o limite de 5 MB/foto é do backend. */
-const OPCOES_PICKER = { base64: true, quality: 0.7, allowsMultipleSelection: false } as const;
+/**
+ * `quality` reduz o peso do upload; o limite de 5 MB/foto é do backend. Sem
+ * `base64`: a foto vira arquivo no aparelho e só é convertida no envio.
+ */
+const OPCOES_PICKER = { quality: 0.7, allowsMultipleSelection: false } as const;
 
-/** Formulário de envio de atestado (`POST /api/atestados`) — foto por câmera ou galeria. */
+/** Recusa e falha de registro apagam as fotos (a fila não as guarda): o montador precisa saber. */
+function comAvisoDeFotos(mensagem: string): string {
+  return `${mensagem}
+As fotos anexadas foram descartadas; anexe de novo.`;
+}
+
+/** Formulário de atestado — foto por câmera ou galeria; entra na fila, então funciona sem sinal. */
 export function NovoAtestado({ aoEnviado, aoIniciarEnvio }: PropsNovoAtestado) {
+  const database = useDatabaseOuFalha();
   const [campos, setCampos] = useState<CamposNovoAtestado>(CAMPOS_VAZIOS);
-  const [fotos, setFotos] = useState<FotoBase64[]>([]);
-  const [previas, setPrevias] = useState<string[]>([]);
+  const fotos = useFotosDoFormulario();
   const [erros, setErros] = useState<ErrosNovoAtestado>({});
   const [enviando, setEnviando] = useState(false);
   const [falha, setFalha] = useState<string | null>(null);
@@ -59,25 +68,25 @@ export function NovoAtestado({ aoEnviado, aoIniciarEnvio }: PropsNovoAtestado) {
         : await ImagePicker.launchImageLibraryAsync({
             ...OPCOES_PICKER,
             // Sem isto, uma foto HEIC da galeria (padrão de câmera iOS) chega
-            // sem `mimeType` compatível e `paraFotoBase64` a descarta.
+            // sem `mimeType` compatível e `mimeTypeSuportado` a recusa.
             preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
           });
     if (resultado.canceled) return;
 
-    const foto = paraFotoBase64(resultado.assets[0]);
-    if (!foto) {
+    const [asset] = resultado.assets;
+    const mimeType = mimeTypeSuportado(asset.mimeType);
+    if (!mimeType) {
       setFalha('Não foi possível usar essa foto. Tente outra.');
       return;
     }
 
-    setFotos((atuais) => [...atuais, foto]);
-    setPrevias((atuais) => [...atuais, resultado.assets[0].uri]);
+    try {
+      await fotos.adicionar(asset.uri, mimeType);
+    } catch {
+      setFalha('Não foi possível guardar essa foto. Tente outra.');
+      return;
+    }
     setErros((atuais) => ({ ...atuais, fotos: undefined }));
-  }
-
-  function removerFoto(indice: number) {
-    setFotos((atuais) => atuais.filter((_, i) => i !== indice));
-    setPrevias((atuais) => atuais.filter((_, i) => i !== indice));
   }
 
   function aoTocarAdicionarFoto() {
@@ -89,21 +98,32 @@ export function NovoAtestado({ aoEnviado, aoIniciarEnvio }: PropsNovoAtestado) {
   }
 
   async function enviar(): Promise<void> {
-    const { erros: encontrados, dados } = validarEnvioAtestado(campos, fotos);
+    const { erros: encontrados, dados } = validarEnvioAtestado(campos, fotos.caminhos);
     setErros(encontrados);
     if (!dados) return;
 
     aoIniciarEnvio?.();
     setEnviando(true);
     setFalha(null);
+    // As fotos passam a ser da fila ao chamar o outbox: o formulário as solta
+    // JÁ, antes da rede (ver NovaAvaria). A recusa e a falha as apagam.
+    fotos.esquecer();
     try {
-      await enviarAtestado({ idCliente: randomUUID(), ...dados });
+      const resultado = await executarAcaoAtestado(database, { idCliente: randomUUID(), ...dados });
+      if (resultado.tipo === 'recusado') {
+        setFalha(comAvisoDeFotos(resultado.mensagem));
+        return;
+      }
       setCampos(CAMPOS_VAZIOS);
-      setFotos([]);
-      setPrevias([]);
-      aoEnviado();
-    } catch (causa: unknown) {
-      setFalha(causa instanceof ErroApi ? causa.message : 'Não foi possível enviar. Tente de novo.');
+      aoEnviado(
+        resultado.tipo === 'enviado'
+          ? 'Atestado enviado. O RH vai analisar.'
+          : 'Sem conexão agora: o atestado foi salvo e será enviado automaticamente.',
+      );
+    } catch (erro) {
+      // Só o enfileiramento que falhou apagou as fotos; qualquer outra falha deixa a linha (e as fotos) na fila.
+      const mensagem = 'Não foi possível registrar o atestado. Tente de novo.';
+      setFalha(erro instanceof ErroAoEnfileirar ? comAvisoDeFotos(mensagem) : mensagem);
     } finally {
       setEnviando(false);
     }
@@ -162,18 +182,19 @@ export function NovoAtestado({ aoEnviado, aoIniciarEnvio }: PropsNovoAtestado) {
             </Texto>
           </Pressable>
 
-          {previas.length > 0 && (
+          {fotos.caminhos.length > 0 && (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: espacamento[8] }}>
-              {previas.map((uri, indice) => (
-                <View key={uri} style={{ width: TAMANHO_MINIATURA, height: TAMANHO_MINIATURA }}>
+              {fotos.caminhos.map((caminho, indice) => (
+                <View key={caminho} style={{ width: TAMANHO_MINIATURA, height: TAMANHO_MINIATURA }}>
                   <Image
-                    source={{ uri }}
+                    source={{ uri: uriDaFoto(caminho) }}
                     accessibilityLabel={`Foto ${indice + 1} do atestado`}
                     style={{ width: '100%', height: '100%', borderRadius: raio.md }}
                   />
                   <Pressable
                     accessibilityLabel={`Remover foto ${indice + 1}`}
-                    onPress={() => removerFoto(indice)}
+                    disabled={enviando}
+                    onPress={() => void fotos.remover(indice)}
                     style={{
                       position: 'absolute',
                       top: -espacamento[6],

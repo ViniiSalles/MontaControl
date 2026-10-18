@@ -1,12 +1,19 @@
+import { Q } from '@nozbe/watermelondb';
+import { File, Paths } from 'expo-file-system';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Pressable, Text } from 'react-native';
 import { StatusJornada } from '@montacontrol/shared';
 import type { JornadaDTO } from '@montacontrol/shared';
-import { criarBancoDeTeste } from '../../db/__tests__/apoio';
+import { criarAcaoPendente, criarBancoDeTeste } from '../../db/__tests__/apoio';
 import { AcaoPendente } from '../../db/AcaoPendente';
 import { Jornada } from '../../db/Jornada';
 import { lerDonoNoBanco, registrarDonoNoBanco } from '../../db/donoDaFila';
+import { apagarTodasAsFotos, salvarFoto } from '../../fotos/armazenamentoFotos';
+import { criarFotoDoPicker, existeFoto, fotosGuardadas } from '../../fotos/__tests__/apoio';
+import { useUiStore } from '../../estado/uiStore';
+import { instalarDiscoEmMemoria } from '../../estado/__tests__/apoio';
 import { drenarFila } from '../../sincronizacao/syncManager';
+import { reiniciarSessaoStore } from '../../estado/sessaoStore';
 import { ProvedorAuth, useAuth } from '../AuthContext';
 import { definirTokens } from '../tokenSessao';
 import { montador, respostaJson, sessaoDe } from './apoio';
@@ -27,7 +34,11 @@ jest.mock('expo-secure-store', () => ({
 
 let mockBanco: ReturnType<typeof criarBancoDeTeste>;
 jest.mock('../../db/database', () => ({
-  limparBancoLocal: jest.fn(() => mockBanco.write(() => mockBanco.unsafeResetDatabase())),
+  limparBancoLocal: jest.fn(() =>
+    jest
+      .requireActual<typeof import('../../db/limparBanco')>('../../db/limparBanco')
+      .limparBancoCompleto(mockBanco),
+  ),
   // `require` lazy: a fábrica do mock não pode referenciar imports do arquivo.
   limparEspelhoBancoLocal: jest.fn(() =>
     jest
@@ -107,7 +118,6 @@ async function popularBanco(donoId: number | null = montador.id) {
   if (donoId !== null) await registrarDonoNoBanco(mockBanco, donoId);
   await mockBanco.write(async () => {
     await mockBanco.get<Jornada>('jornadas').create((registro) => {
-      registro.remoteId = 1;
       registro.usuarioId = montador.id;
       registro.status = StatusJornada.EM_ANDAMENTO;
       registro.lancadoEmAtraso = false;
@@ -130,6 +140,9 @@ async function popularBanco(donoId: number | null = montador.id) {
 }
 
 const contarAcoes = () => mockBanco.get('acoes_pendentes').query().fetchCount();
+// Check-in aceito vira `enviada` (aguarda o pull); só `pendente` ainda precisa subir.
+const contarPendentes = () =>
+  mockBanco.get('acoes_pendentes').query(Q.where('status', 'pendente')).fetchCount();
 const contarJornadas = () => mockBanco.get('jornadas').query().fetchCount();
 
 /** Sessão guardada do montador com refresh token que o servidor já não aceita. */
@@ -174,6 +187,8 @@ beforeEach(() => {
   mockSecureStore.clear();
   mockBanco = criarBancoDeTeste();
   definirTokens(null);
+  // O store de sessão é global (como no app): sem isto o usuário de um teste vaza para o seguinte.
+  reiniciarSessaoStore();
   chamadasAoCheckin = [];
   respostaDoLogin = respostaJson(200, sessaoDe(montador, '-2'));
   globalThis.fetch = jest.fn();
@@ -201,7 +216,7 @@ describe('expiração forçada da sessão (refresh recusado)', () => {
     await drenarFila(mockBanco);
 
     expect(chamadasAoCheckin).toEqual([{ authorization: 'Bearer access-2' }]);
-    expect(await contarAcoes()).toBe(0);
+    expect(await contarPendentes()).toBe(0);
   });
 
   test('fila sem nenhum dono conhecido (anterior à atualização): apagada no login, nada é enviado', async () => {
@@ -245,7 +260,7 @@ describe('expiração forçada da sessão (refresh recusado)', () => {
     await drenarFila(mockBanco);
 
     expect(chamadasAoCheckin).toEqual([{ authorization: 'Bearer access-2' }]);
-    expect(await contarAcoes()).toBe(0);
+    expect(await contarPendentes()).toBe(0);
   });
 
   test('login de OUTRO usuário: apaga tudo e nenhuma ação é enviada sob o token dele', async () => {
@@ -314,5 +329,173 @@ describe('logout explícito', () => {
     expect(mockSecureStore.has(CHAVE_SESSAO)).toBe(false);
     // O dono guardado ao lado da fila morre junto com o banco.
     expect(await lerDonoNoBanco(mockBanco)).toEqual({ tipo: 'ausente' });
+  });
+});
+
+describe('fotos de atestado e avaria guardadas no aparelho (#113)', () => {
+  /** Uma ação da fila com foto em arquivo, além do check-in do `popularBanco`. */
+  async function popularComFoto(): Promise<string> {
+    await popularBanco();
+    const origem = new File(Paths.cache, `picker-${Math.random()}.jpg`);
+    origem.create({ intermediates: true });
+    origem.write('atestado');
+    const caminho = await salvarFoto(origem.uri, 'image/jpeg');
+    await criarAcaoPendente(mockBanco, {
+      tipo: 'atestado',
+      idCliente: 'atestado-1',
+      payload: { fotosCaminhos: [caminho] },
+    });
+    return caminho;
+  }
+
+  afterEach(async () => {
+    await apagarTodasAsFotos();
+  });
+
+  test('expiração forçada mantém a fila e, com ela, as fotos', async () => {
+    guardarSessaoExpirada();
+    const caminho = await popularComFoto();
+    await renderizar();
+    await waitFor(() => expect(mockSecureStore.has(CHAVE_DONO)).toBe(true));
+
+    expect(await contarAcoes()).toBe(2);
+    expect(existeFoto(caminho)).toBe(true);
+  });
+
+  test('login do MESMO usuário depois da expiração mantém as fotos', async () => {
+    guardarSessaoExpirada();
+    const caminho = await popularComFoto();
+    await renderizar();
+    await waitFor(() => expect(mockSecureStore.has(CHAVE_DONO)).toBe(true));
+
+    await fireEvent.press(screen.getByTestId('entrar'));
+    await waitFor(() => expect(screen.getByTestId('usuario')).toHaveTextContent(montador.nome));
+
+    expect(existeFoto(caminho)).toBe(true);
+  });
+
+  test('login de OUTRO usuário apaga a fila e as fotos do anterior', async () => {
+    guardarSessaoExpirada();
+    const caminho = await popularComFoto();
+    await renderizar();
+    await waitFor(() => expect(mockSecureStore.has(CHAVE_DONO)).toBe(true));
+    respostaDoLogin = respostaJson(200, sessaoDe(OUTRO_MONTADOR, '-b'));
+
+    await fireEvent.press(screen.getByTestId('entrar'));
+    await waitFor(() =>
+      expect(screen.getByTestId('usuario')).toHaveTextContent(OUTRO_MONTADOR.nome),
+    );
+
+    expect(await contarAcoes()).toBe(0);
+    expect(existeFoto(caminho)).toBe(false);
+  });
+
+  test('logout explícito apaga as fotos', async () => {
+    mockSecureStore.set(
+      CHAVE_SESSAO,
+      JSON.stringify({ accessToken: 'access', refreshToken: 'refresh', usuario: montador }),
+    );
+    jest.mocked(globalThis.fetch).mockResolvedValue(respostaJson(200, montador));
+    const caminho = await popularComFoto();
+    await renderizar();
+
+    await fireEvent.press(screen.getByTestId('sair'));
+
+    await waitFor(() => expect(screen.getByTestId('usuario')).toHaveTextContent('sem-sessao'));
+    await waitFor(() => expect(existeFoto(caminho)).toBe(false));
+  });
+});
+
+describe('obra e rascunho de avaria (#114) × sessão, ponta a ponta', () => {
+  let disco: ReturnType<typeof instalarDiscoEmMemoria>;
+
+  beforeEach(() => {
+    disco = instalarDiscoEmMemoria();
+  });
+
+  afterEach(async () => {
+    await apagarTodasAsFotos();
+  });
+
+  /** O montador (usuário 1) deixou a obra e um rascunho com foto gravados. */
+  async function deixarRascunhoComFoto(): Promise<string> {
+    const nome = await salvarFoto(criarFotoDoPicker(), 'image/jpeg');
+    useUiStore.getState().escolherObra(10);
+    useUiStore.getState().alterarRascunhoAvaria({
+      pedidoId: 10,
+      campos: { pecaId: 301, tipoAvariaId: 2, descricao: 'Porta riscada' },
+    });
+    useUiStore.getState().anexarFotoAoRascunho(nome);
+    return nome;
+  }
+
+  const estadoDaUiVazio = () => {
+    expect(useUiStore.getState().obraEscolhidaId).toBeNull();
+    expect(useUiStore.getState().rascunhoAvaria.fotos).toEqual([]);
+    expect(useUiStore.getState().rascunhoAvaria.campos.descricao).toBe('');
+  };
+
+  test('expiração forçada e o MESMO usuário de volta: a obra e o rascunho, com a foto, continuam lá', async () => {
+    guardarSessaoExpirada();
+    await popularBanco();
+    await renderizar();
+    await waitFor(() => expect(mockSecureStore.has(CHAVE_DONO)).toBe(true));
+    const nome = await deixarRascunhoComFoto();
+
+    await fireEvent.press(screen.getByTestId('entrar'));
+    await waitFor(() => expect(screen.getByTestId('usuario')).toHaveTextContent(montador.nome));
+
+    expect(useUiStore.getState().obraEscolhidaId).toBe(10);
+    expect(useUiStore.getState().rascunhoAvaria.fotos).toEqual([nome]);
+    expect(existeFoto(nome)).toBe(true);
+  });
+
+  test('expiração forçada e OUTRO usuário entra: obra, rascunho, arquivo da foto e fila do anterior somem', async () => {
+    guardarSessaoExpirada();
+    await popularBanco();
+    await renderizar();
+    await waitFor(() => expect(mockSecureStore.has(CHAVE_DONO)).toBe(true));
+    const nome = await deixarRascunhoComFoto();
+    respostaDoLogin = respostaJson(200, sessaoDe(OUTRO_MONTADOR, '-b'));
+
+    await fireEvent.press(screen.getByTestId('entrar'));
+    await waitFor(() =>
+      expect(screen.getByTestId('usuario')).toHaveTextContent(OUTRO_MONTADOR.nome),
+    );
+
+    estadoDaUiVazio();
+    expect(existeFoto(nome)).toBe(false);
+    expect(fotosGuardadas()).toEqual([]);
+    expect(await contarAcoes()).toBe(0);
+    expect([...disco.dados.keys()].filter((chave) => chave.startsWith('mc.ui'))).toEqual([]);
+  });
+
+  test('logout explícito: o próximo montador a entrar não encontra nada do anterior', async () => {
+    mockSecureStore.set(
+      CHAVE_SESSAO,
+      JSON.stringify({ accessToken: 'access', refreshToken: 'refresh', usuario: montador }),
+    );
+    jest.mocked(globalThis.fetch).mockResolvedValue(respostaJson(200, montador));
+    await popularBanco();
+    await renderizar();
+    const nome = await deixarRascunhoComFoto();
+
+    await fireEvent.press(screen.getByTestId('sair'));
+    await waitFor(() => expect(screen.getByTestId('usuario')).toHaveTextContent('sem-sessao'));
+    await waitFor(() => expect(existeFoto(nome)).toBe(false));
+    estadoDaUiVazio();
+
+    // O boot respondeu tudo com o montador; para o login volta o roteamento por URL.
+    rotear();
+    respostaDoLogin = respostaJson(200, sessaoDe(OUTRO_MONTADOR, '-b'));
+    await fireEvent.press(screen.getByTestId('entrar'));
+    await waitFor(() =>
+      expect(screen.getByTestId('usuario')).toHaveTextContent(OUTRO_MONTADOR.nome),
+    );
+
+    estadoDaUiVazio();
+    expect(await contarAcoes()).toBe(0);
+    expect(await contarJornadas()).toBe(0);
+    expect(fotosGuardadas()).toEqual([]);
   });
 });

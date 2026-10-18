@@ -1,6 +1,5 @@
 import { definirTokens } from '../../auth/tokenSessao';
-import { ErroApi } from '../../jornada/clienteJornadas';
-import { enviarAtestado, listarMeusAtestados } from '../clienteAtestados';
+import { enviarAtestado } from '../clienteAtestados';
 
 const DADOS = {
   idCliente: '11111111-1111-4111-8111-111111111111',
@@ -47,34 +46,5 @@ describe('clienteAtestados', () => {
       codigo: 'PERIODO_ATESTADO_INVALIDO',
       status: 422,
     });
-  });
-
-  it('lista os próprios atestados com o token no cabeçalho', async () => {
-    const fetchFalso = jest.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => [{ id: 1, status: 'PENDENTE' }],
-    });
-    global.fetch = fetchFalso as unknown as typeof fetch;
-
-    const atestados = await listarMeusAtestados();
-
-    expect(atestados).toEqual([{ id: 1, status: 'PENDENTE' }]);
-    const [url, opcoes] = fetchFalso.mock.calls[0];
-    expect(url).toMatch(/\/api\/atestados\/meus$/);
-    expect(opcoes.headers.Authorization).toBe('Bearer token-abc');
-  });
-
-  it('erro ao listar vira ErroApi', async () => {
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: false,
-      status: 500,
-      json: async () => ({ codigo: 'ERRO_INTERNO', message: 'Falha ao listar.' }),
-    }) as unknown as typeof fetch;
-
-    const erro = await listarMeusAtestados().catch((e: unknown) => e);
-
-    expect(erro).toBeInstanceOf(ErroApi);
-    expect((erro as ErroApi).status).toBe(500);
   });
 });

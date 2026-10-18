@@ -1,25 +1,32 @@
 jest.mock('../../auth/AuthContext');
 jest.mock('../../jornada/acoes');
 jest.mock('../../sincronizacao/syncManager');
-jest.mock('../../pedidos/clientePedidos');
+jest.mock('../../banco-horas/clienteBancoHoras');
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { DatabaseProvider } from '@nozbe/watermelondb/react';
 import { StatusJornada } from '@montacontrol/shared';
-import type { JornadaDTO, PedidoDoMontadorDTO } from '@montacontrol/shared';
-import { criarBancoDeTeste } from '../../db/__tests__/apoio';
+import type { JornadaDTO } from '@montacontrol/shared';
+import {
+  criarAcaoPendente,
+  criarBancoDeTeste,
+  gravarLinhasNaReplica,
+  linhaDeJornada,
+  linhaDePedido,
+} from '../../db/__tests__/apoio';
 import { AcaoPendente } from '../../db/AcaoPendente';
-import { upsertBancoHoras } from '../../banco-horas/espelhoBancoHoras';
-import { upsertJornadas } from '../../jornada/espelhoJornada';
 import { useAuth } from '../../auth/AuthContext';
 import { registrarCheckin, registrarCheckout } from '../../jornada/acoes';
-import { iniciarSincronizacao, puxarBancoHoras, puxarJornadas } from '../../sincronizacao/syncManager';
-import { ProvedorSincronizacao } from '../../sincronizacao/SincronizacaoContext';
+import { buscarBancoHoras } from '../../banco-horas/clienteBancoHoras';
+import { iniciarSincronizacao, sincronizar } from '../../sincronizacao/syncManager';
+import { ComSincronizacaoDoApp } from '../../db/__tests__/apoioReact';
+import { useSincronizacaoStore } from '../../estado/sincronizacaoStore';
+import { useUiStore } from '../../estado/uiStore';
+import { instalarDiscoEmMemoria } from '../../estado/__tests__/apoio';
 import { formatarHora } from '../../jornada/formatacao';
 import { periodoAtual } from '../../banco-horas/periodo';
 import { montador } from '../../auth/__tests__/apoio';
-import { listarMeusPedidos } from '../../pedidos/clientePedidos';
-import { lembrarObraDaJornada } from '../../pedidos/obrasLocais';
+import { AGORA_FIXO_ISO, AGORA_FIXO_MS, fixarRelogio, soltarRelogio } from '../../jornada/__tests__/relogioFixo';
 import { Jornada } from '../Jornada';
 
 const abrirHistorico = jest.fn();
@@ -27,17 +34,18 @@ const abrirBancoHoras = jest.fn();
 const lancarEmAtraso = jest.fn();
 
 let database = criarBancoDeTeste();
+let disco: ReturnType<typeof instalarDiscoEmMemoria>;
 
 function renderizar() {
   return render(
     <DatabaseProvider database={database}>
-      <ProvedorSincronizacao>
+      <ComSincronizacaoDoApp>
         <Jornada
           aoAbrirHistorico={abrirHistorico}
           aoAbrirBancoHoras={abrirBancoHoras}
           aoLancarEmAtraso={lancarEmAtraso}
         />
-      </ProvedorSincronizacao>
+      </ComSincronizacaoDoApp>
     </DatabaseProvider>,
   );
 }
@@ -45,17 +53,14 @@ function renderizar() {
 const useAuthMock = jest.mocked(useAuth);
 const registrarCheckinMock = jest.mocked(registrarCheckin);
 const registrarCheckoutMock = jest.mocked(registrarCheckout);
-const puxarJornadasMock = jest.mocked(puxarJornadas);
-const puxarBancoHorasMock = jest.mocked(puxarBancoHoras);
+const sincronizarMock = jest.mocked(sincronizar);
+const buscarBancoHorasMock = jest.mocked(buscarBancoHoras);
 const iniciarSincronizacaoMock = jest.mocked(iniciarSincronizacao);
-const listarMeusPedidosMock = jest.mocked(listarMeusPedidos);
 
+/** A obra como o ponto a recebe da réplica (`pedidos`): id numérico + local do cliente. */
 const OBRA = {
   id: 10,
   numeroPedido: 'PED-000010',
-  status: 'EM_TRIAGEM',
-  clienteId: 3,
-  ambientes: [],
   cliente: {
     nome: 'Maria Souza',
     endereco: 'Av. Afonso Pena, 1000',
@@ -64,26 +69,51 @@ const OBRA = {
     latitude: -19.9325,
     longitude: -43.9382,
   },
-} as unknown as PedidoDoMontadorDTO;
-const OUTRA_OBRA = { ...OBRA, id: 11, numeroPedido: 'PED-000011', cliente: { ...OBRA.cliente, nome: 'João Lima' } };
+};
+const OUTRA_OBRA = {
+  ...OBRA,
+  id: 11,
+  numeroPedido: 'PED-000011',
+  cliente: { ...OBRA.cliente, nome: 'João Lima' },
+};
 
 /**
- * Check-in de duas horas atrás, e não uma data fixa: jornada aberta só conta
- * como "em andamento" dentro do limite de 24h (`estadoJornada`). Com data
- * congelada no passado a fixture nasceria vencida e o botão ofereceria
- * entrada em vez de saída.
+ * Check-in de duas horas antes do relógio fixo do teste, e não uma data
+ * qualquer: jornada aberta só conta como "em andamento" dentro do limite de
+ * 24h (`estadoJornada`) e a tela decide "hoje" pelo relógio.
  */
-const CHECKIN_RECENTE = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+const CHECKIN_RECENTE = new Date(AGORA_FIXO_MS - 2 * 60 * 60 * 1000).toISOString();
 const HORA_CHECKIN = formatarHora(CHECKIN_RECENTE);
 
-const ABERTA: JornadaDTO = {
-  id: 1,
-  usuarioId: montador.id,
+/** Jornada aberta que o servidor mandou no pull (réplica). */
+const abertaNaReplica = (parcial: Parameters<typeof linhaDeJornada>[0] = {}) =>
+  linhaDeJornada({
+    id: '1',
+    status: StatusJornada.EM_ANDAMENTO,
+    pedido_id: null,
+    checkin_at: CHECKIN_RECENTE,
+    checkin_endereco: 'Av. Afonso Pena, 1000',
+    checkout_at: null,
+    checkout_latitude: null,
+    checkout_longitude: null,
+    checkout_endereco: null,
+    checkout_id_cliente: null,
+    criado_em: CHECKIN_RECENTE,
+    ...parcial,
+  });
+
+const CHECKOUT_RECENTE = new Date(AGORA_FIXO_MS - 30 * 60 * 1000).toISOString();
+const HORA_CHECKOUT = formatarHora(CHECKOUT_RECENTE);
+
+/** O que `executarAcaoJornada` devolve na tela; a jornada real vem da sobreposição, não daqui. */
+const RESULTADO_DA_ACAO: JornadaDTO = {
+  id: -1,
+  usuarioId: -1,
   status: StatusJornada.EM_ANDAMENTO,
   checkinAt: CHECKIN_RECENTE,
   checkinLatitude: -19.9325,
   checkinLongitude: -43.9382,
-  checkinEndereco: 'Av. Afonso Pena, 1000',
+  checkinEndereco: null,
   checkoutAt: null,
   checkoutLatitude: null,
   checkoutLongitude: null,
@@ -92,50 +122,85 @@ const ABERTA: JornadaDTO = {
   criadoEm: CHECKIN_RECENTE,
 };
 
-const CHECKOUT_RECENTE = new Date(Date.now() - 30 * 60 * 1000).toISOString();
-const HORA_CHECKOUT = formatarHora(CHECKOUT_RECENTE);
+/** Faz o papel da outbox: a marcação entra na fila (é ela que a tela sobrepõe) antes do `registrar*` voltar. */
+function simularCheckinNaFila(registradoEm = CHECKIN_RECENTE, pedidoId = OBRA.id) {
+  registrarCheckinMock.mockImplementation(async () => {
+    await criarAcaoPendente(database, {
+      tipo: 'checkin',
+      idCliente: 'checkin-novo',
+      payload: {
+        idCliente: 'checkin-novo',
+        latitude: -19.9325,
+        longitude: -43.9382,
+        registradoEm,
+        pedidoId,
+      },
+      criadoEm: registradoEm,
+    });
+    return { tipo: 'ok', jornada: RESULTADO_DA_ACAO };
+  });
+}
 
-const ENCERRADA: JornadaDTO = {
-  ...ABERTA,
-  status: StatusJornada.FINALIZADA,
-  checkoutAt: CHECKOUT_RECENTE,
-  checkoutLatitude: -19.94,
-  checkoutLongitude: -43.94,
-  checkoutEndereco: 'Rua da Bahia, 200',
-};
+function simularCheckoutNaFila() {
+  registrarCheckoutMock.mockImplementation(async () => {
+    await criarAcaoPendente(database, {
+      tipo: 'checkout',
+      idCliente: 'checkout-novo',
+      payload: {
+        idCliente: 'checkout-novo',
+        latitude: -19.94,
+        longitude: -43.94,
+        registradoEm: CHECKOUT_RECENTE,
+      },
+      criadoEm: CHECKOUT_RECENTE,
+    });
+    return {
+      tipo: 'ok',
+      jornada: { ...RESULTADO_DA_ACAO, status: StatusJornada.FINALIZADA, checkoutAt: CHECKOUT_RECENTE },
+    };
+  });
+}
 
 const ROTULO_ENTRADA = 'Bater ponto de entrada';
 const ROTULO_SAIDA = 'Bater ponto de saída';
 
-const { mes: MES_ATUAL, ano: ANO_ATUAL } = periodoAtual(new Date().toISOString());
+const { mes: MES_ATUAL, ano: ANO_ATUAL } = periodoAtual(AGORA_FIXO_ISO);
 
-/** Saldo padrão do mês corrente — o default de todo teste que não testa o card em si. */
-const BANCO_HORAS_PADRAO = {
-  id: 1,
-  usuarioId: montador.id,
-  mes: MES_ATUAL,
-  ano: ANO_ATUAL,
-  horasTrabalhadas: 0,
-  horasPrevistas: 168,
-  saldo: -168,
-};
+afterEach(() => {
+  soltarRelogio();
+});
 
 beforeEach(async () => {
+  fixarRelogio();
   // `clearAllMocks` e não `resetAllMocks`: as implementações que o preset
   // jest-expo instala para os componentes nativos precisam sobreviver.
   jest.clearAllMocks();
   database = criarBancoDeTeste();
-  await upsertBancoHoras(database, BANCO_HORAS_PADRAO);
+  useSincronizacaoStore.getState().reiniciar();
+  // A obra escolhida mora no store global persistido: cada teste começa sem ela.
+  disco = instalarDiscoEmMemoria();
+  // Réplica padrão de todo teste: o saldo do mês corrente e uma obra.
+  await gravarLinhasNaReplica(database, 'banco_horas', [
+    {
+      id: '1',
+      mes: MES_ATUAL,
+      ano: ANO_ATUAL,
+      horas_trabalhadas: 0,
+      horas_previstas: 168,
+      saldo: -168,
+    },
+  ]);
+  await gravarLinhasNaReplica(database, 'pedidos', [linhaDePedido()]);
   useAuthMock.mockReturnValue({
     sessao: { usuario: montador },
     restaurando: false,
     entrar: jest.fn(),
     sair: jest.fn(),
   });
-  puxarJornadasMock.mockResolvedValue(undefined);
-  puxarBancoHorasMock.mockResolvedValue(undefined);
+  sincronizarMock.mockResolvedValue(undefined);
+  // Mês que não está na réplica (ex.: o teste com relógio congelado): sem rede.
+  buscarBancoHorasMock.mockRejectedValue(new Error('offline'));
   iniciarSincronizacaoMock.mockReturnValue(() => {});
-  listarMeusPedidosMock.mockResolvedValue([OBRA]);
 });
 
 test('sem jornada aberta, a tela oferece o ponto de entrada', async () => {
@@ -146,8 +211,8 @@ test('sem jornada aberta, a tela oferece o ponto de entrada', async () => {
   expect(screen.queryByText(ROTULO_SAIDA)).toBeNull();
 });
 
-test('jornada aberta mostra o check-in como último ponto e pede a saída', async () => {
-  await upsertJornadas(database, [ABERTA]);
+test('jornada aberta da réplica mostra o check-in como último ponto e pede a saída', async () => {
+  await gravarLinhasNaReplica(database, 'jornadas', [abertaNaReplica()]);
 
   await renderizar();
 
@@ -156,8 +221,8 @@ test('jornada aberta mostra o check-in como último ponto e pede a saída', asyn
   expect(screen.getByText(ROTULO_SAIDA)).toBeTruthy();
 });
 
-test('bater a entrada registra o ponto e a tela passa a pedir a saída', async () => {
-  registrarCheckinMock.mockResolvedValue({ tipo: 'ok', jornada: ABERTA });
+test('bater a entrada: o ponto aparece na hora (ação na fila) e a tela passa a pedir a saída', async () => {
+  simularCheckinNaFila();
 
   await renderizar();
   await waitFor(() => expect(screen.getByText(ROTULO_ENTRADA)).toBeTruthy());
@@ -168,19 +233,22 @@ test('bater a entrada registra o ponto e a tela passa a pedir a saída', async (
   expect(registrarCheckinMock).toHaveBeenCalledWith(database, OBRA);
   expect(screen.getByText(`Ponto de entrada registrado às ${HORA_CHECKIN}.`)).toBeTruthy();
   expect(screen.getByText(HORA_CHECKIN)).toBeTruthy();
+  // Pede o pull que traz a jornada definitiva; a marcação não depende dele.
+  expect(sincronizarMock).toHaveBeenCalled();
+  expect(await database.get('jornadas').query().fetchCount()).toBe(0);
 });
 
 test('bater a saída mantém o check-out na tela em vez de voltar ao estado vazio', async () => {
-  await upsertJornadas(database, [ABERTA]);
-  registrarCheckoutMock.mockResolvedValue({ tipo: 'ok', jornada: ENCERRADA });
+  await gravarLinhasNaReplica(database, 'jornadas', [abertaNaReplica()]);
+  simularCheckoutNaFila();
 
   await renderizar();
   await waitFor(() => expect(screen.getByText(ROTULO_SAIDA)).toBeTruthy());
 
   await fireEvent.press(screen.getByText(ROTULO_SAIDA));
 
-  // A jornada da resposta tem precedência sobre a leitura local: o ponto
-  // recém-batido continua visível, e o botão volta a oferecer a entrada.
+  // O check-out na fila fecha a jornada da réplica na leitura: o ponto
+  // recém-batido continua visível e o botão volta a oferecer a entrada.
   await waitFor(() => expect(screen.getByText(HORA_CHECKOUT)).toBeTruthy());
   expect(registrarCheckoutMock).toHaveBeenCalledWith(database, null);
   expect(screen.getByText(ROTULO_ENTRADA)).toBeTruthy();
@@ -203,7 +271,7 @@ test('localização negada não registra ponto e instrui o montador', async () =
 });
 
 test('recusa da API aparece como erro sem trocar o estado do botão', async () => {
-  await upsertJornadas(database, [ABERTA]);
+  await gravarLinhasNaReplica(database, 'jornadas', [abertaNaReplica()]);
   registrarCheckoutMock.mockResolvedValue({ tipo: 'recusado', codigo: 'SEM_JORNADA_ABERTA' });
 
   await renderizar();
@@ -217,8 +285,8 @@ test('recusa da API aparece como erro sem trocar o estado do botão', async () =
 
 // Regressão: a falha de leitura chegou a esconder o botão principal, e o
 // montador ficava sem como registrar por causa de um GET que não voltou.
-test('falha ao carregar avisa mas mantém o botão de bater ponto', async () => {
-  puxarJornadasMock.mockRejectedValue(new Error('offline'));
+test('falha ao sincronizar sem nenhum dado local avisa mas mantém o botão de bater ponto', async () => {
+  useSincronizacaoStore.setState({ ultimoErro: 'sem_rede' });
 
   await renderizar();
 
@@ -229,25 +297,32 @@ test('falha ao carregar avisa mas mantém o botão de bater ponto', async () => 
   expect(screen.getByText('Ver histórico')).toBeTruthy();
 });
 
-test('atualizar refaz a busca e limpa o aviso', async () => {
-  // Não dá para encadear `mockRejectedValueOnce().mockImplementationOnce()`
-  // (padrão de "uma falha, depois um sucesso") aqui: `useJornadaAtual` E
-  // `useHistoricoPontos` chamam `puxarJornadas` cada um na sua própria
-  // montagem, então as duas primeiras chamadas já saem consumidas no mount
-  // — antes de qualquer clique em "Atualizar". Em vez de contar chamadas,
-  // troca-se o mock de comportamento entre as duas fases do teste.
-  puxarJornadasMock.mockRejectedValue(new Error('offline'));
+test('app desatualizado (426) mostra o aviso para atualizar, sem esconder o ponto', async () => {
+  await gravarLinhasNaReplica(database, 'jornadas', [abertaNaReplica()]);
+  useSincronizacaoStore.setState({ ultimoErro: 'versao_incompativel' });
+
+  await renderizar();
+
+  await waitFor(() => expect(screen.getByText('Atualize o aplicativo')).toBeTruthy());
+  expect(screen.getByText(ROTULO_SAIDA)).toBeTruthy();
+});
+
+test('atualizar dispara uma sincronização e a jornada que o pull traz aparece', async () => {
+  useSincronizacaoStore.setState({ ultimoErro: 'sem_rede' });
 
   await renderizar();
   await waitFor(() =>
     expect(screen.getByText('Não foi possível carregar sua jornada')).toBeTruthy(),
   );
 
-  puxarJornadasMock.mockImplementation(async () => {
-    await upsertJornadas(database, [ABERTA]);
-  });
-
   await fireEvent.press(screen.getByLabelText('Atualizar'));
+  expect(sincronizarMock).toHaveBeenCalledTimes(1);
+
+  // O pull que o gatilho dispara grava a réplica e limpa o erro.
+  await act(async () => {
+    await gravarLinhasNaReplica(database, 'jornadas', [abertaNaReplica()]);
+    useSincronizacaoStore.setState({ ultimoErro: null });
+  });
 
   await waitFor(() => expect(screen.getByText(ROTULO_SAIDA)).toBeTruthy());
   expect(screen.queryByText('Não foi possível carregar sua jornada')).toBeNull();
@@ -275,24 +350,17 @@ test('abrir um turno novo no mesmo dia soma com o turno anterior, não reseta "t
   // Testing Library nunca avança e a suíte trava (CI do PR fica em loop).
   jest.useFakeTimers({ advanceTimers: true }).setSystemTime(new Date('2026-01-15T15:00:00.000Z'));
 
-  const turno1Fechado: JornadaDTO = {
-    id: 101,
-    usuarioId: montador.id,
-    status: StatusJornada.FINALIZADA,
-    checkinAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-    checkinLatitude: -19.9325,
-    checkinLongitude: -43.9382,
-    checkinEndereco: 'Av. Afonso Pena, 1000',
-    checkoutAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(), // turno de 2h
-    checkoutLatitude: -19.94,
-    checkoutLongitude: -43.94,
-    checkoutEndereco: 'Rua da Bahia, 200',
-    lancadoEmAtraso: false,
-    criadoEm: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-  };
-  await upsertJornadas(database, [turno1Fechado]);
-  const turno2Aberto: JornadaDTO = { ...ABERTA, id: 102, checkinAt: new Date().toISOString() };
-  registrarCheckinMock.mockResolvedValue({ tipo: 'ok', jornada: turno2Aberto });
+  const cincoHorasAtras = new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString();
+  const tresHorasAtras = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+  await gravarLinhasNaReplica(database, 'jornadas', [
+    linhaDeJornada({
+      id: '101',
+      checkin_at: cincoHorasAtras,
+      checkout_at: tresHorasAtras, // turno de 2h
+      criado_em: cincoHorasAtras,
+    }),
+  ]);
+  simularCheckinNaFila(new Date().toISOString());
 
   await renderizar();
   // Turno 1 (2h) já fechado, nenhuma jornada aberta ainda hoje.
@@ -319,56 +387,52 @@ test('o atalho de banco de horas chama a navegação da aba', async () => {
   expect(abrirBancoHoras).toHaveBeenCalled();
 });
 
-test('Atualizar também refaz a busca do banco de horas', async () => {
+test('o saldo do mês vem da réplica; a tela não sincroniza sozinha ao abrir', async () => {
   await renderizar();
   await waitFor(() => expect(screen.getByText('Ver histórico completo')).toBeTruthy());
 
-  expect(puxarBancoHorasMock).toHaveBeenCalledTimes(1);
-
-  await fireEvent.press(screen.getByLabelText('Atualizar'));
-
-  await waitFor(() => expect(puxarBancoHorasMock).toHaveBeenCalledTimes(2));
+  expect(sincronizarMock).not.toHaveBeenCalled();
 });
 
-// #107: a sincronização automática vive em `ProvedorSincronizacao` (app
+// #107: a sincronização automática vive em `useSincronizacaoDoApp` (app
 // autenticado), não na tela — montar Jornada não deve ligá-la de novo.
 test('a tela Jornada não liga a sincronização automática por conta própria', async () => {
   await renderizar();
   await waitFor(() => expect(screen.getByText(ROTULO_ENTRADA)).toBeTruthy());
 
-  // Uma única chamada: a do provider que envolve a tela neste teste.
+  // Uma única chamada: a do `ComSincronizacaoDoApp` que envolve a tela neste teste.
   expect(iniciarSincronizacaoMock).toHaveBeenCalledTimes(1);
 });
 
 test('ação pendente na fila marca o último ponto como sincronizando', async () => {
-  await upsertJornadas(database, [ABERTA]);
-  await database.write(() =>
-    database.get<AcaoPendente>('acoes_pendentes').create((registro) => {
-      registro.tipo = 'checkout';
-      registro.idCliente = 'id-1';
-      registro.payload = '{}';
-      registro.criadoEm = '2026-09-09T12:00:00.000Z';
-      registro.status = 'pendente';
-    }),
-  );
+  await gravarLinhasNaReplica(database, 'jornadas', [abertaNaReplica()]);
+  await criarAcaoPendente(database, {
+    tipo: 'checkout',
+    idCliente: 'id-1',
+    payload: {
+      idCliente: 'id-1',
+      latitude: -19.94,
+      longitude: -43.94,
+      registradoEm: CHECKOUT_RECENTE,
+    },
+  });
 
   await renderizar();
 
   await waitFor(() => expect(screen.getByText('SINCRONIZANDO')).toBeTruthy());
 });
 
-test('bater a saída também refaz a busca do banco de horas', async () => {
-  await upsertJornadas(database, [ABERTA]);
-  registrarCheckoutMock.mockResolvedValue({ tipo: 'ok', jornada: ENCERRADA });
+test('bater a saída também pede uma sincronização (histórico e saldo do mês)', async () => {
+  await gravarLinhasNaReplica(database, 'jornadas', [abertaNaReplica()]);
+  simularCheckoutNaFila();
 
   await renderizar();
   await waitFor(() => expect(screen.getByText(ROTULO_SAIDA)).toBeTruthy());
-
-  expect(puxarBancoHorasMock).toHaveBeenCalledTimes(1);
+  expect(sincronizarMock).not.toHaveBeenCalled();
 
   await fireEvent.press(screen.getByText(ROTULO_SAIDA));
 
-  await waitFor(() => expect(puxarBancoHorasMock).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(sincronizarMock).toHaveBeenCalled());
   expect(registrarCheckoutMock).toHaveBeenCalledWith(database, null);
 });
 
@@ -392,8 +456,14 @@ test('ação descartada na fila aparece como aviso ao abrir a tela', async () =>
 });
 
 test('com mais de uma obra, a entrada exige escolher a obra', async () => {
-  listarMeusPedidosMock.mockResolvedValue([OBRA, OUTRA_OBRA]);
-  registrarCheckinMock.mockResolvedValue({ tipo: 'ok', jornada: ABERTA });
+  await gravarLinhasNaReplica(database, 'pedidos', [
+    linhaDePedido({
+      id: '11',
+      numero_pedido: 'PED-000011',
+      cliente_nome: 'João Lima',
+    }),
+  ]);
+  simularCheckinNaFila(CHECKIN_RECENTE, OUTRA_OBRA.id);
 
   await renderizar();
   await waitFor(() => expect(screen.getByText('João Lima · PED-000011')).toBeTruthy());
@@ -408,8 +478,43 @@ test('com mais de uma obra, a entrada exige escolher a obra', async () => {
   await waitFor(() => expect(registrarCheckinMock).toHaveBeenCalledWith(database, OUTRA_OBRA));
 });
 
+test('a obra escolhida sobrevive a fechar e reabrir o app: o ponto de entrada já vai com ela', async () => {
+  await gravarLinhasNaReplica(database, 'pedidos', [
+    linhaDePedido({ id: '11', numero_pedido: 'PED-000011', cliente_nome: 'João Lima' }),
+  ]);
+  const { unmount } = await renderizar();
+  await waitFor(() => expect(screen.getByText('João Lima · PED-000011')).toBeTruthy());
+  await fireEvent.press(screen.getByText('João Lima · PED-000011'));
+  await unmount();
+
+  await act(async () => {
+    await disco.fecharEReabrirOApp();
+  });
+  expect(useUiStore.getState().obraEscolhidaId).toBe(OUTRA_OBRA.id);
+  await renderizar();
+  await waitFor(() => expect(screen.getByText(ROTULO_ENTRADA)).toBeTruthy());
+  await fireEvent.press(screen.getByText(ROTULO_ENTRADA));
+
+  expect(screen.queryByText('Escolha a obra')).toBeNull();
+  await waitFor(() => expect(registrarCheckinMock).toHaveBeenCalledWith(database, OUTRA_OBRA));
+});
+
+test('obra escolhida que deixou de existir na réplica é ignorada: com uma obra só, vale a única', async () => {
+  useUiStore.getState().escolherObra(9999);
+
+  await renderizar();
+  await waitFor(() => expect(screen.getByText(ROTULO_ENTRADA)).toBeTruthy());
+  await fireEvent.press(screen.getByText(ROTULO_ENTRADA));
+
+  await waitFor(() => expect(registrarCheckinMock).toHaveBeenCalledWith(database, OBRA));
+});
+
 test('sem obra atribuída avisa e não registra', async () => {
-  listarMeusPedidosMock.mockResolvedValue([]);
+  await database.write(async () => {
+    for (const pedido of await database.get('pedidos').query().fetch()) {
+      await pedido.destroyPermanently();
+    }
+  });
 
   await renderizar();
 
@@ -418,10 +523,32 @@ test('sem obra atribuída avisa e não registra', async () => {
   expect(registrarCheckinMock).not.toHaveBeenCalled();
 });
 
-test('a saída usa a obra do check-in guardada no aparelho', async () => {
-  await upsertJornadas(database, [ABERTA]);
-  await lembrarObraDaJornada(database, OBRA.id);
-  registrarCheckoutMock.mockResolvedValue({ tipo: 'ok', jornada: ENCERRADA });
+test('a saída usa a obra do check-in (jornadas.pedido_id da réplica), sem rede', async () => {
+  await gravarLinhasNaReplica(database, 'jornadas', [abertaNaReplica({ pedido_id: '10' })]);
+  simularCheckoutNaFila();
+
+  await renderizar();
+  await waitFor(() => expect(screen.getByText(/Obra: Maria Souza/)).toBeTruthy());
+
+  await fireEvent.press(screen.getByText(ROTULO_SAIDA));
+
+  await waitFor(() => expect(registrarCheckoutMock).toHaveBeenCalledWith(database, OBRA));
+});
+
+test('a saída de um check-in feito offline usa a obra gravada na ação da fila', async () => {
+  await criarAcaoPendente(database, {
+    tipo: 'checkin',
+    idCliente: 'checkin-offline',
+    payload: {
+      idCliente: 'checkin-offline',
+      latitude: -19.9325,
+      longitude: -43.9382,
+      registradoEm: CHECKIN_RECENTE,
+      pedidoId: 10,
+    },
+    criadoEm: CHECKIN_RECENTE,
+  });
+  simularCheckoutNaFila();
 
   await renderizar();
   await waitFor(() => expect(screen.getByText(/Obra: Maria Souza/)).toBeTruthy());

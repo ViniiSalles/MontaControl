@@ -1,7 +1,7 @@
 import { validarEnvioAtestado } from '../validarEnvioAtestado';
 import type { CamposNovoAtestado } from '../validarEnvioAtestado';
 
-const UMA_FOTO = [{ conteudoBase64: 'abc123', mimeType: 'image/jpeg' as const }];
+const UMA_FOTO = ['file:///mock/document/fotos_pendentes/a.jpg'];
 
 function campos(parcial: Partial<CamposNovoAtestado> = {}): CamposNovoAtestado {
   return { dataInicio: '01/09/2026', dataFim: '03/09/2026', observacao: '', ...parcial };
@@ -15,7 +15,7 @@ describe('validarEnvioAtestado', () => {
     expect(dados).toEqual({
       dataInicio: '2026-09-01',
       dataFim: '2026-09-03',
-      fotos: UMA_FOTO,
+      fotosCaminhos: UMA_FOTO,
     });
   });
 
