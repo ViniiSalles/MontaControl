@@ -39,3 +39,29 @@ describe('validate — variáveis do AFD', () => {
     expect(() => validate({ ...BASE_VALIDA, EMPRESA_RAZAO_SOCIAL: 'a'.repeat(151) })).toThrow();
   });
 });
+
+describe('validate — IP do cliente atrás de proxy', () => {
+  it('assume 0 hops e nenhum cabeçalho de IP por padrão', () => {
+    const config = validate({ ...BASE_VALIDA });
+    expect(config.TRUST_PROXY_HOPS).toBe(0);
+    expect(config.CLIENT_IP_HEADER).toBeUndefined();
+  });
+
+  it('converte TRUST_PROXY_HOPS de string para número', () => {
+    expect(validate({ ...BASE_VALIDA, TRUST_PROXY_HOPS: '3' }).TRUST_PROXY_HOPS).toBe(3);
+  });
+
+  it.each(['-1', '11', '1.5', 'true'])('rejeita TRUST_PROXY_HOPS=%s', (valor) => {
+    expect(() => validate({ ...BASE_VALIDA, TRUST_PROXY_HOPS: valor })).toThrow();
+  });
+
+  it('aceita CLIENT_IP_HEADER=true-client-ip', () => {
+    expect(validate({ ...BASE_VALIDA, CLIENT_IP_HEADER: 'true-client-ip' }).CLIENT_IP_HEADER).toBe(
+      'true-client-ip',
+    );
+  });
+
+  it('rejeita CLIENT_IP_HEADER=x-forwarded-for, que o cliente consegue forjar', () => {
+    expect(() => validate({ ...BASE_VALIDA, CLIENT_IP_HEADER: 'x-forwarded-for' })).toThrow();
+  });
+});
