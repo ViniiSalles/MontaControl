@@ -1,5 +1,6 @@
 import { plainToInstance } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsString, IsUrl, Matches, Max, MaxLength, Min, validateSync } from 'class-validator';
+import { IsEnum, IsIn, IsInt, IsOptional, IsString, IsUrl, Matches, Max, MaxLength, Min, validateSync } from 'class-validator';
+import { CABECALHOS_IP_CLIENTE, type CabecalhoIpCliente } from '../common/ip-cliente';
 
 enum Ambiente {
   Development = 'development',
@@ -24,6 +25,25 @@ class EnvironmentVariables {
   @Min(0)
   @Max(65535)
   PORT: number = 3000;
+
+  /**
+   * Proxies confiáveis no `X-Forwarded-For` (`trust proxy` do Express).
+   * Default 0: ignora o cabeçalho — seguro em dev local, onde o cliente
+   * controla tudo. Um valor acima dos hops reais deixa o cliente forjar o IP.
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(10)
+  TRUST_PROXY_HOPS: number = 0;
+
+  /**
+   * Cabeçalho que a borda sobrescreve com o IP real do cliente (no Render,
+   * `true-client-ip`). Ausente: o rate limit usa `req.ip`.
+   */
+  @IsOptional()
+  @IsIn(CABECALHOS_IP_CLIENTE)
+  CLIENT_IP_HEADER?: CabecalhoIpCliente;
 
   @IsString()
   DATABASE_URL!: string;
