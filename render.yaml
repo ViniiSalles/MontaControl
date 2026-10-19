@@ -52,6 +52,8 @@ projects:
                 - Codigo/apps/api/test/**
                 - Codigo/apps/api/**/*.spec.ts
             envVars:
+              - key: CLIENT_IP_HEADER
+                value: true-client-ip
               - key: NODE_VERSION
                 value: "22"
               - key: NODE_ENV
@@ -146,6 +148,8 @@ projects:
                 - Codigo/apps/api/test/**
                 - Codigo/apps/api/**/*.spec.ts
             envVars:
+              - key: CLIENT_IP_HEADER
+                value: true-client-ip
               - key: NODE_VERSION
                 value: "22"
               - key: NODE_ENV
