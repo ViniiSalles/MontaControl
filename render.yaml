@@ -1,0 +1,212 @@
+# Blueprint do Render — MontaControl
+#
+# Dois ambientes no mesmo projeto Render, cada um com sua API (NestJS) e seu
+# Web (SPA Vite, site estático):
+#
+#   production  → branch `main`    → projeto Supabase `MontaControl`
+#   development → branch `develop` → projeto Supabase `MontaControlDev`
+#
+# Banco, Auth e Storage ficam no Supabase (não há Postgres do Render aqui).
+# Segredos usam `sync: false`: o Render pede o valor só na criação do
+# Blueprint — depois disso, alterar pelo Dashboard. Nunca colocar valores
+# reais neste arquivo.
+#
+# Plano free: `preDeployCommand` é só de plano pago, então o
+# `prisma migrate deploy` roda no fim do build (pelo session pooler,
+# `DIRECT_URL`). Se a migração falhar, o deploy falha e a versão anterior
+# continua no ar.
+#
+# O Web sempre chama `/api/...` no mesmo origin (ver apps/web/vite.config.ts),
+# então o site estático reescreve `/api/*` para a API do seu ambiente — sem
+# CORS. Se o Render atribuir à API um subdomínio diferente do nome do serviço
+# (ex.: com sufixo aleatório), atualizar o destino da rota abaixo.
+
+projects:
+  - name: montacontrol
+    environments:
+      - name: production
+        services:
+          - type: web
+            name: montacontrol-api
+            runtime: node
+            plan: free
+            region: virginia
+            branch: main
+            rootDir: Codigo
+            buildCommand: >-
+              npm install -g pnpm@11.22.0 &&
+              pnpm install --frozen-lockfile --prod=false --filter "@montacontrol/api..." &&
+              pnpm --filter @montacontrol/shared build &&
+              pnpm --filter @montacontrol/api build &&
+              pnpm --filter @montacontrol/api exec prisma migrate deploy
+            startCommand: node apps/api/dist/main.js
+            healthCheckPath: /api/health
+            buildFilter:
+              paths:
+                - Codigo/apps/api/**
+                - Codigo/packages/shared/**
+                - Codigo/package.json
+                - Codigo/pnpm-lock.yaml
+                - Codigo/pnpm-workspace.yaml
+              ignoredPaths:
+                - Codigo/apps/api/test/**
+                - Codigo/apps/api/**/*.spec.ts
+            envVars:
+              - key: NODE_VERSION
+                value: "22"
+              - key: NODE_ENV
+                value: production
+              - key: DATABASE_URL
+                sync: false
+              - key: DIRECT_URL
+                sync: false
+              - key: SUPABASE_URL
+                sync: false
+              - key: SUPABASE_ANON_KEY
+                sync: false
+              - key: SUPABASE_SERVICE_ROLE_KEY
+                sync: false
+              - key: SUPABASE_JWT_ISSUER
+                sync: false
+              - key: PASSWORD_RESET_REDIRECT_URL
+                value: https://montacontrol-web.onrender.com/login
+              - key: SUPABASE_BUCKET_ATESTADOS
+                value: atestados
+              - key: SUPABASE_BUCKET_AVARIAS
+                value: avarias
+              - key: SUPABASE_BUCKET_FOTOS_USUARIOS
+                value: fotos-usuarios
+              - key: EMPRESA_CNPJ
+                sync: false
+              - key: EMPRESA_RAZAO_SOCIAL
+                sync: false
+              - key: REP_P_REGISTRO_INPI
+                sync: false
+              - key: DESENVOLVEDOR_CNPJ
+                sync: false
+
+          - type: web
+            name: montacontrol-web
+            runtime: static
+            branch: main
+            rootDir: Codigo
+            buildCommand: >-
+              npm install -g pnpm@11.22.0 &&
+              pnpm install --frozen-lockfile --prod=false --filter "@montacontrol/web..." &&
+              pnpm --filter @montacontrol/shared build &&
+              pnpm --filter @montacontrol/web build
+            staticPublishPath: apps/web/dist
+            buildFilter:
+              paths:
+                - Codigo/apps/web/**
+                - Codigo/packages/**
+                - Codigo/package.json
+                - Codigo/pnpm-lock.yaml
+                - Codigo/pnpm-workspace.yaml
+              ignoredPaths:
+                - Codigo/apps/web/e2e/**
+                - Codigo/apps/web/**/__tests__/**
+            envVars:
+              - key: NODE_VERSION
+                value: "22"
+            routes:
+              # Ordem importa: a primeira regra que casa vence.
+              - type: rewrite
+                source: /api/*
+                destination: https://montacontrol-api.onrender.com/api/*
+              - type: rewrite
+                source: /*
+                destination: /index.html
+
+      - name: development
+        services:
+          - type: web
+            name: montacontrol-api-dev
+            runtime: node
+            plan: free
+            region: virginia
+            branch: develop
+            rootDir: Codigo
+            buildCommand: >-
+              npm install -g pnpm@11.22.0 &&
+              pnpm install --frozen-lockfile --prod=false --filter "@montacontrol/api..." &&
+              pnpm --filter @montacontrol/shared build &&
+              pnpm --filter @montacontrol/api build &&
+              pnpm --filter @montacontrol/api exec prisma migrate deploy
+            startCommand: node apps/api/dist/main.js
+            healthCheckPath: /api/health
+            buildFilter:
+              paths:
+                - Codigo/apps/api/**
+                - Codigo/packages/shared/**
+                - Codigo/package.json
+                - Codigo/pnpm-lock.yaml
+                - Codigo/pnpm-workspace.yaml
+              ignoredPaths:
+                - Codigo/apps/api/test/**
+                - Codigo/apps/api/**/*.spec.ts
+            envVars:
+              - key: NODE_VERSION
+                value: "22"
+              - key: NODE_ENV
+                value: development
+              - key: DATABASE_URL
+                sync: false
+              - key: DIRECT_URL
+                sync: false
+              - key: SUPABASE_URL
+                sync: false
+              - key: SUPABASE_ANON_KEY
+                sync: false
+              - key: SUPABASE_SERVICE_ROLE_KEY
+                sync: false
+              - key: SUPABASE_JWT_ISSUER
+                sync: false
+              - key: PASSWORD_RESET_REDIRECT_URL
+                value: https://montacontrol-web-dev.onrender.com/login
+              - key: SUPABASE_BUCKET_ATESTADOS
+                value: atestados
+              - key: SUPABASE_BUCKET_AVARIAS
+                value: avarias
+              - key: SUPABASE_BUCKET_FOTOS_USUARIOS
+                value: fotos-usuarios
+              - key: EMPRESA_CNPJ
+                sync: false
+              - key: EMPRESA_RAZAO_SOCIAL
+                sync: false
+              - key: REP_P_REGISTRO_INPI
+                sync: false
+              - key: DESENVOLVEDOR_CNPJ
+                sync: false
+
+          - type: web
+            name: montacontrol-web-dev
+            runtime: static
+            branch: develop
+            rootDir: Codigo
+            buildCommand: >-
+              npm install -g pnpm@11.22.0 &&
+              pnpm install --frozen-lockfile --prod=false --filter "@montacontrol/web..." &&
+              pnpm --filter @montacontrol/shared build &&
+              pnpm --filter @montacontrol/web build
+            staticPublishPath: apps/web/dist
+            buildFilter:
+              paths:
+                - Codigo/apps/web/**
+                - Codigo/packages/**
+                - Codigo/package.json
+                - Codigo/pnpm-lock.yaml
+                - Codigo/pnpm-workspace.yaml
+              ignoredPaths:
+                - Codigo/apps/web/e2e/**
+                - Codigo/apps/web/**/__tests__/**
+            envVars:
+              - key: NODE_VERSION
+                value: "22"
+            routes:
+              - type: rewrite
+                source: /api/*
+                destination: https://montacontrol-api-dev.onrender.com/api/*
+              - type: rewrite
+                source: /*
+                destination: /index.html
