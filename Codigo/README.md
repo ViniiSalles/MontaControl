@@ -148,6 +148,63 @@ em quem não tiver IPv6 funcional.
 `TRUNCATE` global é **proibido** no harness de e2e. Cada execução isola seus próprios dados por
 prefixo (`e2e-<uuid>@...`) e limpa exatamente o que criou no `afterAll` — nunca por contagem global.
 
+## Rate limit atrás dos proxies do Render
+
+O `ThrottlerModule` global (100 req/min) usa o IP do cliente como chave. No Render a API nunca vê
+o cliente direto: toda requisição passa pelo Cloudflare e pelo load balancer do Render, e as do Web
+ainda passam pelo rewrite `/api/*` do site estático. Sem configuração, `req.ip` é o IP do proxy e
+**todos os usuários dividem o mesmo limite**. Duas variáveis (validadas em
+`apps/api/src/config/env.validation.ts`) resolvem isso:
+
+| Variável | Default | Efeito |
+| --- | --- | --- |
+| `CLIENT_IP_HEADER` | ausente | Cabeçalho de onde o rate limit lê o IP. Só aceita `true-client-ip` ou `cf-connecting-ip`, que a borda **sobrescreve** em toda requisição. Valor ausente ou inválido no request cai para `req.ip`. |
+| `TRUST_PROXY_HOPS` | `0` | `trust proxy` do Express: quantos proxies à direita do `X-Forwarded-For` são confiáveis para calcular `req.ip`. `0` ignora o cabeçalho e usa o socket. |
+
+**No Render, use `CLIENT_IP_HEADER=true-client-ip` e deixe `TRUST_PROXY_HOPS` em `0`.** Contar hops
+no `X-Forwarded-For` não serve lá:
+
+- O Render **não remove** o `X-Forwarded-For` enviado pelo cliente; só acrescenta entradas à direita
+  (ex.: `<forjado>, <cliente real>, 172.71.x.x, 10.x.x.x`). Com um hop a mais que o real, `req.ip`
+  vira o valor forjado e o cliente escolhe o próprio balde do rate limit.
+- O número de hops não é documentado e **difere entre os caminhos**: o Mobile chama a API direto,
+  o Web chega via rewrite do site estático, que é mais um proxy na frente. Um valor único não acerta
+  os dois.
+- O `True-Client-IP`, por outro lado, é preenchido pelo Cloudflare com o IP real e sobrescrito se
+  o cliente tentar forjá-lo; um `CF-Connecting-IP` forjado é rejeitado com 403 antes de chegar à API.
+
+Fontes: [header-test](https://github.com/johnbeynon/header-test) (teste de forja dos três cabeçalhos
+num web service do Render), [How Render handles DDoS attacks](https://render.com/articles/how-render-handles-ddos-attacks)
+(tráfego passa por Cloudflare + load balancer) e a thread
+[Missing x-forwarded-for header on /api rewrites](https://community.render.com/t/missing-x-forwarded-for-header-on-api-rewrites-to-backend/24481)
+(no rewrite do site estático chegam `cf-connecting-ip`/`true-client-ip`). Nenhuma delas é
+documentação formal do Render — por isso a conferência abaixo depois do primeiro deploy.
+
+Em dev local (sem proxy na frente) deixe as duas ausentes: qualquer cabeçalho de IP é forjável ali,
+e o default já ignora todos. `TRUST_PROXY_HOPS` só faz sentido atrás de uma cadeia de proxies fixa e
+conhecida (ex.: um único Nginx → `1`).
+
+No `render.yaml`, no serviço da API:
+
+```yaml
+services:
+  - type: web
+    name: montacontrol-api
+    runtime: node
+    # ...
+    envVars:
+      - key: CLIENT_IP_HEADER
+        value: true-client-ip
+```
+
+(Sem Blueprint, o mesmo par vai em **Environment** do serviço no dashboard.) Valores fora da lista
+derrubam o boot com `Configuração de ambiente inválida` — de propósito.
+
+**Conferência após o deploy:** dispare mais de 100 requisições em 1 minuto de uma rede (ex.: um
+`for` com `curl` em `/api/health`) até receber `429`, e confirme que outra rede — o celular no 4G,
+pelo app Mobile, e o Web pelo rewrite — continua recebendo `200`. Se as duas redes recebem `429`
+juntas, o cabeçalho não está chegando e o limite voltou a ser compartilhado.
+
 ## Testes
 
 - Backend: unitários com `Test.createTestingModule` do NestJS e duplos de teste via
