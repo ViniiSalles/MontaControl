@@ -20,7 +20,12 @@ import { StatusAtestado, StatusAvaria, syncPullFixture } from '@montacontrol/sha
 import type { SyncPullResponse } from '@montacontrol/shared';
 import { definirTokens } from '../../auth/tokenSessao';
 import { respostaJson } from '../../auth/__tests__/apoio';
-import { criarBancoDeTeste, gravarPullNaReplica } from '../../db/__tests__/apoio';
+import {
+  criarBancoDeTeste,
+  gravarLinhasNaReplica,
+  gravarPullNaReplica,
+  linhaDeJornadaAberta,
+} from '../../db/__tests__/apoio';
 import { comBanco, ComSincronizacaoDoApp } from '../../db/__tests__/apoioReact';
 import { AcaoPendente } from '../../db/AcaoPendente';
 import { apagarTodasAsFotos } from '../../fotos/armazenamentoFotos';
@@ -57,6 +62,14 @@ function pullDoServidor(): SyncPullResponse {
       syncPullFixture.timestamp + 60_000 * (servidor.avarias.length + servidor.atestados.length),
     changes: {
       ...base,
+      jornadas: {
+        ...base.jornadas,
+        updated: base.jornadas.updated.map((jornada) =>
+          jornada.id === '502'
+            ? { ...jornada, checkin_at: new Date(Date.now() - 60 * 60 * 1000).toISOString() }
+            : jornada,
+        ),
+      },
       avarias: {
         created: [],
         deleted: [],
@@ -144,6 +157,7 @@ async function anexarFoto(rotuloDoBotao: string) {
 async function reportarAvariaComDuasFotos() {
   await waitFor(() => expect(screen.getByText('Armário aéreo 80cm')).toBeTruthy());
   await fireEvent.press(screen.getByText('Armário aéreo 80cm'));
+  await fireEvent.press(screen.getByLabelText(/^Problema:/));
   await fireEvent.press(screen.getByText('Peça faltando'));
   await fireEvent.changeText(
     screen.getByPlaceholderText('O que aconteceu com a peça?'),
@@ -186,6 +200,9 @@ beforeEach(async () => {
   database = criarBancoDeTeste();
   // Réplica preenchida por um pull anterior; agora o aparelho está sem rede.
   await gravarPullNaReplica(database, syncPullFixture);
+  // Sem rede, quem libera o formulário é o ponto aberto que já está na réplica
+  // (a 502 da fixture tem entrada em data fixa, vencida para o relógio real).
+  await gravarLinhasNaReplica(database, 'jornadas', [linhaDeJornadaAberta({ id: '700', pedido_id: '12' })]);
 });
 
 afterEach(async () => {
@@ -194,11 +211,11 @@ afterEach(async () => {
 
 describe('avaria sem rede', () => {
   it('abre o formulário com a réplica, enfileira com 2 fotos, aparece aguardando envio e sobe quando a rede volta', async () => {
-    await renderizar(<Avarias />);
+    await renderizar(<Avarias aoIrParaJornada={() => undefined} />);
 
     // Sem rede o formulário está lá, com pedido, peças e tipos da réplica.
     await waitFor(() => expect(screen.getByText('Enviar problema')).toBeTruthy());
-    expect(screen.getByText('PED-2026-0012 · Residencial Acácias')).toBeTruthy();
+    expect(screen.getByText('Residencial Acácias')).toBeTruthy();
     expect(screen.queryByText('Não foi possível carregar')).toBeNull();
 
     await reportarAvariaComDuasFotos();
@@ -239,7 +256,7 @@ describe('avaria sem rede', () => {
   });
 
   it('recusa de regra na subida: a ação sai da fila, a tela mostra o texto do servidor e os arquivos são apagados', async () => {
-    await renderizar(<Avarias />);
+    await renderizar(<Avarias aoIrParaJornada={() => undefined} />);
     await reportarAvariaComDuasFotos();
     await waitFor(() => expect(screen.getByText('AGUARDANDO ENVIO')).toBeTruthy());
     expect(fotosGuardadas()).toHaveLength(2);

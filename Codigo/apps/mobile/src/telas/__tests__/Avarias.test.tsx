@@ -14,7 +14,12 @@ import * as ImagePicker from 'expo-image-picker';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { StatusAvaria, syncPullFixture } from '@montacontrol/shared';
 import { enviarAvaria } from '../../avarias/clienteAvarias';
-import { criarBancoDeTeste, gravarLinhasNaReplica, gravarPullNaReplica } from '../../db/__tests__/apoio';
+import {
+  criarBancoDeTeste,
+  gravarLinhasNaReplica,
+  gravarPullNaReplica,
+  linhaDeJornadaAberta,
+} from '../../db/__tests__/apoio';
 import { comBancoESincronizacao } from '../../db/__tests__/apoioReact';
 import { AcaoPendente } from '../../db/AcaoPendente';
 import { apagarTodasAsFotos } from '../../fotos/armazenamentoFotos';
@@ -32,11 +37,17 @@ const AVARIA_DA_REPLICA = syncPullFixture.changes.avarias.updated[0];
 async function bancoComReplica() {
   const database = criarBancoDeTeste();
   await gravarPullNaReplica(database, syncPullFixture);
+  // Ponto aberto agora no PED-2026-0012 (id 12): é a obra que a tela herda.
+  // A 502 da fixture (em andamento) tem entrada em data fixa, vencida para o
+  // relógio real; esta, mais recente, é a que vale.
+  await gravarLinhasNaReplica(database, 'jornadas', [linhaDeJornadaAberta({ id: '700', pedido_id: '12' })]);
   return database;
 }
 
+const irParaJornada = jest.fn();
+
 async function renderizar(database: ReturnType<typeof criarBancoDeTeste>) {
-  await render(<Avarias />, { wrapper: comBancoESincronizacao(database) });
+  await render(<Avarias aoIrParaJornada={irParaJornada} />, { wrapper: comBancoESincronizacao(database) });
 }
 
 /** Toca em "Fotografar problema" e escolhe uma foto da galeria (o picker devolve o arquivo temporário). */
@@ -59,6 +70,7 @@ async function anexarFotoDaGaleria() {
 async function preencherEEnviar(comFotos = 0) {
   await waitFor(() => expect(screen.getByText('Armário aéreo 80cm')).toBeTruthy());
   await fireEvent.press(screen.getByText('Armário aéreo 80cm'));
+  await fireEvent.press(screen.getByLabelText(/^Problema:/));
   await fireEvent.press(screen.getByText('Peça faltando'));
   await fireEvent.changeText(
     screen.getByPlaceholderText('O que aconteceu com a peça?'),
@@ -106,27 +118,30 @@ test('lista os reportes da réplica com situação e parecer do gestor', async (
   expect(screen.queryByText('AGUARDANDO ENVIO')).toBeNull();
 });
 
-// Regressão: com um pedido só, a lista de pedidos sumia e o montador achava
-// que o vínculo não tinha chegado.
-test('mostra o pedido vinculado com o cliente mesmo quando é o único', async () => {
+test('mostra a obra do ponto, só para leitura', async () => {
   await renderizar(await bancoComReplica());
 
-  await waitFor(() =>
-    expect(screen.getByText('PED-2026-0012 · Residencial Acácias')).toBeTruthy(),
-  );
-  expect(screen.getByText('Rua das Acácias, 120 · Belo Horizonte/MG')).toBeTruthy();
+  await waitFor(() => expect(screen.getByText('Residencial Acácias')).toBeTruthy());
+  expect(screen.getByText('PED-2026-0012 · Rua das Acácias, 120 · Belo Horizonte/MG')).toBeTruthy();
+  expect(screen.queryByText('Trocar')).toBeNull();
 });
 
-test('sem pedido vinculado não mostra o formulário', async () => {
-  await renderizar(criarBancoDeTeste());
+test('sem ponto aberto, bloqueia o formulário mas mantém o histórico', async () => {
+  const database = criarBancoDeTeste();
+  await gravarPullNaReplica(database, syncPullFixture); // 502 da fixture: vencida para o relógio real
+  await renderizar(database);
 
-  await waitFor(() => expect(screen.getByText('Nenhum pedido vinculado')).toBeTruthy());
+  await waitFor(() => expect(screen.getByText('Bata o ponto de entrada para registrar avarias')).toBeTruthy());
   expect(screen.queryByText('Enviar problema')).toBeNull();
+  expect(screen.getByText('MEUS REPORTES')).toBeTruthy();
+  expect(screen.getByText('EM ANÁLISE')).toBeTruthy();
+  await fireEvent.press(screen.getByText('Ir para a Jornada'));
+  expect(irParaJornada).toHaveBeenCalled();
 });
 
 test('réplica vazia depois de uma sincronização que falhou pede para conectar e tentar de novo', async () => {
   await renderizar(criarBancoDeTeste());
-  await waitFor(() => expect(screen.getByText('Nenhum pedido vinculado')).toBeTruthy());
+  await waitFor(() => expect(screen.getByText('Bata o ponto de entrada para registrar avarias')).toBeTruthy());
 
   await act(async () => {
     useSincronizacaoStore.setState({ ultimoErro: 'sem_rede' });
@@ -239,6 +254,7 @@ test('fechar a tela sem enviar mantém o rascunho e as fotos: ao voltar, está t
   await renderizar(database);
   await waitFor(() => expect(screen.getByText('Armário aéreo 80cm')).toBeTruthy());
   await fireEvent.press(screen.getByText('Armário aéreo 80cm'));
+  await fireEvent.press(screen.getByLabelText(/^Problema:/));
   await fireEvent.press(screen.getByText('Peça faltando'));
   await fireEvent.changeText(screen.getByPlaceholderText('O que aconteceu com a peça?'), 'Rascunho');
   await anexarFotoDaGaleria();
@@ -260,6 +276,7 @@ test('fechar e reabrir o app mantém o rascunho de avaria: campos e fotos (os no
   await renderizar(database);
   await waitFor(() => expect(screen.getByText('Armário aéreo 80cm')).toBeTruthy());
   await fireEvent.press(screen.getByText('Armário aéreo 80cm'));
+  await fireEvent.press(screen.getByLabelText(/^Problema:/));
   await fireEvent.press(screen.getByText('Peça faltando'));
   await fireEvent.changeText(screen.getByPlaceholderText('O que aconteceu com a peça?'), 'Rascunho');
   await anexarFotoDaGaleria();
@@ -291,7 +308,7 @@ test('fechar e reabrir o app mantém o rascunho de avaria: campos e fotos (os no
   });
 });
 
-test('rascunho com pedido, peça e tipo que a réplica já não tem não é enviado com esses ids', async () => {
+test('rascunho com peça e tipo que a réplica já não tem não é enviado com esses ids', async () => {
   useUiStore.getState().alterarRascunhoAvaria({
     campos: { pecaId: 9999, tipoAvariaId: 9999, descricao: 'De uma réplica antiga' },
   });
@@ -336,6 +353,7 @@ test('desmontar a tela com o envio ainda pendurado na rede não perde as fotos: 
   await renderizar(database);
   await waitFor(() => expect(screen.getByText('Armário aéreo 80cm')).toBeTruthy());
   await fireEvent.press(screen.getByText('Armário aéreo 80cm'));
+  await fireEvent.press(screen.getByLabelText(/^Problema:/));
   await fireEvent.press(screen.getByText('Peça faltando'));
   await fireEvent.changeText(
     screen.getByPlaceholderText('O que aconteceu com a peça?'),
@@ -382,4 +400,42 @@ test('falha ao registrar (enfileiramento) avisa que as fotos foram descartadas e
   await waitFor(() => expect(screen.getByText(/Não foi possível registrar o problema/)).toBeTruthy());
   expect(screen.getByText(/As fotos anexadas foram descartadas/)).toBeTruthy();
   expect(fotosGuardadas()).toEqual([]);
+});
+
+test('com mais de um pedido na réplica, peças e envio são do pedido da obra do ponto', async () => {
+  enviarMock.mockResolvedValue({} as never);
+  const database = await bancoComReplica();
+  await gravarLinhasNaReplica(database, 'pedidos', [
+    { ...syncPullFixture.changes.pedidos.updated[0], id: '13', numero_pedido: 'PED-2026-0013', cliente_nome: 'Outra obra' },
+  ]);
+  await renderizar(database);
+
+  await preencherEEnviar();
+
+  await waitFor(() => expect(enviarMock).toHaveBeenCalledWith(expect.objectContaining({ pecaId: 301 })));
+  expect(screen.queryByText('Outra obra')).toBeNull();
+});
+
+test('"Outro" troca o rótulo da descrição e envia o tipo Outro', async () => {
+  enviarMock.mockResolvedValue({} as never);
+  const database = await bancoComReplica();
+  await gravarLinhasNaReplica(database, 'tipos_avaria', [
+    { id: '99', nome: 'Outro', descricao: 'Problema não listado — detalhado na descrição' },
+  ]);
+  await renderizar(database);
+  await waitFor(() => expect(screen.getByText('Armário aéreo 80cm')).toBeTruthy());
+  await fireEvent.press(screen.getByText('Armário aéreo 80cm'));
+
+  await fireEvent.press(screen.getByLabelText(/^Problema:/));
+  await fireEvent.press(screen.getByText('Outro'));
+  // O `CampoTexto` junta o " *" de obrigatório ao rótulo no mesmo nó de texto.
+  expect(screen.getByText(/^Qual é o problema\?/)).toBeTruthy();
+  await fireEvent.changeText(screen.getByPlaceholderText('Descreva o problema da peça'), 'Dobradiça solta');
+  await fireEvent.press(screen.getByText('Enviar problema'));
+
+  await waitFor(() =>
+    expect(enviarMock).toHaveBeenCalledWith(
+      expect.objectContaining({ tipoAvariaId: 99, descricao: 'Dobradiça solta' }),
+    ),
+  );
 });
