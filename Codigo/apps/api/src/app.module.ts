@@ -8,6 +8,7 @@ import { AvariasModule } from './avarias/avarias.module';
 import { AuthModule } from './auth/auth.module';
 import { BancoHorasModule } from './banco-horas/banco-horas.module';
 import { ClientesModule } from './clientes/clientes.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { HealthController } from './common/health.controller';
 import { criarOpcoesThrottler } from './common/ip-cliente';
@@ -43,6 +44,7 @@ import { SyncModule } from './sync/sync.module';
     PedidosModule,
     PecasModule,
     AvariasModule,
+    DashboardModule,
     EquipesModule,
     SyncModule,
   ],
