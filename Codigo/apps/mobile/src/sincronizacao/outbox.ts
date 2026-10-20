@@ -8,6 +8,8 @@ import type {
 } from '@montacontrol/shared';
 import { enviarAtestado } from '../atestados/clienteAtestados';
 import { enviarAvaria } from '../avarias/clienteAvarias';
+import { enviarConferencia } from '../conferencia/clienteConferencia';
+import type { PayloadConferenciaNaFila } from '../conferencia/conferencia';
 import { AcaoPendente } from '../db/AcaoPendente';
 import { ErroApi } from '../http/erroApi';
 import { enviarCheckin, enviarCheckout, enviarSolicitacaoPonto } from '../jornada/clienteJornadas';
@@ -26,6 +28,11 @@ export type ResultadoEnvio<T> = { tipo: 'ok'; dado: T } | { tipo: 'recusado'; co
 export type ResultadoPontoEmAtraso = { tipo: 'ok' } | { tipo: 'recusado'; codigo: string };
 /** `pendente`: sem rede agora, fica na fila e sobe sozinho quando a conexão voltar. */
 export type ResultadoAvaria =
+  | { tipo: 'enviada' }
+  | { tipo: 'pendente' }
+  | { tipo: 'recusado'; codigo: string; mensagem: string };
+/** Leitura de código de barras: a regra já rodou no aparelho; o envio só confirma. */
+export type ResultadoConferencia =
   | { tipo: 'enviada' }
   | { tipo: 'pendente' }
   | { tipo: 'recusado'; codigo: string; mensagem: string };
@@ -246,6 +253,34 @@ export async function executarAcaoAvaria(
   return (await confirmarEnvio(database, acao, caminhosDasFotos(payload)))
     ? { tipo: 'enviada' }
     : { tipo: 'pendente' };
+}
+
+/**
+ * Bipagem no descarregamento (US02): a leitura entra na fila antes da rede —
+ * o checklist a mostra conferida pela sobreposição, com ou sem sinal (N4T3).
+ * Aceita, fica `enviada` até o pull trazer a peça DESCARREGADA. Recusa (o
+ * montador deixou de estar no pedido) sai da fila e volta com a mensagem.
+ */
+export async function executarAcaoConferencia(
+  database: Database,
+  payload: PayloadConferenciaNaFila,
+): Promise<ResultadoConferencia> {
+  const acao = await enfileirar(database, 'conferencia', payload.idCliente, payload);
+
+  try {
+    await enviarConferencia(payload);
+  } catch (erro) {
+    if (!ehRecusaDoServidor(erro)) return { tipo: 'pendente' };
+    await database.write(() => acao.destroyPermanently());
+    return { tipo: 'recusado', codigo: erro.codigo, mensagem: erro.message };
+  }
+  try {
+    await marcarComoEnviada(database, acao);
+  } catch {
+    // Segue `pendente` e sobe de novo na drenagem — a API é idempotente.
+    return { tipo: 'pendente' };
+  }
+  return { tipo: 'enviada' };
 }
 
 /**
