@@ -18,6 +18,8 @@ const ROTULO_STATUS_PECA: Record<StatusPeca, string> = {
   [StatusPeca.PENDENTE]: 'Pendente',
   [StatusPeca.TRIADA]: 'Triada',
   [StatusPeca.CARREGADA]: 'Carregada',
+  [StatusPeca.DESCARREGADA]: 'Descarregada',
+  [StatusPeca.INCONSISTENTE]: 'Inconsistente',
   [StatusPeca.ENTREGUE]: 'Entregue',
 }
 

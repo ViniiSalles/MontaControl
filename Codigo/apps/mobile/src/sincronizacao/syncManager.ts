@@ -5,6 +5,7 @@ import type { Database } from '@nozbe/watermelondb';
 import { synchronize } from '@nozbe/watermelondb/sync';
 import { enviarAtestado } from '../atestados/clienteAtestados';
 import { enviarAvaria } from '../avarias/clienteAvarias';
+import { enviarConferencia } from '../conferencia/clienteConferencia';
 import { enviarCheckin, enviarCheckout, enviarSolicitacaoPonto } from '../jornada/clienteJornadas';
 import { ErroSessaoExpirada, geracaoDaSessao, lerTokenAtual } from '../auth/tokenSessao';
 import { AcaoPendente } from '../db/AcaoPendente';
@@ -32,10 +33,10 @@ const VERSAO_INICIAL_DA_SINCRONIZACAO = 2;
 
 /**
  * Ações cujo resultado aparece na tela como registro da réplica (jornada,
- * avaria, atestado): aceitas, ficam `enviada` até o pull o trazer. O ponto em
- * atraso não tem registro para sobrepor e sai da fila.
+ * avaria, atestado, peça conferida): aceitas, ficam `enviada` até o pull o
+ * trazer. O ponto em atraso não tem registro para sobrepor e sai da fila.
  */
-const TIPOS_QUE_AGUARDAM_O_PULL = ['checkin', 'checkout', 'avaria', 'atestado'];
+const TIPOS_QUE_AGUARDAM_O_PULL = ['checkin', 'checkout', 'avaria', 'atestado', 'conferencia'];
 
 /**
  * `sem_rede` cobre tudo o que não é uma decisão do servidor sobre a ação:
@@ -51,6 +52,7 @@ async function reenviar(
   try {
     if (acao.tipo === 'checkin') await enviarCheckin(payload, { geracao });
     else if (acao.tipo === 'checkout') await enviarCheckout(payload, { geracao });
+    else if (acao.tipo === 'conferencia') await enviarConferencia(payload, { geracao });
     else if (acao.tipo === 'avaria') {
       await enviarAvaria(await montarCorpoAvaria(payload), { geracao });
     } else if (acao.tipo === 'atestado') {
@@ -79,12 +81,13 @@ async function reenviar(
 }
 
 /**
- * Avaria e atestado são ações do próprio montador, que já saiu da tela: o aviso
+ * Avaria, atestado e leitura de peça são ações do próprio montador, que já saiu da tela: o aviso
  * leva o texto do servidor (o motivo). Ponto segue com o código, como antes.
  */
 function mensagemDeRecusa(tipo: string, erro: ErroApi): string | undefined {
   if (tipo === 'avaria') return `Avaria recusada: ${erro.message}`;
   if (tipo === 'atestado') return `Atestado recusado: ${erro.message}`;
+  if (tipo === 'conferencia') return `Leitura de peça recusada: ${erro.message}`;
   return undefined;
 }
 

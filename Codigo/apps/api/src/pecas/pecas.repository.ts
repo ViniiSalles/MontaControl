@@ -76,6 +76,38 @@ export class PecasRepository {
     }
   }
 
+  /** Peça triada com esse código e o pedido a que pertence — base da conferência do montador. */
+  async buscarParaConferencia(
+    codigoBarras: string,
+  ): Promise<{ id: number; status: StatusPeca; pedidoId: number } | null> {
+    const linha = await this.prisma.peca.findUnique({
+      where: { codigoBarras },
+      select: { id: true, status: true, ambiente: { select: { pedidoId: true } } },
+    });
+    return linha ? { id: linha.id, status: linha.status, pedidoId: linha.ambiente.pedidoId } : null;
+  }
+
+  /**
+   * Muda o status só se a peça ainda estiver num dos `de` — a condição no
+   * `where` torna a transição segura contra leituras simultâneas. Devolve se
+   * mudou. `conferidaPor` só acompanha a conferência que deu certo.
+   */
+  async registrarConferencia(
+    id: number,
+    de: readonly StatusPeca[],
+    para: typeof StatusPeca.DESCARREGADA | typeof StatusPeca.INCONSISTENTE,
+    usuarioId: number,
+  ): Promise<boolean> {
+    const { count } = await this.prisma.peca.updateMany({
+      where: { id, status: { in: [...de] } },
+      data:
+        para === StatusPeca.DESCARREGADA
+          ? { status: para, conferidaPor: usuarioId, conferidaAt: new Date() }
+          : { status: para },
+    });
+    return count > 0;
+  }
+
   async buscarPorCodigoBarras(codigoBarras: string): Promise<{ id: number } | null> {
     return this.prisma.peca.findUnique({
       where: { codigoBarras },

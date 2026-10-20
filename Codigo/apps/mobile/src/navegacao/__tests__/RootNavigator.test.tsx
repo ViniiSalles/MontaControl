@@ -211,7 +211,7 @@ test('sair remove os listeners de rede e de primeiro plano', async () => {
   expect(gatilhos.appState.size).toBe(0);
 });
 
-test('a barra inferior traz as 5 abas, com Jornada, Avarias e Atestados habilitadas', async () => {
+test('a barra inferior traz as 5 abas, com Jornada, Bipagem, Avarias e Atestados habilitadas', async () => {
   armazenamentoMock.lerSessao.mockResolvedValue(SESSAO_SALVA);
   jest.mocked(globalThis.fetch).mockResolvedValueOnce(respostaJson(200, montador));
 
@@ -223,6 +223,6 @@ test('a barra inferior traz as 5 abas, com Jornada, Avarias e Atestados habilita
   }
 
   // Aba ainda não entregue não troca de tela.
-  await fireEvent.press(screen.getByText('Bipagem'));
+  await fireEvent.press(screen.getByText('Normas'));
   expect(screen.getByText('Jornada de Trabalho')).toBeTruthy();
 });

@@ -316,6 +316,26 @@ export interface AssociarCodigoBarrasRequest {
   codigoBarras: string;
 }
 
+/**
+ * US02/UC03-UC04 — montador bipa uma peça no descarregamento do pedido ativo.
+ * Idempotente: a mesma leitura reenviada pela fila offline dá o mesmo resultado.
+ */
+export interface ConferirPecaRequest {
+  pedidoId: number;
+  codigoBarras: string;
+}
+
+/**
+ * - `CONFERIDA`: a peça é do pedido ativo e ficou DESCARREGADA;
+ * - `INCONSISTENTE`: a peça é de outro pedido e foi marcada INCONSISTENTE;
+ * - `NAO_ENCONTRADA`: nenhum código de barras triado com esse valor.
+ */
+export type ResultadoConferencia = 'CONFERIDA' | 'INCONSISTENTE' | 'NAO_ENCONTRADA';
+
+export interface ConferenciaPecaDTO {
+  resultado: ResultadoConferencia;
+}
+
 export interface AmbienteComPecasDTO {
   id: number;
   nome: string;

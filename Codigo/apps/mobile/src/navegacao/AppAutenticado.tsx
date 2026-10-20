@@ -5,6 +5,7 @@ import { cores } from '@montacontrol/design-tokens/native';
 import { BarraNavInferior } from '../ui/BarraNavInferior';
 import { Atestados } from '../telas/Atestados';
 import { Avarias } from '../telas/Avarias';
+import { Bipagem } from '../telas/Bipagem';
 import { IndicadorDeSincronizacao } from '../sincronizacao/IndicadorDeSincronizacao';
 import { useSincronizacaoDoApp } from '../sincronizacao/useSincronizacaoDoApp';
 import { PilhaJornada } from './PilhaJornada';
@@ -24,6 +25,7 @@ import type { IdAba } from './abas';
  */
 const telaPorAba: Partial<Record<IdAba, ComponentType>> = {
   jornada: PilhaJornada,
+  bipagem: Bipagem,
   avarias: Avarias,
   atestados: Atestados,
 };
