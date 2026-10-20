@@ -42,6 +42,10 @@ enum StatusPeca {
   PENDENTE
   TRIADA
   CARREGADA
+  /// Bipada pelo montador no descarregamento, no pedido certo (US02/UC03).
+  DESCARREGADA
+  /// Bipada no descarregamento de outro pedido — peça no caminhão errado (US02/UC04).
+  INCONSISTENTE
   ENTREGUE
 }
 
