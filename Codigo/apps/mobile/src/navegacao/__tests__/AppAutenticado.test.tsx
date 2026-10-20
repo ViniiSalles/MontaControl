@@ -205,3 +205,13 @@ describe('indicador de status da sincronização', () => {
     });
   });
 });
+
+test('sem ponto aberto, "Ir para a Jornada" na Bipagem troca para a aba Jornada', async () => {
+  await render(arvore());
+  await irParaAba('Bipagem');
+  await waitFor(() => expect(screen.getByText('Ir para a Jornada')).toBeTruthy());
+
+  await fireEvent.press(screen.getByText('Ir para a Jornada'));
+
+  await waitFor(() => expect(screen.getByText('Jornada de Trabalho')).toBeTruthy());
+});

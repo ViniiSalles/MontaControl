@@ -17,13 +17,16 @@ import {
 import type { ResultadoLeitura } from '../conferencia/conferencia';
 import { useDadosConferencia } from '../conferencia/useDadosConferencia';
 import { useDatabaseOuFalha } from '../db/useDatabase';
+import { useObraEmTrabalho } from '../jornada/useObraEmTrabalho';
+import type { PropsTelaDaAba } from '../navegacao/telaDaAba';
 import { executarAcaoConferencia } from '../sincronizacao/outbox';
 import { AvisosDeAcoesRecusadas } from './AvisosDeAcoesRecusadas';
-import { Opcao } from './avarias/Opcao';
 import { CartaoProgresso } from './bipagem/CartaoProgresso';
 import { CartaoUltimaLeitura } from './bipagem/CartaoUltimaLeitura';
 import { ChecklistPecas } from './bipagem/ChecklistPecas';
 import { LeitorCodigoBarras } from './bipagem/LeitorCodigoBarras';
+import { BloqueioSemObra } from './jornada/BloqueioSemObra';
+import { CartaoObra } from './jornada/CartaoObra';
 
 /** Toque curto confirma; o padrão longo avisa sem o montador precisar olhar a tela. */
 const VIBRACAO_CONFERIDA = 60;
@@ -31,29 +34,26 @@ const VIBRACAO_ALERTA = [0, 250, 120, 250];
 
 /**
  * Bipagem no descarregamento (US02): o montador lê a etiqueta de cada peça e
- * o app confere contra o pedido ativo na hora, sem rede (N4T1-N4T3). A
- * leitura vai para a fila e sobe quando houver sinal; o checklist já a mostra
- * conferida pela sobreposição.
+ * o app confere contra o pedido na hora, sem rede (N4T1-N4T3). O pedido
+ * conferido é sempre o da obra do ponto de entrada em andamento
+ * (`useObraEmTrabalho`); sem ponto aberto a tela bloqueia. A leitura vai para
+ * a fila e sobe quando houver sinal; o checklist já a mostra conferida pela
+ * sobreposição.
  */
-export function Bipagem() {
+export function Bipagem({ aoIrParaJornada }: PropsTelaDaAba) {
   const database = useDatabaseOuFalha();
   const { pedidos, leiturasNaFila, carregando, erro, recarregar } = useDadosConferencia();
-  const [pedidoEscolhidoId, setPedidoEscolhidoId] = useState<number | null>(null);
+  const { obra, motivo, carregando: carregandoObra } = useObraEmTrabalho();
   const [ultimaLeitura, setUltimaLeitura] = useState<ResultadoLeitura | null>(null);
   const [recusa, setRecusa] = useState<string | null>(null);
 
-  // Sem escolha (ou escolhido que sumiu da réplica), o primeiro pedido é o ativo.
-  const pedidoAtivo = pedidos.find((pedido) => pedido.id === pedidoEscolhidoId) ?? pedidos[0] ?? null;
+  // O pedido conferido é sempre o da obra do ponto: sem fallback para o primeiro
+  // da réplica, que conferia peças de uma obra onde o montador não estava.
+  const pedidoAtivo = obra ? (pedidos.find((pedido) => pedido.id === obra.id) ?? null) : null;
   const conferencia = useMemo(
     () => (pedidoAtivo ? montarConferencia(pedidoAtivo, leiturasNaFila) : null),
     [pedidoAtivo, leiturasNaFila],
   );
-
-  function escolherPedido(id: number) {
-    setPedidoEscolhidoId(id);
-    setUltimaLeitura(null);
-    setRecusa(null);
-  }
 
   async function aoLer(codigoBarras: string) {
     if (!conferencia) return;
@@ -95,7 +95,7 @@ export function Bipagem() {
 
         <AvisosDeAcoesRecusadas />
 
-        {carregando ? (
+        {carregando || carregandoObra ? (
           <View style={{ alignItems: 'center', paddingVertical: espacamento[32] }}>
             <Carregando tamanho={espacamento[32]} />
           </View>
@@ -115,31 +115,24 @@ export function Bipagem() {
               aoPressionar={() => void recarregar()}
             />
           </>
-        ) : !conferencia ? (
-          <Alerta
-            variante="info"
-            titulo="Nenhum pedido vinculado"
-            mensagem="Você só confere peças dos pedidos em que está trabalhando. Fale com o gestor e toque em Atualizar."
+        ) : !obra ? (
+          <BloqueioSemObra
+            titulo="Bata o ponto de entrada para conferir peças"
+            motivo={motivo ?? 'sem_ponto'}
+            aoIrParaJornada={aoIrParaJornada}
           />
+        ) : !conferencia ? (
+          <>
+            <CartaoObra obra={obra} />
+            <Alerta
+              variante="aviso"
+              titulo="Dados da obra fora do aparelho"
+              mensagem="As peças desta obra ainda não estão no aparelho. Sincronize pelo botão do topo para conferir."
+            />
+          </>
         ) : (
           <>
-            {pedidos.length > 1 && (
-              <View style={{ gap: espacamento[8] }}>
-                <Texto variante="labelMd" cor={cores.onSurfaceVariant}>
-                  PEDIDO EM DESCARREGAMENTO
-                </Texto>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: espacamento[8] }}>
-                  {pedidos.map((pedido) => (
-                    <Opcao
-                      key={pedido.id}
-                      rotulo={`${pedido.numeroPedido} · ${pedido.cliente.nome}`}
-                      selecionada={pedido.id === conferencia.pedido.id}
-                      aoPressionar={() => escolherPedido(pedido.id)}
-                    />
-                  ))}
-                </View>
-              </View>
-            )}
+            <CartaoObra obra={obra} />
 
             <LeitorCodigoBarras aoLer={(codigo) => void aoLer(codigo)} />
 
