@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import type { PecaDTO, TriarPecaRequest } from '@montacontrol/shared';
+import type {
+  ConferenciaPecaDTO,
+  ConferirPecaRequest,
+  PecaDTO,
+  TriarPecaRequest,
+} from '@montacontrol/shared';
 import { StatusPeca } from '../../generated/prisma';
 import { AmbientesRepository } from '../ambientes/ambientes.repository';
 import { PedidoNaoEncontradoException } from '../pedidos/exceptions/pedido-nao-encontrado.exception';
@@ -8,6 +13,11 @@ import { PecaDuplicadaException } from './exceptions/peca-duplicada.exception';
 import { PecaJaTriadaException } from './exceptions/peca-ja-triada.exception';
 import { PecaNaoEncontradaException } from './exceptions/peca-nao-encontrada.exception';
 import { PecasRepository } from './pecas.repository';
+
+/** Peça que saiu do depósito e ainda não chegou a um cliente. */
+const EM_TRANSITO = [StatusPeca.TRIADA, StatusPeca.CARREGADA] as const;
+/** Bipada no pedido certo: também corrige uma INCONSISTENTE lida antes na obra errada. */
+const CONFERIVEIS = [...EM_TRANSITO, StatusPeca.INCONSISTENTE] as const;
 
 @Injectable()
 export class PecasService {
@@ -44,6 +54,42 @@ export class PecasService {
     if (!peca) throw new PecaDuplicadaException();
 
     return peca;
+  }
+
+  /**
+   * US02/UC03-UC04 — o montador bipa a peça no descarregamento do pedido
+   * ativo. Do pedido certo, a peça fica DESCARREGADA; de outro pedido, fica
+   * INCONSISTENTE (peça no caminhão errado). Idempotente: a fila offline
+   * reenvia a mesma leitura sem efeito novo. Pedido em que o montador não
+   * trabalha é indistinguível de pedido inexistente (404).
+   */
+  async conferir(usuarioId: number, dados: ConferirPecaRequest): Promise<ConferenciaPecaDTO> {
+    if (!(await this.pedidos.montadorVinculado(dados.pedidoId, usuarioId))) {
+      throw new PedidoNaoEncontradoException();
+    }
+
+    const peca = await this.pecas.buscarParaConferencia(dados.codigoBarras);
+    if (!peca) return { resultado: 'NAO_ENCONTRADA' };
+
+    if (peca.pedidoId === dados.pedidoId) {
+      await this.pecas.registrarConferencia(
+        peca.id,
+        CONFERIVEIS,
+        StatusPeca.DESCARREGADA,
+        usuarioId,
+      );
+      return { resultado: 'CONFERIDA' };
+    }
+
+    // Peça já descarregada ou entregue no cliente dela não regride por uma
+    // leitura equivocada em outra obra.
+    await this.pecas.registrarConferencia(
+      peca.id,
+      EM_TRANSITO,
+      StatusPeca.INCONSISTENTE,
+      usuarioId,
+    );
+    return { resultado: 'INCONSISTENTE' };
   }
 
   /**
