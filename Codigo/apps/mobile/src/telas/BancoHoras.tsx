@@ -12,6 +12,7 @@ import { formatarHoras, formatarMesAno, formatarSaldoHoras } from '../banco-hora
 import { ehMesCorrente, mesAnterior, mesSeguinte, periodoAtual } from '../banco-horas/periodo';
 import type { Periodo } from '../banco-horas/periodo';
 import { useBancoHoras } from '../banco-horas/useBancoHoras';
+import { CabecalhoSubtela } from './jornada/CabecalhoSubtela';
 
 interface PropsBancoHoras {
   aoVoltar: () => void;
@@ -37,12 +38,7 @@ export function BancoHoras({ aoVoltar }: PropsBancoHoras) {
   return (
     <Tela rolavel>
       <View style={{ gap: espacamentoNomeado.gapPilha }}>
-        <View style={{ gap: espacamento[4] }}>
-          <Texto variante="labelMd" cor={cores.onSurfaceVariant}>
-            JORNADA
-          </Texto>
-          <Texto variante="headlineMd">Banco de horas</Texto>
-        </View>
+        <CabecalhoSubtela titulo="Banco de horas" aoVoltar={aoVoltar} />
 
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Botao
@@ -124,15 +120,6 @@ export function BancoHoras({ aoVoltar }: PropsBancoHoras) {
             />
           )
         )}
-
-        <Botao
-          variante="fantasma"
-          tamanho={48}
-          forma="pilula"
-          texto="Voltar"
-          larguraTotal
-          aoPressionar={aoVoltar}
-        />
       </View>
     </Tela>
   );

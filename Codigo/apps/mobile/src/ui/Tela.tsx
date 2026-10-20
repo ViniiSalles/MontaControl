@@ -1,4 +1,6 @@
-import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { createContext, useContext } from 'react';
+import type { ReactNode } from 'react';
+import { KeyboardAvoidingView, Platform, RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { PropsTela } from '@montacontrol/ui-contracts/tela';
 import { cores, espacamentoNomeado } from '@montacontrol/design-tokens/native';
@@ -12,17 +14,52 @@ import { cores, espacamentoNomeado } from '@montacontrol/design-tokens/native';
  */
 const TESTID_EVITAR_TECLADO = 'tela-keyboard-avoiding-view';
 
-export function Tela({ children, evitarTeclado = false, rolavel = false }: PropsTela) {
-  const Conteudo = rolavel ? ScrollView : View;
-  const miolo = (
-    <Conteudo
-      style={{ flex: 1, padding: espacamentoNomeado.paddingTelaMobile, backgroundColor: cores.background }}
+const BarraInferiorPresente = createContext(false);
+
+/**
+ * Marca as telas que ficam acima da `BarraNavInferior`: elas terminam na
+ * barra, não no fim do aparelho, então não reservam o indicador de gestos —
+ * reservar ali abria uma faixa vazia entre o conteúdo e a barra.
+ */
+export function ComBarraInferior({ children }: { children: ReactNode }) {
+  return <BarraInferiorPresente.Provider value>{children}</BarraInferiorPresente.Provider>;
+}
+
+const BORDAS_COM_BARRA_INFERIOR = ['top', 'left', 'right'] as const;
+const TODAS_AS_BORDAS = ['top', 'left', 'right', 'bottom'] as const;
+
+export function Tela({
+  children,
+  evitarTeclado = false,
+  rolavel = false,
+  aoAtualizar,
+  atualizando = false,
+}: PropsTela) {
+  const barraInferiorPresente = useContext(BarraInferiorPresente);
+  const padding = { padding: espacamentoNomeado.paddingTelaMobile };
+  // No `ScrollView` o padding vai no conteúdo, não no contêiner: no contêiner
+  // ele vira uma moldura fixa que corta o conteúdo na borda ao rolar.
+  const miolo = rolavel ? (
+    <ScrollView
+      style={{ flex: 1, backgroundColor: cores.background }}
+      contentContainerStyle={padding}
+      refreshControl={
+        aoAtualizar ? (
+          <RefreshControl refreshing={atualizando} onRefresh={aoAtualizar} tintColor={cores.primary} />
+        ) : undefined
+      }
     >
       {children}
-    </Conteudo>
+    </ScrollView>
+  ) : (
+    <View style={[{ flex: 1, backgroundColor: cores.background }, padding]}>{children}</View>
   );
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: cores.background }}>
+    <SafeAreaView
+      testID="tela-area-segura"
+      edges={barraInferiorPresente ? BORDAS_COM_BARRA_INFERIOR : TODAS_AS_BORDAS}
+      style={{ flex: 1, backgroundColor: cores.background }}
+    >
       {evitarTeclado ? (
         <KeyboardAvoidingView
           testID={TESTID_EVITAR_TECLADO}

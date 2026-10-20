@@ -7,6 +7,7 @@ import { Alerta } from '../ui/Alerta';
 import { Badge } from '../ui/Badge';
 import type { VarianteBadge } from '@montacontrol/ui-contracts/badge';
 import { Botao } from '../ui/Botao';
+import { BotaoSincronizacao } from '../sincronizacao/BotaoSincronizacao';
 import { Cartao } from '../ui/Cartao';
 import { Icone } from '../ui/Icone';
 import { Carregando } from '../ui/Carregando';
@@ -86,7 +87,12 @@ export function Atestados() {
   return (
     <Tela rolavel>
       <View style={{ gap: espacamentoNomeado.gapPilha }}>
-        <Texto variante="headlineMd">Atestados Médicos</Texto>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: espacamento[12] }}>
+          <View style={{ flex: 1 }}>
+            <Texto variante="headlineMd">Atestados Médicos</Texto>
+          </View>
+          <BotaoSincronizacao aoSincronizar={() => void recarregar()} />
+        </View>
 
         {aviso && <Alerta variante="sucesso" mensagem={aviso} />}
         <AvisosDeAcoesRecusadas />

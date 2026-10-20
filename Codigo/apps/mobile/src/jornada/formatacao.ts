@@ -18,36 +18,46 @@ export function formatarHora(iso: string | null): string {
   }).format(new Date(iso));
 }
 
-/**
- * `"2026-08-26"` → `"qua, 26 ago"`. Usa `timeZone: 'UTC'` de propósito: a
- * entrada já é um dia civil (`YYYY-MM-DD`), não um instante — formatar de
- * novo no fuso de operação deslocaria a data em um dia.
- */
-export function formatarDiaCurto(data: string): string {
+/** Dia civil `YYYY-MM-DD` como instante UTC — ver o comentário de `formatarDiaEMes`. */
+function instanteDoDia(data: string): Date {
   const [ano, mes, dia] = data.split('-').map(Number);
-  return new Intl.DateTimeFormat('pt-BR', {
-    timeZone: 'UTC',
-    weekday: 'short',
-    day: '2-digit',
-    month: 'short',
-  })
-    .format(new Date(Date.UTC(ano, mes - 1, dia)))
+  return new Date(Date.UTC(ano, mes - 1, dia));
+}
+
+/**
+ * `"2026-08-26"` → `"26 ago"`. Usa `timeZone: 'UTC'` de propósito: a entrada
+ * já é um dia civil (`YYYY-MM-DD`), não um instante — formatar de novo no
+ * fuso de operação deslocaria a data em um dia. Monta as partes à mão porque
+ * o `Intl` em pt-BR devolve "26 de ago.".
+ */
+export function formatarDiaEMes(data: string): string {
+  const instante = instanteDoDia(data);
+  const dia = String(instante.getUTCDate()).padStart(2, '0');
+  const mes = new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC', month: 'short' })
+    .format(instante)
     .replace('.', '');
+  return `${dia} ${mes}`;
+}
+
+/** `"2026-08-26"` → `"quarta-feira"`. Mesma construção UTC de `formatarDiaEMes`. */
+export function formatarDiaDaSemana(data: string): string {
+  return new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC', weekday: 'long' }).format(
+    instanteDoDia(data),
+  );
 }
 
 /**
  * `"2026-08-26"` → `"Quarta-feira, 26 de agosto"`. Mesma construção UTC de
- * `formatarDiaCurto` (ver o comentário lá) — só maiúscula a inicial, já que
+ * `formatarDiaEMes` (ver o comentário lá) — só maiúscula a inicial, já que
  * o `Intl` devolve tudo em minúsculo em pt-BR.
  */
 export function formatarDataCompleta(data: string): string {
-  const [ano, mes, dia] = data.split('-').map(Number);
   const bruto = new Intl.DateTimeFormat('pt-BR', {
     timeZone: 'UTC',
     weekday: 'long',
     day: 'numeric',
     month: 'long',
-  }).format(new Date(Date.UTC(ano, mes - 1, dia)));
+  }).format(instanteDoDia(data));
   return bruto.charAt(0).toUpperCase() + bruto.slice(1);
 }
 

@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react';
 import { render, screen } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { Tela } from '../Tela';
+import { ComBarraInferior, Tela } from '../Tela';
 import { Texto } from '../Texto';
 
 function renderComSafeArea(ui: ReactElement) {
@@ -32,4 +32,30 @@ test('sem evitarTeclado não monta KeyboardAvoidingView', async () => {
     </Tela>,
   );
   expect(screen.queryByTestId('tela-keyboard-avoiding-view')).toBeNull();
+});
+
+// Dentro das abas a tela termina acima da barra inferior: reservar o
+// indicador de gestos ali abria uma faixa vazia entre o conteúdo e a barra.
+test('fora das abas reserva todas as bordas do aparelho', async () => {
+  await renderComSafeArea(
+    <Tela>
+      <Texto variante="bodyMd">conteúdo</Texto>
+    </Tela>,
+  );
+  expect(screen.getByTestId('tela-area-segura').props.edges).toEqual(
+    expect.objectContaining({ bottom: 'additive' }),
+  );
+});
+
+test('acima da barra inferior não reserva a borda de baixo', async () => {
+  await renderComSafeArea(
+    <ComBarraInferior>
+      <Tela>
+        <Texto variante="bodyMd">conteúdo</Texto>
+      </Tela>
+    </ComBarraInferior>,
+  );
+  expect(screen.getByTestId('tela-area-segura').props.edges).toEqual(
+    expect.objectContaining({ bottom: 'off' }),
+  );
 });

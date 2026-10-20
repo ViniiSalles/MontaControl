@@ -4,6 +4,7 @@ import { cores, espacamento, espacamentoNomeado } from '@montacontrol/design-tok
 import { Alerta } from '../ui/Alerta';
 import { Badge } from '../ui/Badge';
 import { Botao } from '../ui/Botao';
+import { BotaoSincronizacao } from '../sincronizacao/BotaoSincronizacao';
 import { Cartao } from '../ui/Cartao';
 import { Carregando } from '../ui/Carregando';
 import { Tela } from '../ui/Tela';
@@ -11,7 +12,6 @@ import { Texto } from '../ui/Texto';
 import { ROTULO_STATUS_AVARIA, VARIANTE_STATUS_AVARIA } from '../avarias/rotulos';
 import type { AvariaExibida } from '../avarias/avariasComPendentes';
 import { useDadosAvarias } from '../avarias/useDadosAvarias';
-import { useSincronizacaoStore } from '../estado/sincronizacaoStore';
 import { AvisosDeAcoesRecusadas } from './AvisosDeAcoesRecusadas';
 import { NovaAvaria } from './avarias/NovaAvaria';
 
@@ -43,7 +43,6 @@ function ItemHistorico({ avaria }: { avaria: AvariaExibida }) {
 /** Reporte de problemas com peças pelo montador em campo e acompanhamento da análise do gestor. */
 export function Avarias() {
   const { pedidos, tipos, avarias, carregando, erro, recarregar } = useDadosAvarias();
-  const sincronizando = useSincronizacaoStore((estado) => estado.sincronizando);
   const [aviso, setAviso] = useState<string | null>(null);
 
   function aoEnviado(mensagem: string) {
@@ -58,15 +57,7 @@ export function Avarias() {
           <View style={{ flex: 1 }}>
             <Texto variante="headlineMd">Avarias</Texto>
           </View>
-          <Botao
-            variante="icone"
-            tamanho={40}
-            forma="pilula"
-            icone="sync"
-            rotuloAcessivel="Atualizar"
-            carregando={sincronizando}
-            aoPressionar={() => void recarregar()}
-          />
+          <BotaoSincronizacao aoSincronizar={() => void recarregar()} />
         </View>
 
         {aviso && <Alerta variante="sucesso" mensagem={aviso} />}

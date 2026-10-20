@@ -1,8 +1,7 @@
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { cores, espacamento } from '@montacontrol/design-tokens/native';
 import type { BancoHorasDTO } from '@montacontrol/shared';
 import { Badge } from '../../ui/Badge';
-import { Botao } from '../../ui/Botao';
 import { Cartao } from '../../ui/Cartao';
 import { Icone } from '../../ui/Icone';
 import { Texto } from '../../ui/Texto';
@@ -25,7 +24,7 @@ function SeloSaldo({ saldo }: { saldo: number }) {
  * (`stitch_tcc/jornada_home_blue_edition:190-206`): saldo do mês corrente,
  * com atalho para a tela de consulta completa (issue #19). O conteúdo
  * inteiro vai em `conteudo`, nunca em `rodape` — o rodapé do `Cartao` tem
- * fundo claro fixo, incompatível com o fundo escuro (`tom="inverso"`) deste
+ * fundo claro fixo, incompatível com o fundo escuro (`tom="destaque"`) deste
  * card.
  */
 export function CartaoBancoHoras({ bancoHoras, aoAbrirBancoHoras }: PropsCartaoBancoHoras) {
@@ -34,36 +33,51 @@ export function CartaoBancoHoras({ bancoHoras, aoAbrirBancoHoras }: PropsCartaoB
   return (
     <Cartao
       elevacao="elev1"
-      tom="inverso"
+      tom="destaque"
       conteudo={
         <View style={{ gap: espacamento[16] }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <Texto variante="labelMd" cor={cores.inverseOnSurface}>
+            <Texto variante="labelMd" cor={cores.onSecondary}>
               Banco de Horas
             </Texto>
-            <Icone nome="account_balance_wallet" tamanho={espacamento[24]} cor={cores.inverseOnSurface} />
+            <Icone nome="account_balance_wallet" tamanho={espacamento[24]} cor={cores.onSecondary} />
           </View>
 
           <View style={{ gap: espacamento[8] }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: espacamento[8] }}>
-              <Texto variante="headlineMd" cor={cores.inverseOnSurface} tabular>
+              <Texto variante="headlineMd" cor={cores.onSecondary} tabular>
                 {formatarSaldoHoras(bancoHoras.saldo)}
               </Texto>
               {bancoHoras.saldo > 0 && (
-                <Icone nome="trending_up" tamanho={espacamento[20]} cor={cores.inverseOnSurface} />
+                <Icone nome="trending_up" tamanho={espacamento[20]} cor={cores.onSecondary} />
               )}
             </View>
             <SeloSaldo saldo={bancoHoras.saldo} />
           </View>
 
-          <Botao
-            variante="fantasma"
-            tamanho={48}
-            forma="pilula"
-            texto="Ver histórico completo"
-            larguraTotal
-            aoPressionar={aoAbrirBancoHoras}
-          />
+          {/*
+            Não é o `Botao variante="fantasma"`: ele pinta o texto de
+            `cores.primary`, que some no fundo escuro. No `secondary` nem o
+            azul-claro (`inversePrimary`) tem contraste — o link vai em
+            `onSecondary`, marcado pelo peso e pela seta.
+          */}
+          <Pressable
+            accessibilityRole="button"
+            onPress={aoAbrirBancoHoras}
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: espacamento[4],
+              minHeight: espacamento[48],
+              opacity: pressed ? 0.7 : 1,
+            })}
+          >
+            <Texto variante="titleMd" peso={700} cor={cores.onSecondary}>
+              Ver banco de horas
+            </Texto>
+            <Icone nome="chevron_right" tamanho={espacamento[20]} cor={cores.onSecondary} />
+          </Pressable>
         </View>
       }
     />

@@ -2,8 +2,7 @@ import { View } from 'react-native';
 import { cores, espacamento } from '@montacontrol/design-tokens/native';
 import { useSincronizacaoStore } from '../estado/sincronizacaoStore';
 import { Texto } from '../ui/Texto';
-import { descreverStatus } from './descreverStatus';
-import { useAgora } from './useAgora';
+import { descreverStatus, faixaVisivel } from './descreverStatus';
 
 /** Mesmas cores do `Badge`, aplicadas a uma faixa. */
 const corPorVariante = {
@@ -14,14 +13,13 @@ const corPorVariante = {
   neutro: { fundo: cores.surfaceContainerHigh, texto: cores.onSurfaceVariant },
 } as const;
 
-/** O "há X" envelhece sozinho: reavalia a cada meio minuto. */
-const INTERVALO_DO_RELOGIO_MS = 30_000;
-
 /**
- * Faixa de status da sincronização, fixa acima da barra de abas: o montador vê
- * em qualquer tela se está em dia, sem conexão, com ações na fila ou com falha.
- * Lê só o store (`useSincronizacaoStore`), alimentado pelo `syncManager` e por
- * `observarFila`.
+ * Faixa de status da sincronização, acima da barra de abas, que só aparece
+ * quando o montador precisa saber de algo (`faixaVisivel`): sem conexão,
+ * servidor sem resposta, falha ou app desatualizado. Em dia, a faixa não
+ * ocupa espaço — o detalhe ("sincronizado há X", fila) fica no
+ * `BotaoSincronizacao` do cabeçalho de cada aba. Lê só o store
+ * (`useSincronizacaoStore`), alimentado pelo `syncManager` e por `observarFila`.
  */
 export function IndicadorDeSincronizacao() {
   const online = useSincronizacaoStore((estado) => estado.online);
@@ -29,12 +27,12 @@ export function IndicadorDeSincronizacao() {
   const pendentes = useSincronizacaoStore((estado) => estado.pendentes);
   const ultimaSincronizacaoEm = useSincronizacaoStore((estado) => estado.ultimaSincronizacaoEm);
   const ultimoErro = useSincronizacaoStore((estado) => estado.ultimoErro);
-  const agora = useAgora(INTERVALO_DO_RELOGIO_MS);
 
-  const { variante, texto } = descreverStatus(
-    { online, sincronizando, pendentes, ultimaSincronizacaoEm, ultimoErro },
-    agora,
-  );
+  const entrada = { online, sincronizando, pendentes, ultimaSincronizacaoEm, ultimoErro };
+  if (!faixaVisivel(entrada)) return null;
+
+  // Nenhum estado visível mostra o "há X", então o relógio não precisa andar aqui.
+  const { variante, texto } = descreverStatus(entrada, Date.now());
   const cor = corPorVariante[variante];
 
   return (

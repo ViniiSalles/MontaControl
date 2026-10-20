@@ -9,4 +9,8 @@ export interface PropsTela {
   children: ReactNode;
   evitarTeclado?: boolean;
   rolavel?: boolean;
+  /** Só com `rolavel`: liga o "puxar para atualizar" (mobile). */
+  aoAtualizar?: () => void;
+  /** Mostra o indicador do "puxar para atualizar" enquanto `true`. */
+  atualizando?: boolean;
 }

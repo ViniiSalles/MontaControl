@@ -12,12 +12,14 @@ const corPorTom: Record<TomCartao, string> = {
   padrao: 'bg-surface-container-lowest text-on-surface',
   baixo: 'bg-surface-container-low text-on-surface',
   inverso: 'bg-inverse-surface text-inverse-on-surface',
+  destaque: 'bg-secondary text-on-secondary',
 }
 
 const corRodape: Record<TomCartao, string> = {
   padrao: 'bg-surface-container-low',
   baixo: 'bg-surface-container',
   inverso: 'bg-inverse-surface',
+  destaque: 'bg-secondary',
 }
 
 /**

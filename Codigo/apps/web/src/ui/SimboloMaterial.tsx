@@ -1,5 +1,6 @@
 import type { NomeIcone } from '@montacontrol/design-tokens/icones';
 import accountBalanceWallet from '@material-symbols/svg-400/outlined/account_balance_wallet.svg?raw';
+import accountCircle from '@material-symbols/svg-400/outlined/account_circle.svg?raw';
 import add from '@material-symbols/svg-400/outlined/add.svg?raw';
 import addAPhoto from '@material-symbols/svg-400/outlined/add_a_photo.svg?raw';
 import arrowDownward from '@material-symbols/svg-400/outlined/arrow_downward.svg?raw';
@@ -10,6 +11,7 @@ import cancel from '@material-symbols/svg-400/outlined/cancel.svg?raw';
 import check from '@material-symbols/svg-400/outlined/check.svg?raw';
 import checkCircle from '@material-symbols/svg-400/outlined/check_circle.svg?raw';
 import close from '@material-symbols/svg-400/outlined/close.svg?raw';
+import cloudUpload from '@material-symbols/svg-400/outlined/cloud_upload.svg?raw';
 import chevronLeft from '@material-symbols/svg-400/outlined/chevron_left.svg?raw';
 import chevronRight from '@material-symbols/svg-400/outlined/chevron_right.svg?raw';
 import conveyorBelt from '@material-symbols/svg-400/outlined/conveyor_belt.svg?raw';
@@ -58,6 +60,7 @@ const comCorAtual = (bruto: string) =>
 
 const svgPorIcone: Record<NomeIcone, string> = {
   account_balance_wallet: comCorAtual(accountBalanceWallet),
+  account_circle: comCorAtual(accountCircle),
   add: comCorAtual(add),
   add_a_photo: comCorAtual(addAPhoto),
   arrow_downward: comCorAtual(arrowDownward),
@@ -68,6 +71,7 @@ const svgPorIcone: Record<NomeIcone, string> = {
   check: comCorAtual(check),
   check_circle: comCorAtual(checkCircle),
   close: comCorAtual(close),
+  cloud_upload: comCorAtual(cloudUpload),
   chevron_left: comCorAtual(chevronLeft),
   chevron_right: comCorAtual(chevronRight),
   conveyor_belt: comCorAtual(conveyorBelt),

@@ -5,6 +5,7 @@ import { cores, espacamento, espacamentoNomeado } from '@montacontrol/design-tok
 import { Alerta } from '../ui/Alerta';
 import { Badge } from '../ui/Badge';
 import { Botao } from '../ui/Botao';
+import { BotaoSincronizacao } from '../sincronizacao/BotaoSincronizacao';
 import { Carregando } from '../ui/Carregando';
 import { Tela } from '../ui/Tela';
 import { Texto } from '../ui/Texto';
@@ -16,7 +17,6 @@ import {
 import type { ResultadoLeitura } from '../conferencia/conferencia';
 import { useDadosConferencia } from '../conferencia/useDadosConferencia';
 import { useDatabaseOuFalha } from '../db/useDatabase';
-import { useSincronizacaoStore } from '../estado/sincronizacaoStore';
 import { executarAcaoConferencia } from '../sincronizacao/outbox';
 import { AvisosDeAcoesRecusadas } from './AvisosDeAcoesRecusadas';
 import { Opcao } from './avarias/Opcao';
@@ -38,7 +38,6 @@ const VIBRACAO_ALERTA = [0, 250, 120, 250];
 export function Bipagem() {
   const database = useDatabaseOuFalha();
   const { pedidos, leiturasNaFila, carregando, erro, recarregar } = useDadosConferencia();
-  const sincronizando = useSincronizacaoStore((estado) => estado.sincronizando);
   const [pedidoEscolhidoId, setPedidoEscolhidoId] = useState<number | null>(null);
   const [ultimaLeitura, setUltimaLeitura] = useState<ResultadoLeitura | null>(null);
   const [recusa, setRecusa] = useState<string | null>(null);
@@ -91,15 +90,7 @@ export function Bipagem() {
           <View style={{ flex: 1 }}>
             <Texto variante="headlineMd">Bipagem</Texto>
           </View>
-          <Botao
-            variante="icone"
-            tamanho={40}
-            forma="pilula"
-            icone="sync"
-            rotuloAcessivel="Atualizar"
-            carregando={sincronizando}
-            aoPressionar={() => void recarregar()}
-          />
+          <BotaoSincronizacao aoSincronizar={() => void recarregar()} />
         </View>
 
         <AvisosDeAcoesRecusadas />

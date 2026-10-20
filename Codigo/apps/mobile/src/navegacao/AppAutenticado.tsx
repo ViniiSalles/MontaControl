@@ -3,6 +3,7 @@ import type { ComponentType } from 'react';
 import { View } from 'react-native';
 import { cores } from '@montacontrol/design-tokens/native';
 import { BarraNavInferior } from '../ui/BarraNavInferior';
+import { ComBarraInferior } from '../ui/Tela';
 import { Atestados } from '../telas/Atestados';
 import { Avarias } from '../telas/Avarias';
 import { Bipagem } from '../telas/Bipagem';
@@ -49,7 +50,9 @@ export function AppAutenticado() {
   return (
     <View style={{ flex: 1, backgroundColor: cores.background }}>
       <View style={{ flex: 1 }}>
-        <TelaAtiva />
+        <ComBarraInferior>
+          <TelaAtiva />
+        </ComBarraInferior>
       </View>
       {/* Acima da barra, fora do conteúdo da aba: o mesmo status em todas as telas. */}
       <IndicadorDeSincronizacao />

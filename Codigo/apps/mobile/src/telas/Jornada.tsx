@@ -4,13 +4,11 @@ import { cores, espacamento, espacamentoNomeado } from '@montacontrol/design-tok
 import { estadoJornada } from '@montacontrol/shared';
 import { Alerta } from '../ui/Alerta';
 import { AvisosDeAcoesRecusadas } from './AvisosDeAcoesRecusadas';
-import { Botao } from '../ui/Botao';
 import { Cartao } from '../ui/Cartao';
 import { Carregando } from '../ui/Carregando';
 import { Icone } from '../ui/Icone';
 import { Tela } from '../ui/Tela';
 import { Texto } from '../ui/Texto';
-import { useAuth } from '../auth/AuthContext';
 import { useBancoHoras } from '../banco-horas/useBancoHoras';
 import { periodoAtual } from '../banco-horas/periodo';
 import { useDatabaseOuFalha } from '../db/useDatabase';
@@ -25,7 +23,10 @@ import { useJornadaAtual } from '../jornada/useJornadaAtual';
 import { useObrasDoMontador } from '../pedidos/useObrasDoMontador';
 import { useSincronizacaoStore } from '../estado/sincronizacaoStore';
 import { useUiStore } from '../estado/uiStore';
+import { BotaoSincronizacao } from '../sincronizacao/BotaoSincronizacao';
+import { AtalhosJornada } from './jornada/AtalhosJornada';
 import { BotaoAcaoPrincipal } from './jornada/BotaoAcaoPrincipal';
+import { BotaoConta } from './jornada/BotaoConta';
 import { CartaoBancoHoras } from './jornada/CartaoBancoHoras';
 import { CartaoUltimoPonto } from './jornada/CartaoUltimoPonto';
 import { descreverObra, SeletorObra } from './jornada/SeletorObra';
@@ -47,11 +48,11 @@ interface PropsJornada {
  * A tela responde a duas perguntas, nessa ordem: qual foi o último ponto e
  * qual ponto bater agora. Histórico e ponto em atraso ficam a um toque, mas
  * abaixo do botão principal — o caminho do dedo até "bater o ponto" é o que
- * manda no layout.
+ * manda no layout. Por isso tudo acima do botão é compacto (obra em uma
+ * linha, sem mapa) e todo aviso vem abaixo dele: um alerta que aparece não
+ * pode empurrar o botão para longe do dedo.
  */
 export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso }: PropsJornada) {
-  const { sair } = useAuth();
-
   const database = useDatabaseOuFalha();
 
   // A sincronização automática (`useSincronizacaoDoApp`) e o status da fila vêm
@@ -83,6 +84,8 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
 
   const [aviso, setAviso] = useState<AvisoAcao | null>(null);
   const [registrando, setRegistrando] = useState(false);
+  const [escolhendoObra, setEscolhendoObra] = useState(false);
+  const [puxandoParaAtualizar, setPuxandoParaAtualizar] = useState(false);
 
   // Um único `agora` por render: calcular de novo dentro do cartão poderia
   // deixá-lo em desacordo com o rótulo do botão na virada do limite.
@@ -96,6 +99,8 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
   const estado = jornada ? estadoJornada(jornada, agoraIso) : 'finalizada';
   const acao = proximaAcao(jornada, agoraIso);
   const trabalhadasMin = minutosTrabalhadosHoje(diaHoje, jornada, estado, agoraIso);
+  // Sem obra atribuída não há entrada possível — o alerta do seletor explica o porquê.
+  const semObraParaEntrada = acao === 'entrada' && !carregandoObras && obras.length === 0;
 
   const baterPonto = useCallback(async () => {
     const registrar =
@@ -103,11 +108,9 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
         ? () => registrarCheckout(database, obraDaJornada)
         : obraEntrada && (() => registrarCheckin(database, obraEntrada));
     if (!registrar) {
-      setAviso({
-        variante: 'aviso',
-        titulo: 'Escolha a obra',
-        mensagem: 'Selecione em qual obra você está antes de bater o ponto de entrada.',
-      });
+      // Entrada sem obra: em vez de um aviso pedindo para escolher, a lista vem até o dedo.
+      setAviso(null);
+      setEscolhendoObra(true);
       return;
     }
     setRegistrando(true);
@@ -133,26 +136,31 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
     await sincronizarAgora();
   }, [dispensarAvisos, sincronizarAgora]);
 
+  const puxarParaAtualizar = useCallback(async () => {
+    setPuxandoParaAtualizar(true);
+    try {
+      await atualizar();
+    } finally {
+      setPuxandoParaAtualizar(false);
+    }
+  }, [atualizar]);
+
   return (
-    <Tela rolavel>
+    <Tela
+      rolavel
+      aoAtualizar={() => void puxarParaAtualizar()}
+      atualizando={puxandoParaAtualizar}
+    >
       <View style={{ gap: espacamentoNomeado.gapPilha }}>
-        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: espacamento[12] }}>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: espacamento[4] }}>
           <View style={{ flex: 1, gap: espacamento[4] }}>
             <Texto variante="labelMd" cor={cores.onSurfaceVariant}>
               {formatarDataCompleta(hojeCivil)}
             </Texto>
             <Texto variante="headlineMd">Jornada de Trabalho</Texto>
           </View>
-          <Botao
-            variante="icone"
-            tamanho={40}
-            forma="pilula"
-            icone="sync"
-            rotuloAcessivel="Atualizar"
-            carregando={carregando}
-            desabilitado={registrando}
-            aoPressionar={() => void atualizar()}
-          />
+          <BotaoSincronizacao aoSincronizar={() => void atualizar()} desabilitado={registrando} />
+          <BotaoConta />
         </View>
 
         {carregando && !jornada ? (
@@ -167,41 +175,15 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
           />
         )}
 
-        {/*
-          Falha de leitura NÃO esconde o botão de bater ponto: deixar o
-          montador sem registrar por causa de um GET que não voltou é pior
-          do que registrar sem saber o estado anterior. Se o palpite estiver
-          errado (havia jornada aberta), a API recusa com
-          `JORNADA_EM_ANDAMENTO` e o aviso explica o que fazer.
-        */}
-        {erroDeSincronizacao === 'versao_incompativel' && (
-          <Alerta
-            variante="aviso"
-            titulo="Atualize o aplicativo"
-            mensagem="Esta versão do app não sincroniza mais com o servidor. Atualize o aplicativo; os pontos que você marcar continuam guardados no aparelho."
-          />
-        )}
-
-        {erro && (
-          <Alerta
-            variante="aviso"
-            titulo="Não foi possível carregar sua jornada"
-            mensagem="Você ainda pode bater o ponto. Toque em Atualizar para ler o servidor de novo."
-          />
-        )}
-
-        {aviso && (
-          <Alerta variante={aviso.variante} titulo={aviso.titulo} mensagem={aviso.mensagem} />
-        )}
-
-        <AvisosDeAcoesRecusadas />
-
         {acao === 'entrada' ? (
           <SeletorObra
             obras={obras}
             selecionadaId={obraEntradaId}
             aoSelecionar={escolherObra}
             carregando={carregandoObras}
+            aberto={escolhendoObra}
+            aoAbrir={() => setEscolhendoObra(true)}
+            aoFechar={() => setEscolhendoObra(false)}
           />
         ) : (
           obraDaJornada && (
@@ -214,22 +196,52 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
         <BotaoAcaoPrincipal
           texto={rotuloBotao[acao]}
           carregando={registrando}
+          desabilitado={semObraParaEntrada}
           aoPressionar={() => void baterPonto()}
         />
 
+        {aviso && (
+          <Alerta variante={aviso.variante} titulo={aviso.titulo} mensagem={aviso.mensagem} />
+        )}
+
+        {/*
+          Falha de leitura NÃO esconde o botão de bater ponto: deixar o
+          montador sem registrar por causa de um GET que não voltou é pior
+          do que registrar sem saber o estado anterior. Se o palpite estiver
+          errado (havia jornada aberta), a API recusa com
+          `JORNADA_EM_ANDAMENTO` e o aviso explica o que fazer.
+        */}
+        {erro && (
+          <Alerta
+            variante="aviso"
+            titulo="Não foi possível carregar sua jornada"
+            mensagem="Você ainda pode bater o ponto. Puxe a tela para baixo para ler o servidor de novo."
+          />
+        )}
+
+        {erroDeSincronizacao === 'versao_incompativel' && (
+          <Alerta
+            variante="aviso"
+            titulo="Atualize o aplicativo"
+            mensagem="Esta versão do app não sincroniza mais com o servidor. Atualize o aplicativo; os pontos que você marcar continuam guardados no aparelho."
+          />
+        )}
+
+        <AvisosDeAcoesRecusadas />
+
         {trabalhadasMin !== null && (
           <Cartao
-            elevacao="elev2"
+            elevacao="elev1"
             tom="padrao"
             conteudo={
-              <View style={{ gap: espacamento[8] }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: espacamento[8] }}>
-                  <Icone nome="schedule" tamanho={espacamento[16]} cor={cores.primary} />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: espacamento[8] }}>
+                <Icone nome="schedule" tamanho={espacamento[20]} cor={cores.primary} />
+                <View style={{ flex: 1 }}>
                   <Texto variante="labelMd" cor={cores.onSurfaceVariant}>
                     TRABALHADAS HOJE
                   </Texto>
                 </View>
-                <Texto variante="headlineMd" tabular>
+                <Texto variante="headlineSm" tabular>
                   {formatarDuracao(trabalhadasMin)}
                 </Texto>
               </View>
@@ -239,37 +251,7 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
 
         <CartaoBancoHoras bancoHoras={bancoHoras} aoAbrirBancoHoras={aoAbrirBancoHoras} />
 
-        <View style={{ flexDirection: 'row', gap: espacamento[12] }}>
-          <View style={{ flex: 1 }}>
-            <Botao
-              variante="tonal"
-              tamanho={48}
-              forma="pilula"
-              texto="Ver histórico"
-              larguraTotal
-              aoPressionar={aoAbrirHistorico}
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Botao
-              variante="tonal"
-              tamanho={48}
-              forma="pilula"
-              texto="Ponto em atraso"
-              larguraTotal
-              aoPressionar={aoLancarEmAtraso}
-            />
-          </View>
-        </View>
-
-        <Botao
-          variante="fantasma"
-          tamanho={40}
-          forma="pilula"
-          texto="Sair"
-          larguraTotal
-          aoPressionar={() => void sair()}
-        />
+        <AtalhosJornada aoAbrirHistorico={aoAbrirHistorico} aoLancarEmAtraso={aoLancarEmAtraso} />
       </View>
     </Tela>
   );
