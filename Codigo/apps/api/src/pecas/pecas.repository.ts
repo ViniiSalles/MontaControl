@@ -62,7 +62,7 @@ export class PecasRepository {
     try {
       const { count } = await this.prisma.peca.updateMany({
         where: { id, status: StatusPeca.PENDENTE },
-        data: { codigoBarras, status: StatusPeca.TRIADA, triadaPor },
+        data: { codigoBarras, status: StatusPeca.TRIADA, triadaPor, triadaAt: new Date() },
       });
       if (count === 0) return null;
       const linha = await this.prisma.peca.findUniqueOrThrow({
@@ -134,6 +134,7 @@ export class PecasRepository {
           descricao: dados.descricao,
           status: StatusPeca.TRIADA,
           triadaPor: dados.triadaPor,
+          triadaAt: new Date(),
         },
         select: SELECAO_PECA,
       });
@@ -169,6 +170,7 @@ export class PecasRepository {
         codigoBarras: dados.codigoBarras,
         status: StatusPeca.TRIADA,
         triadaPor: dados.triadaPor,
+        triadaAt: new Date(),
       },
     });
     if (count === 0) return null;

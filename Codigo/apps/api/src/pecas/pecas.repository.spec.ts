@@ -91,6 +91,7 @@ describe('PecasRepository', () => {
             descricao: 'Porta de armário',
             status: StatusPeca.TRIADA,
             triadaPor: 2,
+            triadaAt: expect.any(Date),
           },
         }),
       );
@@ -115,7 +116,7 @@ describe('PecasRepository', () => {
       expect(peca).toMatchObject({ id: 50, codigoBarras: 'COD-123', status: StatusPeca.TRIADA });
       expect(prisma.peca.updateMany).toHaveBeenCalledWith({
         where: { id: 50, status: StatusPeca.PENDENTE },
-        data: { codigoBarras: 'COD-123', status: StatusPeca.TRIADA, triadaPor: 2 },
+        data: { codigoBarras: 'COD-123', status: StatusPeca.TRIADA, triadaPor: 2, triadaAt: expect.any(Date) },
       });
       expect(prisma.peca.create).not.toHaveBeenCalled();
     });
