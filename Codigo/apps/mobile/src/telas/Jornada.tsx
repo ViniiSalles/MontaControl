@@ -29,7 +29,8 @@ import { BotaoAcaoPrincipal } from './jornada/BotaoAcaoPrincipal';
 import { BotaoConta } from './jornada/BotaoConta';
 import { CartaoBancoHoras } from './jornada/CartaoBancoHoras';
 import { CartaoUltimoPonto } from './jornada/CartaoUltimoPonto';
-import { descreverObra, SeletorObra } from './jornada/SeletorObra';
+import { CartaoObra } from './jornada/CartaoObra';
+import { SeletorObra } from './jornada/SeletorObra';
 
 const rotuloBotao: Record<TipoPonto, string> = {
   entrada: 'Bater ponto de entrada',
@@ -186,11 +187,7 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
             aoFechar={() => setEscolhendoObra(false)}
           />
         ) : (
-          obraDaJornada && (
-            <Texto variante="bodyMd" cor={cores.onSurfaceVariant}>
-              Obra: {obraDaJornada.cliente.nome} · {descreverObra(obraDaJornada)}
-            </Texto>
-          )
+          obraDaJornada && <CartaoObra obra={obraDaJornada} />
         )}
 
         <BotaoAcaoPrincipal

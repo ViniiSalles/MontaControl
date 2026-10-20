@@ -1,13 +1,12 @@
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import { cores, espacamento } from '@montacontrol/design-tokens/native';
 import { RAIO_TOLERANCIA_PONTO_METROS } from '@montacontrol/shared';
 import { Alerta } from '../../ui/Alerta';
-import { Cartao } from '../../ui/Cartao';
-import { Icone } from '../../ui/Icone';
 import { Modal } from '../../ui/Modal';
 import { Texto } from '../../ui/Texto';
 import type { ObraDoPonto } from '../../pedidos/obras';
 import { Opcao } from '../avarias/Opcao';
+import { CartaoObra, descreverObra } from './CartaoObra';
 
 interface PropsSeletorObra {
   obras: ObraDoPonto[];
@@ -18,10 +17,6 @@ interface PropsSeletorObra {
   aberto: boolean;
   aoAbrir: () => void;
   aoFechar: () => void;
-}
-
-export function descreverObra(obra: ObraDoPonto): string {
-  return `${obra.cliente.endereco} · ${obra.cliente.cidade}/${obra.cliente.estado}`;
 }
 
 /**
@@ -50,57 +45,16 @@ export function SeletorObra({
   }
 
   const selecionada = obras.find((obra) => obra.id === selecionadaId) ?? null;
-  const podeTrocar = obras.length > 1;
-
-  const titulo = selecionada
-    ? selecionada.cliente.nome
-    : carregando
-      ? 'Carregando obras…'
-      : 'Nenhuma obra escolhida';
-  const detalhe = selecionada
-    ? `${selecionada.numeroPedido} · ${descreverObra(selecionada)}`
-    : `O ponto só é aceito a até ${RAIO_TOLERANCIA_PONTO_METROS} m da obra.`;
-
-  const linha = (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: espacamento[12] }}>
-      <Icone nome="home_work" tamanho={espacamento[24]} cor={selecionada ? cores.primary : cores.tertiary} />
-      <View style={{ flex: 1, gap: espacamento[2] }}>
-        <Texto variante="labelSm" cor={cores.onSurfaceVariant}>
-          OBRA
-        </Texto>
-        <Texto variante="titleSm" numeroDeLinhas={1}>
-          {titulo}
-        </Texto>
-        <Texto variante="bodySm" cor={cores.onSurfaceVariant} numeroDeLinhas={2}>
-          {detalhe}
-        </Texto>
-      </View>
-      {podeTrocar && (
-        <Texto variante="labelLg" cor={cores.primary}>
-          {selecionada ? 'Trocar' : 'Escolher'}
-        </Texto>
-      )}
-    </View>
-  );
+  const acao =
+    obras.length > 1 ? { rotulo: selecionada ? 'Trocar' : 'Escolher', aoPressionar: aoAbrir } : undefined;
 
   return (
     <>
-      <Cartao
-        elevacao="elev1"
-        tom="padrao"
-        conteudo={
-          podeTrocar ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Obra: ${titulo}. ${selecionada ? 'Trocar' : 'Escolher'}`}
-              onPress={aoAbrir}
-            >
-              {linha}
-            </Pressable>
-          ) : (
-            linha
-          )
-        }
+      <CartaoObra
+        obra={selecionada}
+        tituloVazio={carregando ? 'Carregando obras…' : 'Nenhuma obra escolhida'}
+        detalheVazio={`O ponto só é aceito a até ${RAIO_TOLERANCIA_PONTO_METROS} m da obra.`}
+        acao={acao}
       />
 
       <Modal

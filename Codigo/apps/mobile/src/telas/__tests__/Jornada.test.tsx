@@ -536,7 +536,9 @@ test('a saída usa a obra do check-in (jornadas.pedido_id da réplica), sem rede
   simularCheckoutNaFila();
 
   await renderizar();
-  await waitFor(() => expect(screen.getByText(/Obra: Maria Souza/)).toBeTruthy());
+  // Com ponto aberto, a obra aparece no cartão só leitura (sem "Trocar").
+  await waitFor(() => expect(screen.getByText('Maria Souza')).toBeTruthy());
+  expect(screen.queryByText('Trocar')).toBeNull();
 
   await fireEvent.press(screen.getByText(ROTULO_SAIDA));
 
@@ -559,7 +561,9 @@ test('a saída de um check-in feito offline usa a obra gravada na ação da fila
   simularCheckoutNaFila();
 
   await renderizar();
-  await waitFor(() => expect(screen.getByText(/Obra: Maria Souza/)).toBeTruthy());
+  // Com ponto aberto, a obra aparece no cartão só leitura (sem "Trocar").
+  await waitFor(() => expect(screen.getByText('Maria Souza')).toBeTruthy());
+  expect(screen.queryByText('Trocar')).toBeNull();
 
   await fireEvent.press(screen.getByText(ROTULO_SAIDA));
 
