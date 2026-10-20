@@ -11,3 +11,4 @@ export * from './clientes/uf';
 export * from './sync/tipos';
 export * from './sync/janelas';
 export * from './sync/fixture';
+export * from './avarias/tipos';
