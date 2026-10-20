@@ -67,11 +67,8 @@ export function NovaAvaria({ pedidos, tipos, aoEnviado, aoIniciarEnvio }: PropsN
 
   // O rascunho pode ter ids de uma réplica anterior (pedido, peça ou tipo que
   // deixou de existir): só vale o que ainda está na lista.
-  const pedidoEscolhido = pedidos.some((candidato) => candidato.id === rascunho.pedidoEscolhido)
-    ? rascunho.pedidoEscolhido
-    : null;
-  // Com um pedido só, não há o que escolher.
-  const pedidoId = pedidoEscolhido ?? (pedidos.length === 1 ? pedidos[0].id : null);
+  // Provisório até a tela herdar a obra do ponto: só há pedido com um pedido na réplica.
+  const pedidoId = pedidos.length === 1 ? pedidos[0].id : null;
   const pedido = pedidos.find((candidato) => candidato.id === pedidoId) ?? null;
   const campos: CamposReporteAvaria = {
     ...rascunho.campos,
@@ -184,7 +181,7 @@ export function NovaAvaria({ pedidos, tipos, aoEnviado, aoIniciarEnvio }: PropsN
                 rotulo={`${candidato.numeroPedido} · ${candidato.cliente.nome}`}
                 detalhe={`${candidato.cliente.endereco} · ${candidato.cliente.cidade}/${candidato.cliente.estado}`}
                 selecionada={candidato.id === pedidoId}
-                aoPressionar={() => rascunho.escolherPedido(candidato.id)}
+                aoPressionar={() => undefined}
               />
             ))}
           </Secao>

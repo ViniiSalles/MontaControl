@@ -293,7 +293,6 @@ test('fechar e reabrir o app mantém o rascunho de avaria: campos e fotos (os no
 
 test('rascunho com pedido, peça e tipo que a réplica já não tem não é enviado com esses ids', async () => {
   useUiStore.getState().alterarRascunhoAvaria({
-    pedidoId: 9999,
     campos: { pecaId: 9999, tipoAvariaId: 9999, descricao: 'De uma réplica antiga' },
   });
   await renderizar(await bancoComReplica());

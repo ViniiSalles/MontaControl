@@ -422,7 +422,6 @@ describe('obra e rascunho de avaria (#114) × sessão, ponta a ponta', () => {
     const nome = await salvarFoto(criarFotoDoPicker(), 'image/jpeg');
     useUiStore.getState().escolherObra(10);
     useUiStore.getState().alterarRascunhoAvaria({
-      pedidoId: 10,
       campos: { pecaId: 301, tipoAvariaId: 2, descricao: 'Porta riscada' },
     });
     useUiStore.getState().anexarFotoAoRascunho(nome);
