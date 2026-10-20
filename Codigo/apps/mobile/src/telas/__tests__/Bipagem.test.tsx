@@ -137,3 +137,11 @@ test('obra do ponto sem as peças no aparelho pede para sincronizar', async () =
 
   expect(screen.getByText('Dados da obra fora do aparelho')).toBeTruthy();
 });
+
+test('enquanto a obra carrega, mostra o carregamento e não o bloqueio', async () => {
+  jest.mocked(useObraEmTrabalho).mockReturnValue({ obra: null, motivo: 'sem_ponto', carregando: true });
+  await render(<Bipagem aoIrParaJornada={irParaJornada} />);
+
+  expect(screen.queryByText('Bata o ponto de entrada para conferir peças')).toBeNull();
+  expect(screen.queryByText('Ir para a Jornada')).toBeNull();
+});

@@ -63,11 +63,11 @@ export function SeletorTipoProblema({
           </Pressable>
         }
       />
-      {erro && (
+      {erro ? (
         <Texto variante="labelMd" cor={cores.error}>
           {erro}
         </Texto>
-      )}
+      ) : null}
 
       <Modal
         visivel={aberto}

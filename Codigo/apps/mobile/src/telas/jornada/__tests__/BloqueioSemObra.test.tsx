@@ -19,4 +19,16 @@ describe('BloqueioSemObra', () => {
 
     expect(screen.getByText(/passou de 24h sem saída/i)).toBeTruthy();
   });
+
+  it('pedido sem obra vinculada avisa que o ponto não tem obra', async () => {
+    await render(<BloqueioSemObra titulo="t" motivo="sem_obra_vinculada" aoIrParaJornada={jest.fn()} />);
+
+    expect(screen.getByText(/não tem obra vinculada/i)).toBeTruthy();
+  });
+
+  it('obra fora da réplica avisa que ela ainda não está no aparelho', async () => {
+    await render(<BloqueioSemObra titulo="t" motivo="obra_fora_da_replica" aoIrParaJornada={jest.fn()} />);
+
+    expect(screen.getByText(/ainda não está no aparelho/i)).toBeTruthy();
+  });
 });

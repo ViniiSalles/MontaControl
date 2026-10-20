@@ -108,12 +108,15 @@ export function Avarias({ aoIrParaJornada }: PropsTelaDaAba) {
                 />
               </>
             ) : (
-              <NovaAvaria
-                pedido={pedido}
-                tipos={tipos}
-                aoEnviado={aoEnviado}
-                aoIniciarEnvio={() => setAviso(null)}
-              />
+              <>
+                <CartaoObra obra={obra} />
+                <NovaAvaria
+                  pedido={pedido}
+                  tipos={tipos}
+                  aoEnviado={aoEnviado}
+                  aoIniciarEnvio={() => setAviso(null)}
+                />
+              </>
             )}
 
             <Texto variante="labelMd" cor={cores.onSurfaceVariant}>

@@ -18,7 +18,6 @@ import { MAXIMO_FOTOS, validarReporteAvaria } from '../../avarias/validarReporte
 import type { CamposReporteAvaria, ErrosReporteAvaria } from '../../avarias/validarReporteAvaria';
 import { ErroAoEnfileirar, executarAcaoAvaria } from '../../sincronizacao/outbox';
 import { ehTipoOutro } from '../../avarias/tiposAvaria';
-import { CartaoObra } from '../jornada/CartaoObra';
 import { Opcao } from './Opcao';
 import { SeletorTipoProblema } from './SeletorTipoProblema';
 
@@ -175,8 +174,6 @@ export function NovaAvaria({ pedido, tipos, aoEnviado, aoIniciarEnvio }: PropsNo
       tom="padrao"
       conteudo={
         <View style={{ gap: espacamento[20] }}>
-          <CartaoObra obra={pedido} />
-
           <Secao titulo="PEÇA" erro={erros.peca}>
             {pedido.ambientes.length === 0 ? (
               <Texto variante="bodyMd" cor={cores.onSurfaceVariant}>
