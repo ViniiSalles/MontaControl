@@ -12,6 +12,7 @@ import { useSincronizacaoDoApp } from '../sincronizacao/useSincronizacaoDoApp';
 import { PilhaJornada } from './PilhaJornada';
 import { ABA_PADRAO, ABAS } from './abas';
 import type { IdAba } from './abas';
+import type { PropsTelaDaAba } from './telaDaAba';
 
 /**
  * Casca do app autenticado: conteúdo da aba + barra inferior fixa.
@@ -24,7 +25,7 @@ import type { IdAba } from './abas';
  * Este componente só existe com sessão, logo o logout o desmonta e desliga os
  * listeners.
  */
-const telaPorAba: Partial<Record<IdAba, ComponentType>> = {
+const telaPorAba: Partial<Record<IdAba, ComponentType<PropsTelaDaAba>>> = {
   jornada: PilhaJornada,
   bipagem: Bipagem,
   avarias: Avarias,
@@ -51,7 +52,7 @@ export function AppAutenticado() {
     <View style={{ flex: 1, backgroundColor: cores.background }}>
       <View style={{ flex: 1 }}>
         <ComBarraInferior>
-          <TelaAtiva />
+          <TelaAtiva aoIrParaJornada={() => setAbaAtiva('jornada')} />
         </ComBarraInferior>
       </View>
       {/* Acima da barra, fora do conteúdo da aba: o mesmo status em todas as telas. */}
