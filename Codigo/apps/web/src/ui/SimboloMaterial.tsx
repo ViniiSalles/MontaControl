@@ -23,6 +23,7 @@ import groups from '@material-symbols/svg-400/outlined/groups.svg?raw';
 import history from '@material-symbols/svg-400/outlined/history.svg?raw';
 import homeWork from '@material-symbols/svg-400/outlined/home_work.svg?raw';
 import info from '@material-symbols/svg-400/outlined/info.svg?raw';
+import keyboard from '@material-symbols/svg-400/outlined/keyboard.svg?raw';
 import locationOn from '@material-symbols/svg-400/outlined/location_on.svg?raw';
 import lock from '@material-symbols/svg-400/outlined/lock.svg?raw';
 import logout from '@material-symbols/svg-400/outlined/logout.svg?raw';
@@ -30,6 +31,7 @@ import mail from '@material-symbols/svg-400/outlined/mail.svg?raw';
 import menu from '@material-symbols/svg-400/outlined/menu.svg?raw';
 import menuBook from '@material-symbols/svg-400/outlined/menu_book.svg?raw';
 import pendingActions from '@material-symbols/svg-400/outlined/pending_actions.svg?raw';
+import radioButtonUnchecked from '@material-symbols/svg-400/outlined/radio_button_unchecked.svg?raw';
 import personOff from '@material-symbols/svg-400/outlined/person_off.svg?raw';
 import pictureAsPdf from '@material-symbols/svg-400/outlined/picture_as_pdf.svg?raw';
 import report from '@material-symbols/svg-400/outlined/report.svg?raw';
@@ -79,6 +81,7 @@ const svgPorIcone: Record<NomeIcone, string> = {
   history: comCorAtual(history),
   home_work: comCorAtual(homeWork),
   info: comCorAtual(info),
+  keyboard: comCorAtual(keyboard),
   location_on: comCorAtual(locationOn),
   lock: comCorAtual(lock),
   logout: comCorAtual(logout),
@@ -86,6 +89,7 @@ const svgPorIcone: Record<NomeIcone, string> = {
   menu: comCorAtual(menu),
   menu_book: comCorAtual(menuBook),
   pending_actions: comCorAtual(pendingActions),
+  radio_button_unchecked: comCorAtual(radioButtonUnchecked),
   person_off: comCorAtual(personOff),
   picture_as_pdf: comCorAtual(pictureAsPdf),
   report: comCorAtual(report),
