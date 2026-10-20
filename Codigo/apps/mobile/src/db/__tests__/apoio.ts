@@ -123,6 +123,26 @@ export function linhaDeJornada(parcial: Partial<SyncJornadaRow> = {}): SyncJorna
   };
 }
 
+/**
+ * Jornada em andamento com entrada há 1h no relógio corrente (dentro das 24h):
+ * o ponto aberto que libera Bipagem e Avarias. A fixture de sync tem a 502 em
+ * andamento, mas com entrada em data fixa — vencida para o relógio real.
+ */
+export function linhaDeJornadaAberta(parcial: Partial<SyncJornadaRow> = {}): SyncJornadaRow {
+  const umaHoraAtras = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  return linhaDeJornada({
+    status: StatusJornada.EM_ANDAMENTO,
+    checkin_at: umaHoraAtras,
+    criado_em: umaHoraAtras,
+    checkout_at: null,
+    checkout_latitude: null,
+    checkout_longitude: null,
+    checkout_endereco: null,
+    checkout_id_cliente: null,
+    ...parcial,
+  });
+}
+
 interface DadosAcaoPendente {
   tipo: string;
   idCliente: string;
