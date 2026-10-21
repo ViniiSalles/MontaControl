@@ -51,7 +51,7 @@ export interface EventoDeInconsistencia {
   em: Date;
 }
 
-export interface EventosDoPeriodo {
+export interface EventosRecentes {
   checkins: EventoDeJornada[];
   checkouts: EventoDeJornada[];
   avarias: EventoDeAvaria[];
@@ -86,7 +86,9 @@ export class DashboardRepository {
                 status: true,
                 triadaAt: true,
                 conferidaAt: true,
-                _count: { select: { avarias: { where: { status: { not: StatusAvaria.RESOLVIDA } } } } },
+                _count: {
+                  select: { avarias: { where: { status: { not: StatusAvaria.RESOLVIDA } } } },
+                },
               },
             },
           },
@@ -154,11 +156,18 @@ export class DashboardRepository {
     return linhas.flatMap((linha) => (linha.conferidaAt ? [linha.conferidaAt] : []));
   }
 
-  async listarEventosDesde(desde: Date): Promise<EventosDoPeriodo> {
+  /**
+   * Os `limite` eventos mais recentes de cada tipo, sem recorte de tempo — com
+   * operação parada, o feed ainda mostra o que aconteceu por último. Bipagens
+   * viram um alerta por leva, então delas vêm até `limiteDeBipagens` leituras.
+   */
+  async listarEventosRecentes(limite: number, limiteDeBipagens: number): Promise<EventosRecentes> {
     const [checkins, checkouts, avarias, triagens, descarregamentos, inconsistencias] =
       await Promise.all([
         this.prisma.jornada.findMany({
-          where: { checkinAt: { gte: desde } },
+          where: { checkinAt: { not: null } },
+          orderBy: { checkinAt: 'desc' },
+          take: limite,
           select: {
             id: true,
             checkinAt: true,
@@ -167,7 +176,9 @@ export class DashboardRepository {
           },
         }),
         this.prisma.jornada.findMany({
-          where: { checkoutAt: { gte: desde } },
+          where: { checkoutAt: { not: null } },
+          orderBy: { checkoutAt: 'desc' },
+          take: limite,
           select: {
             id: true,
             checkoutAt: true,
@@ -176,7 +187,8 @@ export class DashboardRepository {
           },
         }),
         this.prisma.avaria.findMany({
-          where: { createdAt: { gte: desde } },
+          orderBy: { createdAt: 'desc' },
+          take: limite,
           select: {
             id: true,
             createdAt: true,
@@ -191,7 +203,9 @@ export class DashboardRepository {
           },
         }),
         this.prisma.peca.findMany({
-          where: { triadaAt: { gte: desde } },
+          where: { triadaAt: { not: null } },
+          orderBy: { triadaAt: 'desc' },
+          take: limiteDeBipagens,
           select: {
             triadaAt: true,
             triador: { select: { nome: true } },
@@ -199,7 +213,9 @@ export class DashboardRepository {
           },
         }),
         this.prisma.peca.findMany({
-          where: { status: { in: NO_CLIENTE }, conferidaAt: { gte: desde } },
+          where: { status: { in: NO_CLIENTE }, conferidaAt: { not: null } },
+          orderBy: { conferidaAt: 'desc' },
+          take: limiteDeBipagens,
           select: {
             conferidaAt: true,
             conferente: { select: { nome: true } },
@@ -207,7 +223,9 @@ export class DashboardRepository {
           },
         }),
         this.prisma.peca.findMany({
-          where: { status: StatusPeca.INCONSISTENTE, updatedAt: { gte: desde } },
+          where: { status: StatusPeca.INCONSISTENTE },
+          orderBy: { updatedAt: 'desc' },
+          take: limite,
           select: {
             id: true,
             descricao: true,

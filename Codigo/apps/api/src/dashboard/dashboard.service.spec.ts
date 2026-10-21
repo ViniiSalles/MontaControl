@@ -2,7 +2,7 @@ import { Test } from '@nestjs/testing';
 import { StatusPedido as StatusPedidoCompartilhado } from '@montacontrol/shared';
 import { StatusPeca } from '../../generated/prisma';
 import { DashboardRepository } from './dashboard.repository';
-import type { EventosDoPeriodo, PedidoParaAcompanhamento } from './dashboard.repository';
+import type { EventosRecentes, PedidoParaAcompanhamento } from './dashboard.repository';
 import {
   DashboardService,
   etapaDoPedido,
@@ -11,7 +11,7 @@ import {
   montarProdutividade,
 } from './dashboard.service';
 
-const SEM_EVENTOS: EventosDoPeriodo = {
+const SEM_EVENTOS: EventosRecentes = {
   checkins: [],
   checkouts: [],
   avarias: [],
@@ -79,11 +79,26 @@ describe('montarAlertas', () => {
     const alertas = montarAlertas({
       ...SEM_EVENTOS,
       descarregamentos: [
-        { pedidoId: 1, numeroPedido: 'PED-1', responsavel: 'João', em: new Date('2026-10-20T10:00:00Z') },
-        { pedidoId: 1, numeroPedido: 'PED-1', responsavel: 'João', em: new Date('2026-10-20T10:05:00Z') },
+        {
+          pedidoId: 1,
+          numeroPedido: 'PED-1',
+          responsavel: 'João',
+          em: new Date('2026-10-20T10:00:00Z'),
+        },
+        {
+          pedidoId: 1,
+          numeroPedido: 'PED-1',
+          responsavel: 'João',
+          em: new Date('2026-10-20T10:05:00Z'),
+        },
       ],
       checkins: [
-        { jornadaId: 7, montador: 'Maria', numeroPedido: null, em: new Date('2026-10-20T09:00:00Z') },
+        {
+          jornadaId: 7,
+          montador: 'Maria',
+          numeroPedido: null,
+          em: new Date('2026-10-20T09:00:00Z'),
+        },
       ],
       avarias: [
         {
@@ -97,12 +112,47 @@ describe('montarAlertas', () => {
       ],
     });
 
-    expect(alertas.map((alerta) => alerta.id)).toEqual(['avaria-3', 'descarregamento-1', 'checkin-7']);
+    expect(alertas.map((alerta) => alerta.id)).toEqual([
+      'avaria-3',
+      `descarregamento-1-${Date.parse('2026-10-20T10:00:00Z')}`,
+      'checkin-7',
+    ]);
     expect(alertas[1]).toMatchObject({
       tipo: 'DESCARREGAMENTO',
       descricao: 'Pedido PED-1: 2 peças conferida(s) na obra por João.',
       em: '2026-10-20T10:05:00.000Z',
     });
+  });
+
+  it('separa em levas as bipagens do mesmo pedido com pausa maior que 1 h', () => {
+    const alertas = montarAlertas({
+      ...SEM_EVENTOS,
+      triagens: [
+        {
+          pedidoId: 1,
+          numeroPedido: 'PED-1',
+          responsavel: 'Ana',
+          em: new Date('2026-10-12T04:00:00Z'),
+        },
+        {
+          pedidoId: 1,
+          numeroPedido: 'PED-1',
+          responsavel: 'Ana',
+          em: new Date('2026-10-20T09:00:00Z'),
+        },
+        {
+          pedidoId: 1,
+          numeroPedido: 'PED-1',
+          responsavel: 'Bia',
+          em: new Date('2026-10-20T09:40:00Z'),
+        },
+      ],
+    });
+
+    expect(alertas.map((alerta) => [alerta.descricao, alerta.em])).toEqual([
+      ['Pedido PED-1: 2 peças bipada(s) na triagem por Ana, Bia.', '2026-10-20T09:40:00.000Z'],
+      ['Pedido PED-1: 1 peça bipada(s) na triagem por Ana.', '2026-10-12T04:00:00.000Z'],
+    ]);
   });
 });
 
@@ -125,15 +175,19 @@ describe('montarProdutividade', () => {
 describe('DashboardService', () => {
   it('N2T1: monta indicadores, pedidos, alertas e produtividade com "hoje" no fuso da operação', async () => {
     const repositorio = {
-      listarPedidosParaAcompanhamento: jest.fn().mockResolvedValue([pedido([peca(StatusPeca.TRIADA)])]),
+      listarPedidosParaAcompanhamento: jest
+        .fn()
+        .mockResolvedValue([pedido([peca(StatusPeca.TRIADA)])]),
       contarMontadoresEmCampo: jest.fn().mockResolvedValue(3),
       contarAvariasDesde: jest.fn().mockResolvedValue(1),
       contarAvariasAbertas: jest.fn().mockResolvedValue(4),
       contarPecasInconsistentes: jest.fn().mockResolvedValue(2),
       contarEpisVencendoAte: jest.fn().mockResolvedValue(5),
-      listarInstantesDeTriagemDesde: jest.fn().mockResolvedValue([new Date('2026-10-20T13:00:00Z')]),
+      listarInstantesDeTriagemDesde: jest
+        .fn()
+        .mockResolvedValue([new Date('2026-10-20T13:00:00Z')]),
       listarInstantesDeDescarregamentoDesde: jest.fn().mockResolvedValue([]),
-      listarEventosDesde: jest.fn().mockResolvedValue(SEM_EVENTOS),
+      listarEventosRecentes: jest.fn().mockResolvedValue(SEM_EVENTOS),
     };
     const modulo = await Test.createTestingModule({
       providers: [DashboardService, DashboardRepository],
@@ -147,8 +201,10 @@ describe('DashboardService', () => {
     const dashboard = await service.obter(agora);
 
     // Meia-noite de 20/10 em São Paulo (UTC-3).
-    expect(repositorio.contarMontadoresEmCampo).toHaveBeenCalledWith(new Date('2026-10-20T03:00:00Z'));
-    expect(repositorio.listarEventosDesde).toHaveBeenCalledWith(new Date('2026-10-19T15:00:00Z'));
+    expect(repositorio.contarMontadoresEmCampo).toHaveBeenCalledWith(
+      new Date('2026-10-20T03:00:00Z'),
+    );
+    expect(repositorio.listarEventosRecentes).toHaveBeenCalledWith(30, 500);
     expect(dashboard.indicadores).toEqual({
       montadoresEmCampo: 3,
       avariasHoje: 1,

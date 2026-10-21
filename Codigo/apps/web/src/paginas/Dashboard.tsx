@@ -26,7 +26,7 @@ const mensagemDe = (causa: unknown) =>
 /**
  * Destino N1T1 do GESTOR (US08/US09, Figura 37): onde está cada pedido — no
  * estoque (bipado pelo operador na triagem) e no cliente (bipado pelo
- * montador no descarregamento) —, o que aconteceu nas últimas 24 h e a
+ * montador no descarregamento) —, o que aconteceu por último na operação e a
  * produtividade da semana.
  */
 export default function Dashboard() {

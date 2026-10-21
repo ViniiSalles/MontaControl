@@ -85,7 +85,7 @@ export interface DashboardDTO {
   geradoEm: string;
   indicadores: IndicadoresDashboardDTO;
   pedidos: AcompanhamentoPedidoDTO[];
-  /** Eventos das últimas 24 h, do mais recente para o mais antigo. */
+  /** Últimos eventos da operação (sem recorte de tempo), do mais recente para o mais antigo. */
   alertas: AlertaDashboardDTO[];
   /** Últimos 7 dias, do mais antigo para hoje. */
   produtividade: ProdutividadeDiaDTO[];

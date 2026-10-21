@@ -7,7 +7,7 @@ interface PropsFeedAlertas {
   agora: Date
 }
 
-/** "Alertas em tempo real" (Figura 37): o que aconteceu na operação nas últimas 24 h. */
+/** "Alertas em tempo real" (Figura 37): o que aconteceu por último na operação. */
 export function FeedAlertas({ alertas, agora }: PropsFeedAlertas) {
   return (
     <section aria-labelledby="titulo-alertas" className="space-y-16 rounded-xl bg-surface-container-lowest p-24 shadow-elev1">
@@ -15,11 +15,11 @@ export function FeedAlertas({ alertas, agora }: PropsFeedAlertas) {
         <h2 id="titulo-alertas" className="text-headline-sm text-on-surface">
           Alertas recentes
         </h2>
-        <p className="text-body-sm text-on-surface-variant">Últimas 24 horas</p>
+        <p className="text-body-sm text-on-surface-variant">Últimos eventos da operação</p>
       </div>
 
       {alertas.length === 0 ? (
-        <p className="text-body-md text-on-surface-variant">Nenhum evento nas últimas 24 horas.</p>
+        <p className="text-body-md text-on-surface-variant">Nenhum evento registrado ainda.</p>
       ) : (
         <ul className="space-y-16">
           {alertas.map((alerta) => (
