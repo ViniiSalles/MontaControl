@@ -12,13 +12,15 @@ import { FUSO_OPERACAO } from '../common/fuso';
 import { DashboardRepository } from './dashboard.repository';
 import type {
   EventoDeBipagem,
-  EventosDoPeriodo,
+  EventosRecentes,
   PedidoParaAcompanhamento,
 } from './dashboard.repository';
 
 const DIAS_DE_PRODUTIVIDADE = 7;
-const JANELA_DE_ALERTAS_MS = 24 * 60 * 60 * 1000;
 const LIMITE_DE_ALERTAS = 30;
+const LIMITE_DE_BIPAGENS = 500;
+/** Leituras do mesmo pedido com intervalo maior que este são outra leva (outro caminhão, outro dia). */
+const INTERVALO_ENTRE_LEVAS_MS = 60 * 60 * 1000;
 const DIAS_DE_ANTECEDENCIA_EPI = 30;
 
 const NO_CLIENTE = new Set<StatusPeca>([StatusPeca.DESCARREGADA, StatusPeca.ENTREGUE]);
@@ -68,34 +70,52 @@ function pecasNoPlural(quantidade: number): string {
   return quantidade === 1 ? '1 peça' : `${quantidade} peças`;
 }
 
+interface Leva {
+  numeroPedido: string;
+  pedidoId: number;
+  quantidade: number;
+  responsaveis: Set<string>;
+  inicio: Date;
+  em: Date;
+}
+
 /**
- * Bipagens peça a peça viram um alerta por pedido — 40 leituras do mesmo
- * caminhão são um evento para o gestor, não 40.
+ * Bipagens peça a peça viram um alerta por leva — 40 leituras do mesmo
+ * caminhão são um evento para o gestor, não 40. Uma leva é uma sequência de
+ * leituras do mesmo pedido sem pausa maior que `INTERVALO_ENTRE_LEVAS_MS`.
  */
 function agruparBipagens(
   eventos: readonly EventoDeBipagem[],
-): { numeroPedido: string; pedidoId: number; quantidade: number; responsaveis: string[]; em: Date }[] {
-  const porPedido = new Map<
-    number,
-    { numeroPedido: string; pedidoId: number; quantidade: number; responsaveis: Set<string>; em: Date }
-  >();
-  for (const evento of eventos) {
-    const grupo = porPedido.get(evento.pedidoId) ?? {
-      numeroPedido: evento.numeroPedido,
-      pedidoId: evento.pedidoId,
-      quantidade: 0,
-      responsaveis: new Set<string>(),
-      em: evento.em,
-    };
-    grupo.quantidade += 1;
-    if (evento.responsavel) grupo.responsaveis.add(evento.responsavel);
-    if (evento.em > grupo.em) grupo.em = evento.em;
-    porPedido.set(evento.pedidoId, grupo);
+): {
+  numeroPedido: string;
+  pedidoId: number;
+  quantidade: number;
+  responsaveis: string[];
+  inicio: Date;
+  em: Date;
+}[] {
+  const emOrdem = [...eventos].sort((a, b) => a.em.getTime() - b.em.getTime());
+  const levaAberta = new Map<number, Leva>();
+  const levas: Leva[] = [];
+  for (const evento of emOrdem) {
+    let leva = levaAberta.get(evento.pedidoId);
+    if (!leva || evento.em.getTime() - leva.em.getTime() > INTERVALO_ENTRE_LEVAS_MS) {
+      leva = {
+        numeroPedido: evento.numeroPedido,
+        pedidoId: evento.pedidoId,
+        quantidade: 0,
+        responsaveis: new Set<string>(),
+        inicio: evento.em,
+        em: evento.em,
+      };
+      levaAberta.set(evento.pedidoId, leva);
+      levas.push(leva);
+    }
+    leva.quantidade += 1;
+    if (evento.responsavel) leva.responsaveis.add(evento.responsavel);
+    leva.em = evento.em;
   }
-  return [...porPedido.values()].map((grupo) => ({
-    ...grupo,
-    responsaveis: [...grupo.responsaveis].sort(),
-  }));
+  return levas.map((leva) => ({ ...leva, responsaveis: [...leva.responsaveis].sort() }));
 }
 
 function porQuem(responsaveis: readonly string[]): string {
@@ -106,7 +126,7 @@ function obra(numeroPedido: string | null): string {
   return numeroPedido ? ` na obra do pedido ${numeroPedido}` : '';
 }
 
-export function montarAlertas(eventos: EventosDoPeriodo): AlertaDashboardDTO[] {
+export function montarAlertas(eventos: EventosRecentes): AlertaDashboardDTO[] {
   const alertas: AlertaDashboardDTO[] = [
     ...eventos.inconsistencias.map((evento) => ({
       id: `inconsistencia-${evento.pecaId}`,
@@ -123,14 +143,14 @@ export function montarAlertas(eventos: EventosDoPeriodo): AlertaDashboardDTO[] {
       em: evento.em.toISOString(),
     })),
     ...agruparBipagens(eventos.descarregamentos).map((grupo) => ({
-      id: `descarregamento-${grupo.pedidoId}`,
+      id: `descarregamento-${grupo.pedidoId}-${grupo.inicio.getTime()}`,
       tipo: 'DESCARREGAMENTO' as const,
       titulo: 'Descarregamento no cliente',
       descricao: `Pedido ${grupo.numeroPedido}: ${pecasNoPlural(grupo.quantidade)} conferida(s) na obra${porQuem(grupo.responsaveis)}.`,
       em: grupo.em.toISOString(),
     })),
     ...agruparBipagens(eventos.triagens).map((grupo) => ({
-      id: `triagem-${grupo.pedidoId}`,
+      id: `triagem-${grupo.pedidoId}-${grupo.inicio.getTime()}`,
       tipo: 'TRIAGEM' as const,
       titulo: 'Chegada ao estoque',
       descricao: `Pedido ${grupo.numeroPedido}: ${pecasNoPlural(grupo.quantidade)} bipada(s) na triagem${porQuem(grupo.responsaveis)}.`,
@@ -196,7 +216,6 @@ export class DashboardService {
     const inicioDaSemana = new Date(
       comporInstante(somarDias(hoje, -(DIAS_DE_PRODUTIVIDADE - 1)), '00:00', FUSO_OPERACAO),
     );
-    const inicioDosAlertas = new Date(agora.getTime() - JANELA_DE_ALERTAS_MS);
     const limiteEpi = new Date(agora.getTime() + DIAS_DE_ANTECEDENCIA_EPI * 24 * 60 * 60 * 1000);
 
     const [
@@ -218,7 +237,7 @@ export class DashboardService {
       this.dashboard.contarEpisVencendoAte(limiteEpi),
       this.dashboard.listarInstantesDeTriagemDesde(inicioDaSemana),
       this.dashboard.listarInstantesDeDescarregamentoDesde(inicioDaSemana),
-      this.dashboard.listarEventosDesde(inicioDosAlertas),
+      this.dashboard.listarEventosRecentes(LIMITE_DE_ALERTAS, LIMITE_DE_BIPAGENS),
     ]);
 
     const produtividade = montarProdutividade(hoje, triagens, descarregamentos);

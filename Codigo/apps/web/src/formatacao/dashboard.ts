@@ -64,7 +64,7 @@ export function percentual(parte: number, total: number): number {
   return total === 0 ? 0 : Math.round((parte / total) * 100)
 }
 
-/** `agora`, `há 5 min`, `há 3 h`, `há 2 dias` — o feed é das últimas 24 h, mas o pedido pode ser antigo. */
+/** `agora`, `há 5 min`, `há 3 h`, `há 2 dias` — o feed traz os últimos eventos, que podem ser de dias atrás. */
 export function tempoRelativo(iso: string, agora: Date): string {
   const minutos = Math.floor((agora.getTime() - new Date(iso).getTime()) / 60_000)
   if (minutos < 1) return 'agora'
