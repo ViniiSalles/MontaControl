@@ -19,3 +19,13 @@ describe('SeletorPeriodo', () => {
     expect(aoTrocar).toHaveBeenCalledWith(30);
   });
 });
+
+describe('SeletorPeriodo — controle segmentado', () => {
+  it('anuncia só o período ativo como selecionado', async () => {
+    await render(<SeletorPeriodo periodo={15} aoTrocar={jest.fn()} />);
+
+    expect(screen.getByRole('radio', { name: '15 dias', selected: true })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: '5 dias', selected: false })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: '30 dias', selected: false })).toBeTruthy();
+  });
+});

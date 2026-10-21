@@ -42,6 +42,10 @@ enum StatusPeca {
   PENDENTE
   TRIADA
   CARREGADA
+  /// Bipada pelo montador no descarregamento, no pedido certo (US02/UC03).
+  DESCARREGADA
+  /// Bipada no descarregamento de outro pedido — peça no caminhão errado (US02/UC04).
+  INCONSISTENTE
   ENTREGUE
 }
 
@@ -223,6 +227,8 @@ model Peca {
   quantidade   Int        @default(1)
   status       StatusPeca @default(PENDENTE)
   triadaPor    Int?       @map("triada_por")
+  /// Quando a peça chegou ao estoque (bipada na triagem) — base do acompanhamento do gestor.
+  triadaAt     DateTime?  @map("triada_at")
   conferidaPor Int?       @map("conferida_por")
   conferidaAt  DateTime?  @map("conferida_at")
   createdAt    DateTime   @default(now()) @map("created_at")

@@ -1,4 +1,6 @@
+import { StyleSheet } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import { cores } from '@montacontrol/design-tokens/native';
 import { StatusJornada } from '@montacontrol/shared';
 import type { DiaJornadaDTO, JornadaDTO } from '@montacontrol/shared';
 import { CartaoDia } from '../CartaoDia';
@@ -59,15 +61,24 @@ function diaComDoisTurnos(): DiaJornadaDTO {
 }
 
 describe('CartaoDia', () => {
-  it('um turno mostra as duas pontas e a duração, sem repetir o total do dia', async () => {
+  it('mostra o dia em destaque com o dia da semana e o total no cabeçalho', async () => {
     await render(<CartaoDia dia={dia()} aoLancarEmAtraso={jest.fn()} />);
 
+    expect(screen.getByText('26 ago')).toBeTruthy();
+    expect(screen.getByText('QUARTA-FEIRA')).toBeTruthy();
+    expect(screen.getByText('TOTAL')).toBeTruthy();
+  });
+
+  it('um turno mostra entrada e saída rotuladas, sem repetir a duração nem numerar o turno', async () => {
+    await render(<CartaoDia dia={dia()} aoLancarEmAtraso={jest.fn()} />);
+
+    expect(screen.getByText('ENT.')).toBeTruthy();
     expect(screen.getByText('08:00')).toBeTruthy();
+    expect(screen.getByText('SAÍ.')).toBeTruthy();
     expect(screen.getByText('17:00')).toBeTruthy();
-    expect(screen.getByText('1 turno')).toBeTruthy();
-    // Com um turno só, "TOTAL DO DIA" repetiria a linha acima.
-    expect(screen.queryByText('TOTAL DO DIA')).toBeNull();
-    expect(screen.getByText('9h 00min')).toBeTruthy();
+    // A duração do único turno é o total do cabeçalho: aparece uma vez só.
+    expect(screen.getAllByText('9h 00min')).toHaveLength(1);
+    expect(screen.queryByText('1º TURNO')).toBeNull();
   });
 
   // O caso que motivou a refatoração: antes o card fundia os dois turnos num
@@ -75,7 +86,6 @@ describe('CartaoDia', () => {
   it('dois turnos no mesmo dia aparecem como linhas separadas', async () => {
     await render(<CartaoDia dia={diaComDoisTurnos()} aoLancarEmAtraso={jest.fn()} />);
 
-    expect(screen.getByText('2 turnos')).toBeTruthy();
     expect(screen.getByText('1º TURNO')).toBeTruthy();
     expect(screen.getByText('2º TURNO')).toBeTruthy();
 
@@ -87,8 +97,7 @@ describe('CartaoDia', () => {
 
     expect(screen.getByText('5h 00min')).toBeTruthy();
     expect(screen.getByText('2h 00min')).toBeTruthy();
-    // Soma dos turnos, não a distância entre 10:00 e 18:00 (que daria 8h).
-    expect(screen.getByText('TOTAL DO DIA')).toBeTruthy();
+    // Total do cabeçalho: soma dos turnos, não a distância entre 10:00 e 18:00 (que daria 8h).
     expect(screen.getByText('7h 00min')).toBeTruthy();
   });
 
@@ -167,5 +176,47 @@ describe('CartaoDia', () => {
     await render(<CartaoDia dia={comAtraso} aoLancarEmAtraso={jest.fn()} />);
 
     expect(screen.getByText(/em atraso/i)).toBeTruthy();
+  });
+});
+
+describe('CartaoDia — faixa de destaque', () => {
+  const corDoDestaque = () =>
+    StyleSheet.flatten(screen.getByTestId('cartao-dia').props.style).borderLeftColor;
+
+  it('dia regular usa o primário', async () => {
+    await render(<CartaoDia dia={dia()} aoLancarEmAtraso={jest.fn()} />);
+    expect(corDoDestaque()).toBe(cores.primary);
+  });
+
+  it('dia com ponto lançado em atraso usa o terciário', async () => {
+    const comAtraso = dia({
+      jornadas: [
+        turno({
+          id: 1,
+          checkinAt: '2026-08-26T11:00:00.000Z',
+          checkoutAt: '2026-08-26T20:00:00.000Z',
+          lancadoEmAtraso: true,
+        }),
+      ],
+    });
+    await render(<CartaoDia dia={comAtraso} aoLancarEmAtraso={jest.fn()} />);
+    expect(corDoDestaque()).toBe(cores.tertiary);
+  });
+
+  // Sem saída é o que pede ação: ganha do "em atraso" quando os dois aparecem.
+  it('dia com turno sem saída usa o erro', async () => {
+    const vencido = dia({
+      emAndamento: true,
+      jornadas: [
+        turno({
+          id: 1,
+          status: StatusJornada.EM_ANDAMENTO,
+          checkinAt: '2026-08-26T11:00:00.000Z',
+          lancadoEmAtraso: true,
+        }),
+      ],
+    });
+    await render(<CartaoDia dia={vencido} aoLancarEmAtraso={jest.fn()} />);
+    expect(corDoDestaque()).toBe(cores.error);
   });
 });

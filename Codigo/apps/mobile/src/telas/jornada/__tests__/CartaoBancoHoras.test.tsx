@@ -1,4 +1,6 @@
+import { StyleSheet } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import { cores } from '@montacontrol/design-tokens/native';
 import type { BancoHorasDTO } from '@montacontrol/shared';
 import { CartaoBancoHoras } from '../CartaoBancoHoras';
 
@@ -48,12 +50,25 @@ describe('CartaoBancoHoras', () => {
     expect(screen.getByText(/em dia/i)).toBeTruthy();
   });
 
-  it('tocar "Ver histórico completo" chama o callback', async () => {
+  it('tocar "Ver banco de horas" chama o callback', async () => {
     const abrir = jest.fn();
     await render(<CartaoBancoHoras bancoHoras={bancoHorasFake()} aoAbrirBancoHoras={abrir} />);
 
-    await fireEvent.press(screen.getByText('Ver histórico completo'));
+    await fireEvent.press(screen.getByText('Ver banco de horas'));
 
     expect(abrir).toHaveBeenCalled();
+  });
+
+  // Fundo azul-ardósia: o azul-claro (inversePrimary) não tem contraste ali,
+  // então o link vai no texto do papel "on-secondary".
+  it('usa o tom destaque, com o link em on-secondary', async () => {
+    await render(<CartaoBancoHoras bancoHoras={bancoHorasFake()} aoAbrirBancoHoras={jest.fn()} />);
+
+    expect(StyleSheet.flatten(screen.getByTestId('cartao').props.style).backgroundColor).toBe(
+      cores.secondary,
+    );
+    expect(StyleSheet.flatten(screen.getByText('Ver banco de horas').props.style).color).toBe(
+      cores.onSecondary,
+    );
   });
 });

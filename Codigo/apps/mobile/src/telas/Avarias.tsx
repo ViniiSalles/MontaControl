@@ -4,6 +4,7 @@ import { cores, espacamento, espacamentoNomeado } from '@montacontrol/design-tok
 import { Alerta } from '../ui/Alerta';
 import { Badge } from '../ui/Badge';
 import { Botao } from '../ui/Botao';
+import { BotaoSincronizacao } from '../sincronizacao/BotaoSincronizacao';
 import { Cartao } from '../ui/Cartao';
 import { Carregando } from '../ui/Carregando';
 import { Tela } from '../ui/Tela';
@@ -11,9 +12,12 @@ import { Texto } from '../ui/Texto';
 import { ROTULO_STATUS_AVARIA, VARIANTE_STATUS_AVARIA } from '../avarias/rotulos';
 import type { AvariaExibida } from '../avarias/avariasComPendentes';
 import { useDadosAvarias } from '../avarias/useDadosAvarias';
-import { useSincronizacaoStore } from '../estado/sincronizacaoStore';
 import { AvisosDeAcoesRecusadas } from './AvisosDeAcoesRecusadas';
+import { useObraEmTrabalho } from '../jornada/useObraEmTrabalho';
+import type { PropsTelaDaAba } from '../navegacao/telaDaAba';
 import { NovaAvaria } from './avarias/NovaAvaria';
+import { BloqueioSemObra } from './jornada/BloqueioSemObra';
+import { CartaoObra } from './jornada/CartaoObra';
 
 function ItemHistorico({ avaria }: { avaria: AvariaExibida }) {
   return (
@@ -41,9 +45,11 @@ function ItemHistorico({ avaria }: { avaria: AvariaExibida }) {
 }
 
 /** Reporte de problemas com peças pelo montador em campo e acompanhamento da análise do gestor. */
-export function Avarias() {
+export function Avarias({ aoIrParaJornada }: PropsTelaDaAba) {
   const { pedidos, tipos, avarias, carregando, erro, recarregar } = useDadosAvarias();
-  const sincronizando = useSincronizacaoStore((estado) => estado.sincronizando);
+  const { obra, motivo, carregando: carregandoObra } = useObraEmTrabalho();
+  // Só se reporta peça da obra do ponto: abrir avaria em outro pedido era fácil demais.
+  const pedido = obra ? (pedidos.find((candidato) => candidato.id === obra.id) ?? null) : null;
   const [aviso, setAviso] = useState<string | null>(null);
 
   function aoEnviado(mensagem: string) {
@@ -58,21 +64,13 @@ export function Avarias() {
           <View style={{ flex: 1 }}>
             <Texto variante="headlineMd">Avarias</Texto>
           </View>
-          <Botao
-            variante="icone"
-            tamanho={40}
-            forma="pilula"
-            icone="sync"
-            rotuloAcessivel="Atualizar"
-            carregando={sincronizando}
-            aoPressionar={() => void recarregar()}
-          />
+          <BotaoSincronizacao aoSincronizar={() => void recarregar()} />
         </View>
 
         {aviso && <Alerta variante="sucesso" mensagem={aviso} />}
         <AvisosDeAcoesRecusadas />
 
-        {carregando ? (
+        {carregando || carregandoObra ? (
           <View style={{ alignItems: 'center', paddingVertical: espacamento[32] }}>
             <Carregando tamanho={espacamento[32]} />
           </View>
@@ -94,19 +92,31 @@ export function Avarias() {
           </>
         ) : (
           <>
-            {pedidos.length === 0 ? (
-              <Alerta
-                variante="info"
-                titulo="Nenhum pedido vinculado"
-                mensagem="Você só pode reportar peças dos pedidos em que está trabalhando. Fale com o gestor."
+            {!obra ? (
+              <BloqueioSemObra
+                titulo="Bata o ponto de entrada para registrar avarias"
+                motivo={motivo ?? 'sem_ponto'}
+                aoIrParaJornada={aoIrParaJornada}
               />
+            ) : !pedido ? (
+              <>
+                <CartaoObra obra={obra} />
+                <Alerta
+                  variante="aviso"
+                  titulo="Dados da obra fora do aparelho"
+                  mensagem="As peças desta obra ainda não estão no aparelho. Sincronize pelo botão do topo para reportar."
+                />
+              </>
             ) : (
-              <NovaAvaria
-                pedidos={pedidos}
-                tipos={tipos}
-                aoEnviado={aoEnviado}
-                aoIniciarEnvio={() => setAviso(null)}
-              />
+              <>
+                <CartaoObra obra={obra} />
+                <NovaAvaria
+                  pedido={pedido}
+                  tipos={tipos}
+                  aoEnviado={aoEnviado}
+                  aoIniciarEnvio={() => setAviso(null)}
+                />
+              </>
             )}
 
             <Texto variante="labelMd" cor={cores.onSurfaceVariant}>

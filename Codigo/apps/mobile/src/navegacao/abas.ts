@@ -21,7 +21,7 @@ export const ABA_PADRAO: IdAba = 'jornada';
 
 export const ABAS: readonly DefinicaoAba[] = [
   { id: 'jornada', rotulo: 'Jornada', icone: 'event_note', disponivel: true },
-  { id: 'bipagem', rotulo: 'Bipagem', icone: 'barcode_scanner', disponivel: false },
+  { id: 'bipagem', rotulo: 'Bipagem', icone: 'barcode_scanner', disponivel: true },
   { id: 'avarias', rotulo: 'Avarias', icone: 'report', disponivel: true },
   { id: 'atestados', rotulo: 'Atestados', icone: 'description', disponivel: true },
   { id: 'normas', rotulo: 'Normas', icone: 'menu_book', disponivel: false },

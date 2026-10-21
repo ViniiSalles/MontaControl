@@ -18,27 +18,14 @@ afterEach(async () => {
 describe('useRascunhoDeAvaria', () => {
   it('lê o rascunho do store: o que já estava lá aparece (reabrir a tela)', async () => {
     useUiStore.getState().alterarRascunhoAvaria({
-      pedidoId: 4,
       campos: { pecaId: 9, tipoAvariaId: 2, descricao: 'Riscado' },
     });
     useUiStore.getState().anexarFotoAoRascunho('1-a.jpg');
 
     const { result } = await renderHook(() => useRascunhoDeAvaria());
 
-    expect(result.current.pedidoEscolhido).toBe(4);
     expect(result.current.campos).toEqual({ pecaId: 9, tipoAvariaId: 2, descricao: 'Riscado' });
     expect(result.current.caminhos).toEqual(['1-a.jpg']);
-  });
-
-  it('escolher outro pedido zera a peça (ela pertence ao pedido)', async () => {
-    const { result } = await renderHook(() => useRascunhoDeAvaria());
-    await act(async () => {
-      result.current.alterar('pecaId', 9);
-      result.current.escolherPedido(4);
-    });
-
-    expect(result.current.pedidoEscolhido).toBe(4);
-    expect(result.current.campos.pecaId).toBeNull();
   });
 
   it('alterar muda só o campo pedido e vai para o store', async () => {
@@ -150,10 +137,9 @@ describe('useRascunhoDeAvaria', () => {
     expect(existeFoto(nome)).toBe(true);
   });
 
-  it('limparCampos zera os campos e mantém o pedido escolhido', async () => {
+  it('limparCampos zera os campos', async () => {
     const { result } = await renderHook(() => useRascunhoDeAvaria());
     await act(async () => {
-      result.current.escolherPedido(4);
       result.current.alterar('descricao', 'x');
     });
 
@@ -162,13 +148,11 @@ describe('useRascunhoDeAvaria', () => {
     });
 
     expect(result.current.campos).toEqual({ pecaId: null, tipoAvariaId: null, descricao: '' });
-    expect(result.current.pedidoEscolhido).toBe(4);
   });
 
   it('descartar apaga os arquivos e esvazia o rascunho inteiro', async () => {
     const { result } = await renderHook(() => useRascunhoDeAvaria());
     await act(async () => {
-      result.current.escolherPedido(4);
       result.current.alterar('descricao', 'x');
       await result.current.adicionarFoto(criarFotoDoPicker(), 'image/jpeg');
     });
@@ -181,14 +165,10 @@ describe('useRascunhoDeAvaria', () => {
     expect(existeFoto(nome)).toBe(false);
     expect(result.current.caminhos).toEqual([]);
     expect(result.current.campos.descricao).toBe('');
-    expect(result.current.pedidoEscolhido).toBeNull();
   });
 
-  it('temConteudo só é verdadeiro com algo digitado, escolhido ou fotografado (o pedido sozinho não conta)', async () => {
+  it('temConteudo só é verdadeiro com algo digitado, escolhido ou fotografado', async () => {
     const { result } = await renderHook(() => useRascunhoDeAvaria());
-    expect(result.current.temConteudo).toBe(false);
-
-    await act(async () => result.current.escolherPedido(4));
     expect(result.current.temConteudo).toBe(false);
 
     await act(async () => result.current.alterar('descricao', '  '));

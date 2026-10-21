@@ -82,6 +82,17 @@ As outras aparecem desabilitadas para que a barra inferior tenha a forma final a
 mudar de layout a cada sprint. Cada sprint seguinte vira uma para `true` e acrescenta uma linha em
 `telaPorAba` (`AppAutenticado.tsx`).
 
+## Bipagem (US02)
+
+A aba **Bipagem** (`src/telas/Bipagem.tsx`) lê o código de barras de cada peça no descarregamento com
+`expo-camera` (ou digitação manual) e confere contra o **pedido ativo** inteiramente na réplica local
+(`src/conferencia/conferencia.ts`) — funciona sem sinal (N4T3). Peça de outro pedido ou código
+desconhecido gera alerta de inconsistência (N4T2). Cada leitura entra na fila (`tipo: 'conferencia'`)
+e sobe para `POST /api/pecas/conferencias`, que marca a peça `DESCARREGADA` ou `INCONSISTENTE`.
+
+`expo-camera` é módulo nativo: depois de instalar, gere o dev client de novo
+(`pnpm android` / `npx expo prebuild`) — o binário antigo não tem a câmera.
+
 ## Testes
 
 `jest-expo` + `@testing-library/react-native` v14. Duas pegadinhas da v14 que já custaram caro aqui:

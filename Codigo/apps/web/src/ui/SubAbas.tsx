@@ -22,7 +22,7 @@ export function SubAbas<Id extends string>({ abas, ativa, aoMudar }: PropsSubAba
           aria-selected={aba.id === ativa}
           onClick={() => aoMudar(aba.id)}
           className={[
-            'border-b-2 py-4 text-body-md transition-colors',
+            'whitespace-nowrap border-b-2 py-4 text-body-md transition-colors',
             aba.id === ativa ? 'border-primary font-semibold text-primary' : 'border-transparent text-on-surface-variant hover:text-primary',
           ].join(' ')}
         >

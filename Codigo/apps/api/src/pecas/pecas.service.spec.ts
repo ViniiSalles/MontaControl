@@ -28,9 +28,15 @@ describe('PecasService', () => {
     buscarPorId: jest.Mock;
     associarCodigoBarras: jest.Mock;
     criar: jest.Mock;
+    buscarParaConferencia: jest.Mock;
+    registrarConferencia: jest.Mock;
   };
   let ambientes: { buscarOuCriar: jest.Mock };
-  let pedidos: { buscarPorNumero: jest.Mock; marcarEmTriagem: jest.Mock };
+  let pedidos: {
+    buscarPorNumero: jest.Mock;
+    marcarEmTriagem: jest.Mock;
+    montadorVinculado: jest.Mock;
+  };
   let service: PecasService;
 
   beforeEach(() => {
@@ -39,11 +45,14 @@ describe('PecasService', () => {
       buscarPorId: jest.fn(),
       associarCodigoBarras: jest.fn(),
       criar: jest.fn(),
+      buscarParaConferencia: jest.fn().mockResolvedValue(null),
+      registrarConferencia: jest.fn().mockResolvedValue(true),
     };
     ambientes = { buscarOuCriar: jest.fn().mockResolvedValue({ id: 4, nome: 'Cozinha' }) };
     pedidos = {
       buscarPorNumero: jest.fn().mockResolvedValue(pedidoAguardando),
       marcarEmTriagem: jest.fn().mockResolvedValue(undefined),
+      montadorVinculado: jest.fn().mockResolvedValue(true),
     };
     service = new PecasService(
       pecas as unknown as PecasRepository,
@@ -149,6 +158,58 @@ describe('PecasService', () => {
 
       await expect(service.associarCodigoBarras(2, 9, 'COD-123')).rejects.toThrow(ConflictException);
       expect(pedidos.marcarEmTriagem).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('conferir', () => {
+    const leitura = { pedidoId: 3, codigoBarras: 'COD-123' };
+
+    it('N4T1: peça do pedido ativo fica DESCARREGADA e registra o montador', async () => {
+      pecas.buscarParaConferencia.mockResolvedValue({ id: 9, status: StatusPeca.TRIADA, pedidoId: 3 });
+
+      const resultado = await service.conferir(2, leitura);
+
+      expect(resultado).toEqual({ resultado: 'CONFERIDA' });
+      expect(pecas.registrarConferencia).toHaveBeenCalledWith(
+        9,
+        [StatusPeca.TRIADA, StatusPeca.CARREGADA, StatusPeca.INCONSISTENTE],
+        StatusPeca.DESCARREGADA,
+        2,
+      );
+    });
+
+    it('é idempotente: reenvio da mesma leitura confere de novo sem erro', async () => {
+      pecas.buscarParaConferencia.mockResolvedValue({ id: 9, status: StatusPeca.DESCARREGADA, pedidoId: 3 });
+      pecas.registrarConferencia.mockResolvedValue(false);
+
+      await expect(service.conferir(2, leitura)).resolves.toEqual({ resultado: 'CONFERIDA' });
+    });
+
+    it('N4T2: peça de outro pedido fica INCONSISTENTE, só se ainda estava em trânsito', async () => {
+      pecas.buscarParaConferencia.mockResolvedValue({ id: 9, status: StatusPeca.TRIADA, pedidoId: 77 });
+
+      const resultado = await service.conferir(2, leitura);
+
+      expect(resultado).toEqual({ resultado: 'INCONSISTENTE' });
+      expect(pecas.registrarConferencia).toHaveBeenCalledWith(
+        9,
+        [StatusPeca.TRIADA, StatusPeca.CARREGADA],
+        StatusPeca.INCONSISTENTE,
+        2,
+      );
+    });
+
+    it('código sem peça triada não muda nada', async () => {
+      await expect(service.conferir(2, leitura)).resolves.toEqual({ resultado: 'NAO_ENCONTRADA' });
+      expect(pecas.registrarConferencia).not.toHaveBeenCalled();
+    });
+
+    it('pedido em que o montador não trabalha é 404', async () => {
+      pedidos.montadorVinculado.mockResolvedValue(false);
+
+      await expect(service.conferir(2, leitura)).rejects.toBeInstanceOf(NotFoundException);
+      expect(pedidos.montadorVinculado).toHaveBeenCalledWith(3, 2);
+      expect(pecas.buscarParaConferencia).not.toHaveBeenCalled();
     });
   });
 });

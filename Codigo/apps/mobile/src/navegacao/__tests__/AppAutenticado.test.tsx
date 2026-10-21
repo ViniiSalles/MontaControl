@@ -139,16 +139,17 @@ test('desmontar o app autenticado remove os listeners', async () => {
 const ABAS_COM_TELA = ['Jornada', 'Avarias', 'Atestados', 'Jornada'];
 
 describe('indicador de status da sincronização', () => {
-  test('aparece em TODAS as abas e acompanha a conexão', async () => {
+  test('em dia, o status fica no ⟳ de TODAS as abas; sem conexão, a faixa aparece em todas', async () => {
     await render(arvore());
 
+    // Espera a sincronização do boot terminar: o botão deixa de dizer Sincronizando….
+    await waitFor(() => expect(screen.getByLabelText(/^Sincronização: Sincronizado/)).toBeTruthy());
     for (const aba of ABAS_COM_TELA) {
       await irParaAba(aba);
-      expect(screen.getByTestId('indicador-sincronizacao')).toBeTruthy();
+      expect(screen.getByLabelText(/^Sincronização: Sincronizado/)).toBeTruthy();
+      expect(screen.queryByTestId('indicador-sincronizacao')).toBeNull();
     }
 
-    // Espera a sincronização do boot terminar: o indicador deixa de dizer Sincronizando….
-    await waitFor(() => expect(screen.getByText(/^Sincronizado/)).toBeTruthy());
     await act(async () => gatilhos.emitirRede(false));
     for (const aba of ABAS_COM_TELA) {
       await irParaAba(aba);
@@ -156,24 +157,26 @@ describe('indicador de status da sincronização', () => {
     }
 
     await act(async () => gatilhos.emitirRede(true));
-    await waitFor(() => expect(screen.getByText(/^Sincronizado/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByLabelText(/^Sincronização: Sincronizado/)).toBeTruthy());
     for (const aba of ABAS_COM_TELA) {
       await irParaAba(aba);
-      expect(screen.queryByText('Sem conexão')).toBeNull();
-      expect(screen.getByText(/^Sincronizado/)).toBeTruthy();
+      expect(screen.queryByTestId('indicador-sincronizacao')).toBeNull();
     }
   });
 
-  test('mostra o tamanho da fila em qualquer aba, e some quando a fila esvazia', async () => {
+  test('mostra o tamanho da fila em qualquer aba, e ele some quando a fila esvazia', async () => {
     await enfileirarAvaria();
     // Sem rede para enviar: a ação segue pendente.
     jest.mocked(enviarAvaria).mockRejectedValue(new TypeError('Network request failed'));
 
     await render(arvore());
 
+    // Com rede, a fila não ocupa faixa: o ⟳ de cada aba ganha o ponto de atenção.
     for (const aba of ABAS_COM_TELA) {
       await irParaAba(aba);
-      await waitFor(() => expect(screen.getByText('1 pendente')).toBeTruthy());
+      await waitFor(() => expect(screen.getByLabelText('Sincronização: 1 pendente')).toBeTruthy());
+      expect(screen.getByTestId('ponto-status-sincronizacao')).toBeTruthy();
+      expect(screen.queryByTestId('indicador-sincronizacao')).toBeNull();
     }
 
     await act(async () => gatilhos.emitirRede(false));
@@ -190,7 +193,7 @@ describe('indicador de status da sincronização', () => {
 
   test('desmontar o app autenticado (logout) zera o status', async () => {
     const { unmount } = await render(arvore());
-    await waitFor(() => expect(screen.getByText(/^Sincronizado/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByLabelText(/^Sincronização: Sincronizado/)).toBeTruthy());
     expect(useSincronizacaoStore.getState().ultimaSincronizacaoEm).not.toBeNull();
 
     await unmount();
@@ -201,4 +204,14 @@ describe('indicador de status da sincronização', () => {
       online: true,
     });
   });
+});
+
+test('sem ponto aberto, "Ir para a Jornada" na Bipagem troca para a aba Jornada', async () => {
+  await render(arvore());
+  await irParaAba('Bipagem');
+  await waitFor(() => expect(screen.getByText('Ir para a Jornada')).toBeTruthy());
+
+  await fireEvent.press(screen.getByText('Ir para a Jornada'));
+
+  await waitFor(() => expect(screen.getByText('Jornada de Trabalho')).toBeTruthy());
 });

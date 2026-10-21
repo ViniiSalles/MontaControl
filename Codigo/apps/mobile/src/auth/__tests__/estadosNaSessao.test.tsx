@@ -67,7 +67,6 @@ function prepararFila({ acoes, banco }: { acoes: number; banco: Dono }) {
 function deixarEstadosNoDiscoEFecharOApp() {
   useUiStore.getState().escolherObra(12);
   useUiStore.getState().alterarRascunhoAvaria({
-    pedidoId: 12,
     campos: { pecaId: 5, tipoAvariaId: 2, descricao: 'Porta riscada' },
   });
   useUiStore.getState().anexarFotoAoRascunho('1-a.jpg');

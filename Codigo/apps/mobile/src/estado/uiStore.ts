@@ -13,7 +13,6 @@ import { CHAVE_UI } from './chavesPersistidas';
  * ou o logout / troca de usuário (`apagarTodasAsFotos`).
  */
 export interface RascunhoDeAvaria {
-  pedidoId: number | null;
   campos: CamposReporteAvaria;
   fotos: string[];
 }
@@ -26,11 +25,7 @@ export interface EstadoDaUi {
 
 export interface AcoesDaUi {
   escolherObra: (id: number | null) => void;
-  alterarRascunhoAvaria: (
-    parcial: Partial<Omit<RascunhoDeAvaria, 'fotos' | 'campos'>> & {
-      campos?: Partial<CamposReporteAvaria>;
-    },
-  ) => void;
+  alterarRascunhoAvaria: (parcial: { campos?: Partial<CamposReporteAvaria> }) => void;
   anexarFotoAoRascunho: (nome: string) => void;
   removerFotoDoRascunho: (nome: string) => void;
   /** Zera a lista de fotos SEM apagar arquivos: a fila passou a ser dona deles. */
@@ -40,7 +35,6 @@ export interface AcoesDaUi {
 }
 
 const RASCUNHO_VAZIO: RascunhoDeAvaria = {
-  pedidoId: null,
   campos: { pecaId: null, tipoAvariaId: null, descricao: '' },
   fotos: [],
 };
@@ -59,10 +53,10 @@ function sanitizar(persistido: unknown): EstadoDaUi {
   const rascunho = (bruto.rascunhoAvaria ?? {}) as Record<string, unknown>;
   const campos = (rascunho.campos ?? {}) as Record<string, unknown>;
 
+  // Rascunho de versão antiga pode trazer `pedidoId` (o pedido agora vem do ponto): é ignorado.
   return {
     obraEscolhidaId: numeroOuNulo(bruto.obraEscolhidaId),
     rascunhoAvaria: {
-      pedidoId: numeroOuNulo(rascunho.pedidoId),
       campos: {
         pecaId: numeroOuNulo(campos.pecaId),
         tipoAvariaId: numeroOuNulo(campos.tipoAvariaId),
@@ -87,11 +81,10 @@ export function criarUiStore(armazenamento: StateStorage) {
       (set) => ({
         ...ESTADO_INICIAL_DA_UI,
         escolherObra: (id) => set({ obraEscolhidaId: id }),
-        alterarRascunhoAvaria: ({ campos, ...resto }) =>
+        alterarRascunhoAvaria: ({ campos }) =>
           set((estado) => ({
             rascunhoAvaria: {
               ...estado.rascunhoAvaria,
-              ...resto,
               campos: { ...estado.rascunhoAvaria.campos, ...campos },
             },
           })),

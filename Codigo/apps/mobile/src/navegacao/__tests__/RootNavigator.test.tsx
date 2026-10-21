@@ -183,6 +183,8 @@ test('sair volta ao Login e limpa os tokens do aparelho', async () => {
   await render(arvore());
   await waitFor(() => expect(screen.getByText('Jornada de Trabalho')).toBeTruthy());
 
+  // O "Sair" mora no painel da conta, no cabeçalho da Jornada.
+  await fireEvent.press(screen.getByLabelText('Conta'));
   await fireEvent.press(screen.getByText('Sair'));
 
   await waitFor(() => expect(screen.getByText('Entrar')).toBeTruthy());
@@ -204,6 +206,8 @@ test('sair remove os listeners de rede e de primeiro plano', async () => {
   expect(gatilhos.rede.size).toBe(1);
   expect(gatilhos.appState.size).toBe(1);
 
+  // O "Sair" mora no painel da conta, no cabeçalho da Jornada.
+  await fireEvent.press(screen.getByLabelText('Conta'));
   await fireEvent.press(screen.getByText('Sair'));
 
   await waitFor(() => expect(screen.getByText('Entrar')).toBeTruthy());
@@ -211,7 +215,7 @@ test('sair remove os listeners de rede e de primeiro plano', async () => {
   expect(gatilhos.appState.size).toBe(0);
 });
 
-test('a barra inferior traz as 5 abas, com Jornada, Avarias e Atestados habilitadas', async () => {
+test('a barra inferior traz as 5 abas, com Jornada, Bipagem, Avarias e Atestados habilitadas', async () => {
   armazenamentoMock.lerSessao.mockResolvedValue(SESSAO_SALVA);
   jest.mocked(globalThis.fetch).mockResolvedValueOnce(respostaJson(200, montador));
 
@@ -223,6 +227,6 @@ test('a barra inferior traz as 5 abas, com Jornada, Avarias e Atestados habilita
   }
 
   // Aba ainda não entregue não troca de tela.
-  await fireEvent.press(screen.getByText('Bipagem'));
+  await fireEvent.press(screen.getByText('Normas'));
   expect(screen.getByText('Jornada de Trabalho')).toBeTruthy();
 });

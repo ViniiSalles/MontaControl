@@ -29,6 +29,10 @@ export enum StatusPeca {
   PENDENTE = 'PENDENTE',
   TRIADA = 'TRIADA',
   CARREGADA = 'CARREGADA',
+  /** Bipada pelo montador no descarregamento, no pedido certo (US02/UC03). */
+  DESCARREGADA = 'DESCARREGADA',
+  /** Bipada no descarregamento de outro pedido — peça no caminhão errado (US02/UC04). */
+  INCONSISTENTE = 'INCONSISTENTE',
   ENTREGUE = 'ENTREGUE',
 }
 

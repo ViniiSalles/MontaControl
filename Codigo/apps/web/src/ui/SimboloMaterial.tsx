@@ -1,5 +1,6 @@
 import type { NomeIcone } from '@montacontrol/design-tokens/icones';
 import accountBalanceWallet from '@material-symbols/svg-400/outlined/account_balance_wallet.svg?raw';
+import accountCircle from '@material-symbols/svg-400/outlined/account_circle.svg?raw';
 import add from '@material-symbols/svg-400/outlined/add.svg?raw';
 import addAPhoto from '@material-symbols/svg-400/outlined/add_a_photo.svg?raw';
 import arrowDownward from '@material-symbols/svg-400/outlined/arrow_downward.svg?raw';
@@ -10,6 +11,7 @@ import cancel from '@material-symbols/svg-400/outlined/cancel.svg?raw';
 import check from '@material-symbols/svg-400/outlined/check.svg?raw';
 import checkCircle from '@material-symbols/svg-400/outlined/check_circle.svg?raw';
 import close from '@material-symbols/svg-400/outlined/close.svg?raw';
+import cloudUpload from '@material-symbols/svg-400/outlined/cloud_upload.svg?raw';
 import chevronLeft from '@material-symbols/svg-400/outlined/chevron_left.svg?raw';
 import chevronRight from '@material-symbols/svg-400/outlined/chevron_right.svg?raw';
 import conveyorBelt from '@material-symbols/svg-400/outlined/conveyor_belt.svg?raw';
@@ -23,6 +25,7 @@ import groups from '@material-symbols/svg-400/outlined/groups.svg?raw';
 import history from '@material-symbols/svg-400/outlined/history.svg?raw';
 import homeWork from '@material-symbols/svg-400/outlined/home_work.svg?raw';
 import info from '@material-symbols/svg-400/outlined/info.svg?raw';
+import keyboard from '@material-symbols/svg-400/outlined/keyboard.svg?raw';
 import locationOn from '@material-symbols/svg-400/outlined/location_on.svg?raw';
 import lock from '@material-symbols/svg-400/outlined/lock.svg?raw';
 import logout from '@material-symbols/svg-400/outlined/logout.svg?raw';
@@ -30,6 +33,7 @@ import mail from '@material-symbols/svg-400/outlined/mail.svg?raw';
 import menu from '@material-symbols/svg-400/outlined/menu.svg?raw';
 import menuBook from '@material-symbols/svg-400/outlined/menu_book.svg?raw';
 import pendingActions from '@material-symbols/svg-400/outlined/pending_actions.svg?raw';
+import radioButtonUnchecked from '@material-symbols/svg-400/outlined/radio_button_unchecked.svg?raw';
 import personOff from '@material-symbols/svg-400/outlined/person_off.svg?raw';
 import pictureAsPdf from '@material-symbols/svg-400/outlined/picture_as_pdf.svg?raw';
 import report from '@material-symbols/svg-400/outlined/report.svg?raw';
@@ -56,6 +60,7 @@ const comCorAtual = (bruto: string) =>
 
 const svgPorIcone: Record<NomeIcone, string> = {
   account_balance_wallet: comCorAtual(accountBalanceWallet),
+  account_circle: comCorAtual(accountCircle),
   add: comCorAtual(add),
   add_a_photo: comCorAtual(addAPhoto),
   arrow_downward: comCorAtual(arrowDownward),
@@ -66,6 +71,7 @@ const svgPorIcone: Record<NomeIcone, string> = {
   check: comCorAtual(check),
   check_circle: comCorAtual(checkCircle),
   close: comCorAtual(close),
+  cloud_upload: comCorAtual(cloudUpload),
   chevron_left: comCorAtual(chevronLeft),
   chevron_right: comCorAtual(chevronRight),
   conveyor_belt: comCorAtual(conveyorBelt),
@@ -79,6 +85,7 @@ const svgPorIcone: Record<NomeIcone, string> = {
   history: comCorAtual(history),
   home_work: comCorAtual(homeWork),
   info: comCorAtual(info),
+  keyboard: comCorAtual(keyboard),
   location_on: comCorAtual(locationOn),
   lock: comCorAtual(lock),
   logout: comCorAtual(logout),
@@ -86,6 +93,7 @@ const svgPorIcone: Record<NomeIcone, string> = {
   menu: comCorAtual(menu),
   menu_book: comCorAtual(menuBook),
   pending_actions: comCorAtual(pendingActions),
+  radio_button_unchecked: comCorAtual(radioButtonUnchecked),
   person_off: comCorAtual(personOff),
   picture_as_pdf: comCorAtual(pictureAsPdf),
   report: comCorAtual(report),

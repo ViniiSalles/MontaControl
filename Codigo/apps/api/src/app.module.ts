@@ -1,5 +1,5 @@
 import { Module, ValidationPipe } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD, APP_PIPE } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AfdModule } from './afd/afd.module';
@@ -8,8 +8,10 @@ import { AvariasModule } from './avarias/avarias.module';
 import { AuthModule } from './auth/auth.module';
 import { BancoHorasModule } from './banco-horas/banco-horas.module';
 import { ClientesModule } from './clientes/clientes.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { HealthController } from './common/health.controller';
+import { criarOpcoesThrottler } from './common/ip-cliente';
 import { validate } from './config/env.validation';
 import { EquipesModule } from './equipes/equipes.module';
 import { EspelhoPontoModule } from './espelho-ponto/espelho-ponto.module';
@@ -26,7 +28,10 @@ import { SyncModule } from './sync/sync.module';
       isGlobal: true,
       validate,
     }),
-    ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 100 }]),
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: criarOpcoesThrottler,
+    }),
     PrismaModule,
     AuthModule,
     JornadasModule,
@@ -39,6 +44,7 @@ import { SyncModule } from './sync/sync.module';
     PedidosModule,
     PecasModule,
     AvariasModule,
+    DashboardModule,
     EquipesModule,
     SyncModule,
   ],

@@ -2,6 +2,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient, Perfil, StatusPeca, StatusPedido } from '../generated/prisma';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { NOME_TIPO_AVARIA_OUTRO } from '@montacontrol/shared';
 
 dotenv.config({ path: process.env.NODE_ENV === 'production' ? '.env.production' : '.env' });
 
@@ -68,17 +69,27 @@ async function seedUsuario(dados: { nome: string; email: string; perfil: Perfil;
   }
 }
 
+const TIPOS_AVARIA = [
+  { nome: 'Amassado', descricao: 'Deformação superficial por impacto' },
+  { nome: 'Risco', descricao: 'Marca superficial em acabamento' },
+  { nome: 'Quebrado', descricao: 'Peça fraturada ou partida' },
+  { nome: 'Manchado', descricao: 'Mancha ou descoloração no acabamento' },
+  { nome: 'Faltante', descricao: 'Peça não veio no carregamento ou não foi encontrada' },
+  { nome: NOME_TIPO_AVARIA_OUTRO, descricao: 'Problema não listado — detalhado na descrição' },
+];
+
+/**
+ * Cria só os tipos que ainda não existem (por nome). Não basta "tabela vazia":
+ * a migração `tipo_avaria_outro` já insere "Outro" antes do seed num banco novo.
+ */
 async function seedTiposAvaria(): Promise<void> {
-  if ((await prisma.tipoAvaria.count()) > 0) return;
-  await prisma.tipoAvaria.createMany({
-    data: [
-      { nome: 'Amassado', descricao: 'Deformação superficial por impacto' },
-      { nome: 'Risco', descricao: 'Marca superficial em acabamento' },
-      { nome: 'Quebrado', descricao: 'Peça fraturada ou partida' },
-      { nome: 'Manchado', descricao: 'Mancha ou descoloração no acabamento' },
-      { nome: 'Faltante', descricao: 'Peça não veio no carregamento ou não foi encontrada' },
-    ],
-  });
+  const existentes = new Set(
+    (await prisma.tipoAvaria.findMany({ select: { nome: true } })).map((tipo) =>
+      tipo.nome.toLowerCase(),
+    ),
+  );
+  const faltando = TIPOS_AVARIA.filter((tipo) => !existentes.has(tipo.nome.toLowerCase()));
+  if (faltando.length > 0) await prisma.tipoAvaria.createMany({ data: faltando });
 }
 
 async function seedTiposFerramenta(): Promise<void> {

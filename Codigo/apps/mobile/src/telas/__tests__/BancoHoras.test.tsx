@@ -123,9 +123,11 @@ test('mês fora da réplica e sem rede: avisa que não há dados offline e permi
 test('voltar devolve o controle para a tela de jornada', async () => {
   await gravarLinhasNaReplica(database, 'banco_horas', [linhaDeAgosto()]);
   await renderizar();
-  await waitFor(() => expect(screen.getByText('Voltar')).toBeTruthy());
+  await waitFor(() => expect(screen.getByLabelText('Voltar')).toBeTruthy());
+  // O voltar é o ‹ do cabeçalho, não um botão no fim da tela.
+  expect(screen.queryByText('Voltar')).toBeNull();
 
-  await fireEvent.press(screen.getByText('Voltar'));
+  await fireEvent.press(screen.getByLabelText('Voltar'));
 
   expect(voltar).toHaveBeenCalled();
 });

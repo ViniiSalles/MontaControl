@@ -29,7 +29,14 @@
         "expo-image-picker",
         {
           "photosPermission": "O MontaControl usa a galeria para anexar a foto do atestado.",
-          "cameraPermission": "O MontaControl usa a câmera para fotografar o atestado."
+          "cameraPermission": "O MontaControl usa a câmera para fotografar atestados e avarias e para ler o código de barras das peças."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "O MontaControl usa a câmera para fotografar atestados e avarias e para ler o código de barras das peças.",
+          "recordAudioAndroid": false
         }
       ],
       [
