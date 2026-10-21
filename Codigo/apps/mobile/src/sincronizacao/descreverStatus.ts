@@ -60,3 +60,14 @@ export function descreverStatus(estado: EntradaDoStatus, agora: number): StatusD
   }
   return { variante: 'neutro', texto: 'Aguardando a primeira sincronização' };
 }
+
+/**
+ * A faixa global só aparece quando o montador precisa saber de algo: sem
+ * conexão ou a última rodada não completou. Em dia, sincronizando ou só com
+ * fila (que sobe sozinha com rede), o status fica no `BotaoSincronizacao` do
+ * cabeçalho. Ignora `sincronizando` de propósito: a nova tentativa depois de
+ * um erro não pode piscar a faixa — ela só some quando a rodada der certo.
+ */
+export function faixaVisivel(estado: EntradaDoStatus): boolean {
+  return !estado.online || estado.ultimoErro !== null;
+}

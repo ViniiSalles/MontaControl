@@ -17,10 +17,13 @@ import { useRascunhoDeAvaria } from '../../avarias/useRascunhoDeAvaria';
 import { MAXIMO_FOTOS, validarReporteAvaria } from '../../avarias/validarReporteAvaria';
 import type { CamposReporteAvaria, ErrosReporteAvaria } from '../../avarias/validarReporteAvaria';
 import { ErroAoEnfileirar, executarAcaoAvaria } from '../../sincronizacao/outbox';
+import { ehTipoOutro } from '../../avarias/tiposAvaria';
 import { Opcao } from './Opcao';
+import { SeletorTipoProblema } from './SeletorTipoProblema';
 
 interface PropsNovaAvaria {
-  pedidos: PedidoDoMontadorDTO[];
+  /** Pedido da obra do ponto em andamento — o único em que o montador pode reportar. */
+  pedido: PedidoDoMontadorDTO;
   tipos: TipoAvariaDTO[];
   /** Reporte aceito (enviado ou na fila) — o pai mostra o aviso e recarrega o histórico. */
   aoEnviado: (aviso: string) => void;
@@ -57,25 +60,19 @@ As fotos anexadas foram descartadas; anexe de novo se precisar.`
 }
 
 /** Reporte de problema na peça pelo montador — entra na outbox, então funciona sem sinal. */
-export function NovaAvaria({ pedidos, tipos, aoEnviado, aoIniciarEnvio }: PropsNovaAvaria) {
+export function NovaAvaria({ pedido, tipos, aoEnviado, aoIniciarEnvio }: PropsNovaAvaria) {
   const database = useDatabaseOuFalha();
-  // Pedido, campos e fotos vivem no rascunho persistido: sobrevivem a trocar de aba e a fechar o app.
+  // Campos e fotos vivem no rascunho persistido: sobrevivem a trocar de aba e a fechar o app.
   const rascunho = useRascunhoDeAvaria();
   const [erros, setErros] = useState<ErrosReporteAvaria>({});
   const [enviando, setEnviando] = useState(false);
   const [falha, setFalha] = useState<string | null>(null);
 
-  // O rascunho pode ter ids de uma réplica anterior (pedido, peça ou tipo que
-  // deixou de existir): só vale o que ainda está na lista.
-  const pedidoEscolhido = pedidos.some((candidato) => candidato.id === rascunho.pedidoEscolhido)
-    ? rascunho.pedidoEscolhido
-    : null;
-  // Com um pedido só, não há o que escolher.
-  const pedidoId = pedidoEscolhido ?? (pedidos.length === 1 ? pedidos[0].id : null);
-  const pedido = pedidos.find((candidato) => candidato.id === pedidoId) ?? null;
+  // O rascunho pode ter ids de uma réplica anterior ou de outra obra (peça de
+  // outro pedido, tipo que deixou de existir): só vale o que está na réplica atual.
   const campos: CamposReporteAvaria = {
     ...rascunho.campos,
-    pecaId: pedido?.ambientes.some((ambiente) =>
+    pecaId: pedido.ambientes.some((ambiente) =>
       ambiente.pecas.some((peca) => peca.id === rascunho.campos.pecaId),
     )
       ? rascunho.campos.pecaId
@@ -84,6 +81,8 @@ export function NovaAvaria({ pedidos, tipos, aoEnviado, aoIniciarEnvio }: PropsN
       ? rascunho.campos.tipoAvariaId
       : null,
   };
+  const tipoEscolhido = tipos.find((tipo) => tipo.id === campos.tipoAvariaId) ?? null;
+  const problemaOutro = tipoEscolhido !== null && ehTipoOutro(tipoEscolhido);
 
   function alterar<C extends keyof CamposReporteAvaria>(campo: C, valor: CamposReporteAvaria[C]) {
     rascunho.alterar(campo, valor);
@@ -175,26 +174,8 @@ export function NovaAvaria({ pedidos, tipos, aoEnviado, aoIniciarEnvio }: PropsN
       tom="padrao"
       conteudo={
         <View style={{ gap: espacamento[20] }}>
-          {/* Sempre visível, mesmo com um pedido só: é como o montador confere a obra. */}
-          <Secao titulo="PEDIDO">
-            {pedidos.map((candidato) => (
-              <Opcao
-                key={candidato.id}
-                forma="linha"
-                rotulo={`${candidato.numeroPedido} · ${candidato.cliente.nome}`}
-                detalhe={`${candidato.cliente.endereco} · ${candidato.cliente.cidade}/${candidato.cliente.estado}`}
-                selecionada={candidato.id === pedidoId}
-                aoPressionar={() => rascunho.escolherPedido(candidato.id)}
-              />
-            ))}
-          </Secao>
-
-          <Secao titulo={pedido ? `PEÇA · ${pedido.numeroPedido}` : 'PEÇA'} erro={erros.peca}>
-            {!pedido ? (
-              <Texto variante="bodyMd" cor={cores.onSurfaceVariant}>
-                Escolha o pedido para ver as peças.
-              </Texto>
-            ) : pedido.ambientes.length === 0 ? (
+          <Secao titulo="PEÇA" erro={erros.peca}>
+            {pedido.ambientes.length === 0 ? (
               <Texto variante="bodyMd" cor={cores.onSurfaceVariant}>
                 Este pedido ainda não tem peças cadastradas.
               </Texto>
@@ -219,24 +200,18 @@ export function NovaAvaria({ pedidos, tipos, aoEnviado, aoIniciarEnvio }: PropsN
             )}
           </Secao>
 
-          <Secao titulo="PROBLEMA" erro={erros.tipo}>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: espacamento[8] }}>
-              {tipos.map((tipo) => (
-                <Opcao
-                  key={tipo.id}
-                  rotulo={tipo.nome}
-                  selecionada={campos.tipoAvariaId === tipo.id}
-                  aoPressionar={() => alterar('tipoAvariaId', tipo.id)}
-                />
-              ))}
-            </View>
-          </Secao>
+          <SeletorTipoProblema
+            tipos={tipos}
+            selecionadoId={campos.tipoAvariaId}
+            aoSelecionar={(id) => alterar('tipoAvariaId', id)}
+            erro={erros.tipo}
+          />
 
           <CampoTexto
-            rotulo="Descrição"
+            rotulo={problemaOutro ? 'Qual é o problema?' : 'Descrição'}
             valor={campos.descricao}
             aoAlterar={(valor) => alterar('descricao', valor)}
-            placeholder="O que aconteceu com a peça?"
+            placeholder={problemaOutro ? 'Descreva o problema da peça' : 'O que aconteceu com a peça?'}
             erro={erros.descricao}
             multilinha
             obrigatorio

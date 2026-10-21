@@ -57,7 +57,7 @@ describe('CartaoUltimoPonto', () => {
     expect(screen.getByText('08:00')).toBeTruthy();
     expect(screen.getByText('17:00')).toBeTruthy();
     expect(screen.getByText(/encerrada/i)).toBeTruthy();
-    // O mapa segue o último ponto — agora é o de check-out.
+    // O endereço segue o último ponto — agora é o de check-out.
     expect(screen.getByText('Rua da Bahia, 200')).toBeTruthy();
     expect(screen.queryByTestId('pulso-atividade')).toBeNull();
   });
@@ -75,7 +75,7 @@ describe('CartaoUltimoPonto', () => {
     expect(screen.queryByTestId('pulso-atividade')).toBeNull();
   });
 
-  it('ponto lançado em atraso ganha badge próprio e sem coordenada não renderiza mapa', async () => {
+  it('ponto lançado em atraso ganha badge próprio e sem endereço não mostra a linha de local', async () => {
     await render(
       <CartaoUltimoPonto
         jornada={jornada({
@@ -88,21 +88,29 @@ describe('CartaoUltimoPonto', () => {
       />,
     );
 
-    expect(screen.queryByTestId('mapa-webview')).toBeNull();
+    expect(screen.queryByText('Av. Afonso Pena, 1000')).toBeNull();
     expect(screen.getByText(/em atraso/i)).toBeTruthy();
   });
 
-  it('pendenteSincronizacao true mostra o selo "Sincronizando"', async () => {
+  // Na fila o ponto já vale, só não subiu: "sincronizando" mentia sem rede.
+  it('pendenteSincronizacao true avisa que aguarda envio, sem selo a mais no cabeçalho', async () => {
     await render(
       <CartaoUltimoPonto jornada={jornada()} estado="em_andamento" pendenteSincronizacao />,
     );
 
-    expect(screen.getByText(/sincronizando/i)).toBeTruthy();
+    expect(screen.getByText('Aguardando envio ao servidor')).toBeTruthy();
+    expect(screen.getAllByTestId('badge-container')).toHaveLength(1);
   });
 
-  it('pendenteSincronizacao false (padrão) não mostra o selo', async () => {
+  it('pendenteSincronizacao false (padrão) não mostra o aviso de envio', async () => {
     await render(<CartaoUltimoPonto jornada={jornada()} estado="em_andamento" />);
 
-    expect(screen.queryByText(/sincronizando/i)).toBeNull();
+    expect(screen.queryByText('Aguardando envio ao servidor')).toBeNull();
+  });
+
+  it('não renderiza mais o mapa: o endereço basta na home', async () => {
+    await render(<CartaoUltimoPonto jornada={jornada()} estado="em_andamento" />);
+
+    expect(screen.queryByTestId('mapa-webview')).toBeNull();
   });
 });

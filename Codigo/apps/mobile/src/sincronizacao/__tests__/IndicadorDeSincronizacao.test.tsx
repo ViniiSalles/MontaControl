@@ -13,7 +13,21 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
-const texto = () => screen.getByTestId('indicador-sincronizacao');
+const faixa = () => screen.queryByTestId('indicador-sincronizacao');
+
+test('em dia, a faixa não ocupa espaço na tela', async () => {
+  useSincronizacaoStore.setState({ ultimaSincronizacaoEm: INICIO });
+  await render(<IndicadorDeSincronizacao />);
+
+  expect(faixa()).toBeNull();
+});
+
+test('com fila e rede, a faixa continua escondida (a fila sobe sozinha)', async () => {
+  useSincronizacaoStore.setState({ ultimaSincronizacaoEm: INICIO, pendentes: 2 });
+  await render(<IndicadorDeSincronizacao />);
+
+  expect(faixa()).toBeNull();
+});
 
 test('reflete o store: sem conexão com ações na fila', async () => {
   await render(<IndicadorDeSincronizacao />);
@@ -24,12 +38,15 @@ test('reflete o store: sem conexão com ações na fila', async () => {
   expect(screen.getByText('Sem conexão · 2 pendentes')).toBeTruthy();
 });
 
-test('acompanha as mudanças do store sem remontar', async () => {
+test('aparece com o erro, segue visível na nova tentativa e some quando ela dá certo', async () => {
+  useSincronizacaoStore.setState({ ultimaSincronizacaoEm: INICIO });
   await render(<IndicadorDeSincronizacao />);
+  expect(faixa()).toBeNull();
+
   await act(async () => {
-    useSincronizacaoStore.setState({ ultimaSincronizacaoEm: INICIO });
+    useSincronizacaoStore.setState({ ultimoErro: 'falha' });
   });
-  expect(screen.getByText('Sincronizado agora')).toBeTruthy();
+  expect(screen.getByText('Falha ao sincronizar')).toBeTruthy();
 
   await act(async () => {
     useSincronizacaoStore.setState({ sincronizando: true });
@@ -37,29 +54,14 @@ test('acompanha as mudanças do store sem remontar', async () => {
   expect(screen.getByText('Sincronizando…')).toBeTruthy();
 
   await act(async () => {
-    useSincronizacaoStore.setState({ sincronizando: false, ultimoErro: 'falha' });
+    useSincronizacaoStore.setState({ sincronizando: false, ultimoErro: null });
   });
-  expect(screen.getByText('Falha ao sincronizar')).toBeTruthy();
+  expect(faixa()).toBeNull();
 });
 
-test('o "há X" envelhece sozinho com o passar do tempo', async () => {
-  useSincronizacaoStore.setState({ ultimaSincronizacaoEm: INICIO });
+test('é um aviso de status acessível (região viva educada)', async () => {
+  useSincronizacaoStore.setState({ online: false });
   await render(<IndicadorDeSincronizacao />);
-  expect(screen.getByText('Sincronizado agora')).toBeTruthy();
 
-  await act(async () => {
-    await jest.advanceTimersByTimeAsync(5 * 60_000);
-  });
-
-  expect(screen.getByText('Sincronizado há 5 min')).toBeTruthy();
-});
-
-test('é um aviso de status acessível (região viva educada) e some o intervalo ao desmontar', async () => {
-  const limpar = jest.spyOn(globalThis, 'clearInterval');
-  const { unmount } = await render(<IndicadorDeSincronizacao />);
-  expect(texto().props.accessibilityLiveRegion).toBe('polite');
-
-  await unmount();
-
-  expect(limpar).toHaveBeenCalled();
+  expect(faixa()?.props.accessibilityLiveRegion).toBe('polite');
 });

@@ -6,7 +6,6 @@ import type { EstadoJornada, JornadaDTO } from '@montacontrol/shared';
 import { Badge } from '../../ui/Badge';
 import { Cartao } from '../../ui/Cartao';
 import { Icone } from '../../ui/Icone';
-import { MapaLocalizacao } from '../../ui/MapaLocalizacao';
 import { PulsoAtividade } from '../../ui/PulsoAtividade';
 import { Texto } from '../../ui/Texto';
 import { formatarHora } from '../../jornada/formatacao';
@@ -17,7 +16,7 @@ interface PropsCartaoUltimoPonto {
   jornada: JornadaDTO | null;
   /** Estado da jornada — decide o selo, o item pendente e o aviso. */
   estado: EstadoJornada;
-  /** Há ação de jornada na fila de sincronização (issue #18). */
+  /** Há ação de jornada na fila de sincronização (issue #18) — o ponto já vale, só não subiu. */
   pendenteSincronizacao?: boolean;
 }
 
@@ -103,9 +102,24 @@ function LinhaMarcacao({ rotulo, descricao, hora, concluido, pulsando }: PropsLi
   );
 }
 
+function LinhaInformativa({ icone, texto }: { icone: 'location_on' | 'cloud_upload'; texto: string }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: espacamento[8] }}>
+      <Icone nome={icone} tamanho={espacamento[16]} cor={cores.onSurfaceVariant} />
+      <View style={{ flex: 1 }}>
+        <Texto variante="bodySm" cor={cores.onSurfaceVariant} numeroDeLinhas={2}>
+          {texto}
+        </Texto>
+      </View>
+    </View>
+  );
+}
+
 /**
  * Cartão "MARCAÇÕES DE HOJE" (`jornada_home:110-160`): linha do tempo com
- * entrada e saída do dia, selo de estado e o mapa do último ponto batido.
+ * entrada e saída do dia, selo de estado e o endereço do último ponto batido.
+ * Sem mapa: no Stitch ele é da confirmação do ponto, não da home, e aqui
+ * empurrava o botão principal para fora da tela.
  * Com só check-in, a saída aparece como próximo item pendente — pulsando
  * quando a jornada ainda está em curso, parada quando já venceu (o aviso
  * abaixo explica o que fazer nesse caso).
@@ -117,11 +131,7 @@ export function CartaoUltimoPonto({
 }: PropsCartaoUltimoPonto) {
   if (!jornada) return <CartaoVazio />;
 
-  const ultimoPonto = derivarUltimoPonto(jornada);
-  // Desestruturar antes do JSX é o que faz o TS estreitar `number | null`
-  // para `number` dentro do bloco condicional do mapa.
-  const latitude = ultimoPonto?.latitude ?? null;
-  const longitude = ultimoPonto?.longitude ?? null;
+  const endereco = derivarUltimoPonto(jornada)?.endereco ?? null;
 
   return (
     <Cartao
@@ -132,7 +142,6 @@ export function CartaoUltimoPonto({
           <Cabecalho
             filho={
               <View style={{ flexDirection: 'row', gap: espacamento[6] }}>
-                {pendenteSincronizacao && <Badge variante="neutro" texto="Sincronizando" />}
                 <SeloEstado estado={estado} />
                 {jornada.lancadoEmAtraso && <Badge variante="aviso" texto="Em atraso" />}
               </View>
@@ -162,8 +171,13 @@ export function CartaoUltimoPonto({
             </Texto>
           )}
 
-          {latitude !== null && longitude !== null && (
-            <MapaLocalizacao latitude={latitude} longitude={longitude} endereco={ultimoPonto?.endereco} />
+          {(endereco || pendenteSincronizacao) && (
+            <View style={{ gap: espacamento[8] }}>
+              {endereco && <LinhaInformativa icone="location_on" texto={endereco} />}
+              {pendenteSincronizacao && (
+                <LinhaInformativa icone="cloud_upload" texto="Aguardando envio ao servidor" />
+              )}
+            </View>
           )}
         </View>
       }

@@ -68,6 +68,9 @@ test('abre em 15 dias e lista os dias do período com o total, lendo só a répl
   await waitFor(() => expect(screen.getByText('10h 00min')).toBeTruthy());
   expect(screen.getByText('9h 00min')).toBeTruthy();
   expect(screen.getByText('08:00')).toBeTruthy();
+  // Resumo do período: 2 dias trabalhados, 10h no total → média de 5h por dia.
+  expect(screen.getByText('MÉDIA POR DIA')).toBeTruthy();
+  expect(screen.getByText('5h 00min')).toBeTruthy();
   // Quem sincroniza é o provider do app, não a tela.
   expect(sincronizarMock).not.toHaveBeenCalled();
 });
@@ -160,11 +163,12 @@ test('sem dado local e com a sincronização falhando, mostra erro e permite ten
   await waitFor(() => expect(screen.getByText('10h 00min')).toBeTruthy());
 });
 
-test('voltar devolve o controle para a tela de jornada', async () => {
+test('voltar fica no cabeçalho, não depois da lista, e devolve o controle para a jornada', async () => {
   await renderizar();
-  await waitFor(() => expect(screen.getByText('Voltar')).toBeTruthy());
+  await waitFor(() => expect(screen.getByLabelText('Voltar')).toBeTruthy());
+  expect(screen.queryByText('Voltar')).toBeNull();
 
-  await fireEvent.press(screen.getByText('Voltar'));
+  await fireEvent.press(screen.getByLabelText('Voltar'));
 
   expect(voltar).toHaveBeenCalled();
 });

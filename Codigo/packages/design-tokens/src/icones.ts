@@ -7,6 +7,7 @@
  */
 export const NOMES_ICONE = [
   'account_balance_wallet',
+  'account_circle',
   'add',
   'add_a_photo',
   'arrow_downward',
@@ -19,6 +20,7 @@ export const NOMES_ICONE = [
   'chevron_left',
   'chevron_right',
   'close',
+  'cloud_upload',
   'conveyor_belt',
   'dashboard',
   'database',

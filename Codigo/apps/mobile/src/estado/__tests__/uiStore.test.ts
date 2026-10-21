@@ -11,7 +11,6 @@ describe('uiStore', () => {
     expect(abrir().getState()).toMatchObject({
       obraEscolhidaId: null,
       rascunhoAvaria: {
-        pedidoId: null,
         campos: { pecaId: null, tipoAvariaId: null, descricao: '' },
         fotos: [],
       },
@@ -23,7 +22,6 @@ describe('uiStore', () => {
     const aberta = abrir(armazenamento);
     aberta.getState().escolherObra(12);
     aberta.getState().alterarRascunhoAvaria({
-      pedidoId: 12,
       campos: { pecaId: 5, tipoAvariaId: 2, descricao: 'Porta riscada' },
     });
     aberta.getState().anexarFotoAoRascunho('1-1-a.jpg');
@@ -34,7 +32,6 @@ describe('uiStore', () => {
 
     expect(reaberta.getState().obraEscolhidaId).toBe(12);
     expect(reaberta.getState().rascunhoAvaria).toEqual({
-      pedidoId: 12,
       campos: { pecaId: 5, tipoAvariaId: 2, descricao: 'Porta riscada' },
       fotos: ['1-1-a.jpg', '2-2-b.png'],
     });
@@ -78,12 +75,12 @@ describe('uiStore', () => {
   it('limparRascunhoAvaria volta ao vazio sem mexer na obra', () => {
     const store = abrir();
     store.getState().escolherObra(9);
-    store.getState().alterarRascunhoAvaria({ pedidoId: 9 });
+    store.getState().alterarRascunhoAvaria({ campos: { descricao: 'x' } });
     store.getState().anexarFotoAoRascunho('a.jpg');
 
     store.getState().limparRascunhoAvaria();
 
-    expect(store.getState().rascunhoAvaria.pedidoId).toBeNull();
+    expect(store.getState().rascunhoAvaria.campos.descricao).toBe('');
     expect(store.getState().rascunhoAvaria.fotos).toEqual([]);
     expect(store.getState().obraEscolhidaId).toBe(9);
   });
@@ -99,7 +96,7 @@ describe('uiStore', () => {
     expect(store.getState().rascunhoAvaria.fotos).toEqual([]);
   });
 
-  it('conteúdo salvo malformado é descartado campo a campo, sem derrubar o app', async () => {
+  it('conteúdo salvo malformado (ou de versão antiga, com pedidoId) é lido campo a campo, sem derrubar o app', async () => {
     const { dados, armazenamento } = armazenamentoEmMemoria();
     dados.set(
       CHAVE_UI,
@@ -121,7 +118,6 @@ describe('uiStore', () => {
 
     expect(store.getState().obraEscolhidaId).toBeNull();
     expect(store.getState().rascunhoAvaria).toEqual({
-      pedidoId: 4,
       campos: { pecaId: null, tipoAvariaId: 2, descricao: '' },
       fotos: ['ok.jpg'],
     });

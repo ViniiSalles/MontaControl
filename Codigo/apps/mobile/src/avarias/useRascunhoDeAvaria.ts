@@ -6,13 +6,11 @@ import type { MimeTypeFoto } from '../fotos/armazenamentoFotos';
 import type { CamposReporteAvaria } from './validarReporteAvaria';
 
 export interface RascunhoDeAvariaEmEdicao {
-  pedidoEscolhido: number | null;
   campos: CamposReporteAvaria;
   /** Nomes dos arquivos das fotos já guardadas no aparelho, na ordem de anexo; `uriDaFoto` dá a miniatura. */
   caminhos: string[];
-  /** Há algo que valha descartar (texto, peça, tipo ou foto); só o pedido escolhido não conta. */
+  /** Há algo que valha descartar (texto, peça, tipo ou foto). */
   temConteudo: boolean;
-  escolherPedido: (id: number) => void;
   alterar: <C extends keyof CamposReporteAvaria>(campo: C, valor: CamposReporteAvaria[C]) => void;
   /** Copia a foto do picker para a pasta do app e a põe no rascunho. Rejeita se não conseguir copiar. */
   adicionarFoto: (uri: string, mimeType: MimeTypeFoto) => Promise<void>;
@@ -20,7 +18,7 @@ export interface RascunhoDeAvariaEmEdicao {
   remover: (indice: number) => Promise<void>;
   /** Zera a lista de fotos SEM apagar os arquivos: a fila passa a ser a dona deles (chamar ao entregá-los ao outbox, antes da rede). */
   esquecerFotos: () => void;
-  /** Zera os campos (envio aceito) e mantém o pedido escolhido. */
+  /** Zera os campos (envio aceito). */
   limparCampos: () => void;
   /** Descarte explícito: apaga os arquivos das fotos e esvazia o rascunho inteiro. */
   descartar: () => Promise<void>;
@@ -42,11 +40,6 @@ export function useRascunhoDeAvaria(): RascunhoDeAvariaEmEdicao {
   const alterarRascunhoAvaria = useUiStore((estado) => estado.alterarRascunhoAvaria);
   const anexarFotoAoRascunho = useUiStore((estado) => estado.anexarFotoAoRascunho);
   const removerFotoDoRascunho = useUiStore((estado) => estado.removerFotoDoRascunho);
-
-  const escolherPedido = useCallback(
-    (id: number) => alterarRascunhoAvaria({ pedidoId: id, campos: { pecaId: null } }),
-    [alterarRascunhoAvaria],
-  );
 
   const alterar = useCallback(
     <C extends keyof CamposReporteAvaria>(campo: C, valor: CamposReporteAvaria[C]) =>
@@ -99,11 +92,9 @@ export function useRascunhoDeAvaria(): RascunhoDeAvariaEmEdicao {
     rascunho.fotos.length > 0;
 
   return {
-    pedidoEscolhido: rascunho.pedidoId,
     campos: rascunho.campos,
     caminhos: rascunho.fotos,
     temConteudo,
-    escolherPedido,
     alterar,
     adicionarFoto,
     remover,

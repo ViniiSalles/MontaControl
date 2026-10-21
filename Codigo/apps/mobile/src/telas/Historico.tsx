@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { View } from 'react-native';
 import { cores, espacamento, espacamentoNomeado } from '@montacontrol/design-tokens/native';
 import type { PeriodoHistorico } from '@montacontrol/shared';
@@ -8,9 +8,10 @@ import { Carregando } from '../ui/Carregando';
 import { Cartao } from '../ui/Cartao';
 import { Tela } from '../ui/Tela';
 import { Texto } from '../ui/Texto';
-import { formatarDuracao } from '../jornada/formatacao';
 import { useHistoricoPontos } from '../jornada/useHistoricoPontos';
+import { CabecalhoSubtela } from './jornada/CabecalhoSubtela';
 import { CartaoDia } from './jornada/CartaoDia';
+import { ResumoPeriodo } from './jornada/ResumoPeriodo';
 import { SeletorPeriodo } from './jornada/SeletorPeriodo';
 
 interface PropsHistorico {
@@ -29,33 +30,25 @@ const PERIODO_PADRAO: PeriodoHistorico = 15;
 export function Historico({ aoVoltar, aoLancarEmAtraso }: PropsHistorico) {
   const [periodo, setPeriodo] = useState<PeriodoHistorico>(PERIODO_PADRAO);
   const { dias, totalMinutos, carregando, erro, recarregar } = useHistoricoPontos(periodo);
+  const [atualizando, setAtualizando] = useState(false);
+
+  const puxarParaAtualizar = useCallback(async () => {
+    setAtualizando(true);
+    try {
+      await recarregar();
+    } finally {
+      setAtualizando(false);
+    }
+  }, [recarregar]);
 
   return (
-    <Tela rolavel>
+    <Tela rolavel aoAtualizar={() => void puxarParaAtualizar()} atualizando={atualizando}>
       <View style={{ gap: espacamentoNomeado.gapPilha }}>
-        <View style={{ gap: espacamento[4] }}>
-          <Texto variante="labelMd" cor={cores.onSurfaceVariant}>
-            JORNADA
-          </Texto>
-          <Texto variante="headlineMd">Histórico de pontos</Texto>
-        </View>
+        <CabecalhoSubtela titulo="Histórico de pontos" aoVoltar={aoVoltar} />
 
         <SeletorPeriodo periodo={periodo} aoTrocar={setPeriodo} />
 
-        <Cartao
-          elevacao="elev1"
-          tom="baixo"
-          conteudo={
-            <View style={{ gap: espacamento[4] }}>
-              <Texto variante="labelMd" cor={cores.onSurfaceVariant}>
-                TOTAL NO PERÍODO
-              </Texto>
-              <Texto variante="headlineSm" tabular>
-                {formatarDuracao(totalMinutos)}
-              </Texto>
-            </View>
-          }
-        />
+        <ResumoPeriodo totalMinutos={totalMinutos} diasTrabalhados={dias.length} />
 
         {carregando ? (
           <View style={{ alignItems: 'center', paddingVertical: espacamento[32] }}>
@@ -97,15 +90,6 @@ export function Historico({ aoVoltar, aoLancarEmAtraso }: PropsHistorico) {
             ))}
           </View>
         )}
-
-        <Botao
-          variante="fantasma"
-          tamanho={48}
-          forma="pilula"
-          texto="Voltar"
-          larguraTotal
-          aoPressionar={aoVoltar}
-        />
       </View>
     </Tela>
   );

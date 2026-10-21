@@ -183,6 +183,8 @@ test('sair volta ao Login e limpa os tokens do aparelho', async () => {
   await render(arvore());
   await waitFor(() => expect(screen.getByText('Jornada de Trabalho')).toBeTruthy());
 
+  // O "Sair" mora no painel da conta, no cabeçalho da Jornada.
+  await fireEvent.press(screen.getByLabelText('Conta'));
   await fireEvent.press(screen.getByText('Sair'));
 
   await waitFor(() => expect(screen.getByText('Entrar')).toBeTruthy());
@@ -204,6 +206,8 @@ test('sair remove os listeners de rede e de primeiro plano', async () => {
   expect(gatilhos.rede.size).toBe(1);
   expect(gatilhos.appState.size).toBe(1);
 
+  // O "Sair" mora no painel da conta, no cabeçalho da Jornada.
+  await fireEvent.press(screen.getByLabelText('Conta'));
   await fireEvent.press(screen.getByText('Sair'));
 
   await waitFor(() => expect(screen.getByText('Entrar')).toBeTruthy());

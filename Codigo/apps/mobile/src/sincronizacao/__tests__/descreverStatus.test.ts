@@ -1,4 +1,4 @@
-import { descreverStatus, formatarHa } from '../descreverStatus';
+import { descreverStatus, faixaVisivel, formatarHa } from '../descreverStatus';
 import type { EntradaDoStatus } from '../descreverStatus';
 
 const AGORA = Date.UTC(2026, 9, 18, 15, 0, 0);
@@ -112,5 +112,31 @@ describe('descreverStatus', () => {
 
   it('sem conexão tem prioridade sobre o último erro (o erro é consequência)', () => {
     expect(descrever({ online: false, ultimoErro: 'sem_rede' }).texto).toBe('Sem conexão');
+  });
+});
+
+describe('faixaVisivel', () => {
+  it.each<[string, Partial<EntradaDoStatus>]>([
+    ['em dia', {}],
+    ['nunca sincronizou', { ultimaSincronizacaoEm: null }],
+    ['sincronizando', { sincronizando: true }],
+    ['só com fila (ela sobe sozinha com rede)', { pendentes: 3 }],
+  ])('esconde a faixa quando não há o que fazer: %s', (_, parcial) => {
+    expect(faixaVisivel({ ...OCIOSO, ...parcial })).toBe(false);
+  });
+
+  it.each<[string, Partial<EntradaDoStatus>]>([
+    ['sem conexão', { online: false }],
+    ['app desatualizado', { ultimoErro: 'versao_incompativel' }],
+    ['falha', { ultimoErro: 'falha' }],
+    ['sessão', { ultimoErro: 'sessao' }],
+    ['servidor sem resposta', { ultimoErro: 'sem_rede' }],
+  ])('mostra a faixa quando o montador precisa saber: %s', (_, parcial) => {
+    expect(faixaVisivel({ ...OCIOSO, ...parcial })).toBe(true);
+  });
+
+  // A nova tentativa não pode piscar a faixa: o problema só some quando ela der certo.
+  it('continua visível enquanto tenta de novo depois de um erro', () => {
+    expect(faixaVisivel({ ...OCIOSO, ultimoErro: 'sem_rede', sincronizando: true })).toBe(true);
   });
 });

@@ -8,6 +8,7 @@ const corPorTom = {
   padrao: cores.surfaceContainerLowest,
   baixo: cores.surfaceContainerLow,
   inverso: cores.inverseSurface,
+  destaque: cores.secondary,
 } as const;
 
 /**
@@ -19,6 +20,7 @@ const corPorTom = {
 export function Cartao({ elevacao, tom, conteudo, rodape }: PropsCartao) {
   return (
     <View
+      testID="cartao"
       style={[
         { borderRadius: raio.lg, overflow: 'hidden', backgroundColor: corPorTom[tom] },
         elevacao !== 'none' && sombraPorNivel(elevacao, Platform.OS === 'android' ? 'android' : 'ios'),

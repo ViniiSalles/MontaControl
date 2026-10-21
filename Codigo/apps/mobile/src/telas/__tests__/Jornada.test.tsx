@@ -294,7 +294,7 @@ test('falha ao sincronizar sem nenhum dado local avisa mas mantém o botão de b
     expect(screen.getByText('Não foi possível carregar sua jornada')).toBeTruthy(),
   );
   expect(screen.getByText(ROTULO_ENTRADA)).toBeTruthy();
-  expect(screen.getByText('Ver histórico')).toBeTruthy();
+  expect(screen.getByText('Histórico de pontos')).toBeTruthy();
 });
 
 test('app desatualizado (426) mostra o aviso para atualizar, sem esconder o ponto', async () => {
@@ -315,7 +315,10 @@ test('atualizar dispara uma sincronização e a jornada que o pull traz aparece'
     expect(screen.getByText('Não foi possível carregar sua jornada')).toBeTruthy(),
   );
 
-  await fireEvent.press(screen.getByLabelText('Atualizar'));
+  // O ⟳ do cabeçalho abre o painel de status; a sincronização sai do "Sincronizar agora".
+  await fireEvent.press(screen.getByLabelText(/^Sincronização:/));
+  expect(sincronizarMock).not.toHaveBeenCalled();
+  await fireEvent.press(screen.getByText('Sincronizar agora'));
   expect(sincronizarMock).toHaveBeenCalledTimes(1);
 
   // O pull que o gatilho dispara grava a réplica e limpa o erro.
@@ -332,10 +335,10 @@ test('os atalhos de histórico e ponto em atraso chamam a navegação da aba', a
   await renderizar();
   await waitFor(() => expect(screen.getByText(ROTULO_ENTRADA)).toBeTruthy());
 
-  await fireEvent.press(screen.getByText('Ver histórico'));
+  await fireEvent.press(screen.getByText('Histórico de pontos'));
   expect(abrirHistorico).toHaveBeenCalled();
 
-  await fireEvent.press(screen.getByText('Ponto em atraso'));
+  await fireEvent.press(screen.getByText('Lançar ponto em atraso'));
   expect(lancarEmAtraso).toHaveBeenCalled();
 });
 
@@ -380,16 +383,16 @@ test('abrir um turno novo no mesmo dia soma com o turno anterior, não reseta "t
 
 test('o atalho de banco de horas chama a navegação da aba', async () => {
   await renderizar();
-  await waitFor(() => expect(screen.getByText('Ver histórico completo')).toBeTruthy());
+  await waitFor(() => expect(screen.getByText('Ver banco de horas')).toBeTruthy());
 
-  await fireEvent.press(screen.getByText('Ver histórico completo'));
+  await fireEvent.press(screen.getByText('Ver banco de horas'));
 
   expect(abrirBancoHoras).toHaveBeenCalled();
 });
 
 test('o saldo do mês vem da réplica; a tela não sincroniza sozinha ao abrir', async () => {
   await renderizar();
-  await waitFor(() => expect(screen.getByText('Ver histórico completo')).toBeTruthy());
+  await waitFor(() => expect(screen.getByText('Ver banco de horas')).toBeTruthy());
 
   expect(sincronizarMock).not.toHaveBeenCalled();
 });
@@ -404,7 +407,7 @@ test('a tela Jornada não liga a sincronização automática por conta própria'
   expect(iniciarSincronizacaoMock).toHaveBeenCalledTimes(1);
 });
 
-test('ação pendente na fila marca o último ponto como sincronizando', async () => {
+test('ação pendente na fila marca o último ponto como aguardando envio', async () => {
   await gravarLinhasNaReplica(database, 'jornadas', [abertaNaReplica()]);
   await criarAcaoPendente(database, {
     tipo: 'checkout',
@@ -419,7 +422,7 @@ test('ação pendente na fila marca o último ponto como sincronizando', async (
 
   await renderizar();
 
-  await waitFor(() => expect(screen.getByText('SINCRONIZANDO')).toBeTruthy());
+  await waitFor(() => expect(screen.getByText('Aguardando envio ao servidor')).toBeTruthy());
 });
 
 test('bater a saída também pede uma sincronização (histórico e saldo do mês)', async () => {
@@ -466,13 +469,17 @@ test('com mais de uma obra, a entrada exige escolher a obra', async () => {
   simularCheckinNaFila(CHECKIN_RECENTE, OUTRA_OBRA.id);
 
   await renderizar();
-  await waitFor(() => expect(screen.getByText('João Lima · PED-000011')).toBeTruthy());
+  await waitFor(() => expect(screen.getByText('Nenhuma obra escolhida')).toBeTruthy());
 
+  // Sem obra, bater a entrada abre a escolha em vez de registrar.
   await fireEvent.press(screen.getByText(ROTULO_ENTRADA));
   expect(screen.getByText('Escolha a obra')).toBeTruthy();
   expect(registrarCheckinMock).not.toHaveBeenCalled();
 
   await fireEvent.press(screen.getByText('João Lima · PED-000011'));
+  // Escolher fecha a lista e a obra aparece compacta acima do botão.
+  expect(screen.queryByText('Escolha a obra')).toBeNull();
+  expect(screen.getByText('João Lima')).toBeTruthy();
   await fireEvent.press(screen.getByText(ROTULO_ENTRADA));
 
   await waitFor(() => expect(registrarCheckinMock).toHaveBeenCalledWith(database, OUTRA_OBRA));
@@ -483,7 +490,8 @@ test('a obra escolhida sobrevive a fechar e reabrir o app: o ponto de entrada j�
     linhaDePedido({ id: '11', numero_pedido: 'PED-000011', cliente_nome: 'João Lima' }),
   ]);
   const { unmount } = await renderizar();
-  await waitFor(() => expect(screen.getByText('João Lima · PED-000011')).toBeTruthy());
+  await waitFor(() => expect(screen.getByText('Nenhuma obra escolhida')).toBeTruthy());
+  await fireEvent.press(screen.getByLabelText(/^Obra:/));
   await fireEvent.press(screen.getByText('João Lima · PED-000011'));
   await unmount();
 
@@ -528,7 +536,9 @@ test('a saída usa a obra do check-in (jornadas.pedido_id da réplica), sem rede
   simularCheckoutNaFila();
 
   await renderizar();
-  await waitFor(() => expect(screen.getByText(/Obra: Maria Souza/)).toBeTruthy());
+  // Com ponto aberto, a obra aparece no cartão só leitura (sem "Trocar").
+  await waitFor(() => expect(screen.getByText('Maria Souza')).toBeTruthy());
+  expect(screen.queryByText('Trocar')).toBeNull();
 
   await fireEvent.press(screen.getByText(ROTULO_SAIDA));
 
@@ -551,7 +561,9 @@ test('a saída de um check-in feito offline usa a obra gravada na ação da fila
   simularCheckoutNaFila();
 
   await renderizar();
-  await waitFor(() => expect(screen.getByText(/Obra: Maria Souza/)).toBeTruthy());
+  // Com ponto aberto, a obra aparece no cartão só leitura (sem "Trocar").
+  await waitFor(() => expect(screen.getByText('Maria Souza')).toBeTruthy());
+  expect(screen.queryByText('Trocar')).toBeNull();
 
   await fireEvent.press(screen.getByText(ROTULO_SAIDA));
 
@@ -568,4 +580,41 @@ test('longe da obra o aviso mostra a distância', async () => {
 
   await waitFor(() => expect(screen.getByText(/cerca de 1,3 km/)).toBeTruthy());
   expect(screen.getByText(ROTULO_ENTRADA)).toBeTruthy();
+});
+
+test('com uma obra só, ela aparece compacta e não há o que trocar', async () => {
+  await renderizar();
+
+  await waitFor(() => expect(screen.getByText('Maria Souza')).toBeTruthy());
+  expect(screen.queryByText('Trocar')).toBeNull();
+  expect(screen.queryByText('Escolha a obra')).toBeNull();
+});
+
+test('sair fica no painel da conta, não solto na tela', async () => {
+  const sair = jest.fn();
+  useAuthMock.mockReturnValue({
+    sessao: { usuario: montador },
+    restaurando: false,
+    entrar: jest.fn(),
+    sair,
+  });
+
+  await renderizar();
+  await waitFor(() => expect(screen.getByText(ROTULO_ENTRADA)).toBeTruthy());
+  expect(screen.queryByText('Sair')).toBeNull();
+
+  await fireEvent.press(screen.getByLabelText('Conta'));
+  expect(screen.getByText(montador.nome)).toBeTruthy();
+  await fireEvent.press(screen.getByText('Sair'));
+
+  expect(sair).toHaveBeenCalled();
+});
+
+test('a jornada aberta não mostra mais o mapa, só o endereço do último ponto', async () => {
+  await gravarLinhasNaReplica(database, 'jornadas', [abertaNaReplica()]);
+
+  await renderizar();
+
+  await waitFor(() => expect(screen.getByText('Av. Afonso Pena, 1000')).toBeTruthy());
+  expect(screen.queryByTestId('mapa-webview')).toBeNull();
 });
