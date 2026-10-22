@@ -116,6 +116,10 @@ Regras práticas:
 - **Do** manter nomenclatura de domínio em pt-BR e nomenclatura técnica/estrutural em inglês.
 - **Do** manter todo o código dentro de `Codigo/`, organizado por app/pacote de workspace.
 - **Do** utilize o mcp e skill do code-graph sempre que possível para navegar entre os arquivos do projeto e entender as dependências entre eles.
+- **Do** remover todo worktree aberto para uma tarefa (ex.: em `.claude/worktrees/`) ao final da
+  implementação, assim que o trabalho for mergeado ou enviado em PR: confirmar que não há nada
+  pendente, rodar `git worktree remove <caminho>` + `git worktree prune` e, após o merge, apagar a
+  branch local.
 
 ## Don'ts
 
