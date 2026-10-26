@@ -165,7 +165,7 @@ export default function Dashboard() {
               ) : (
                 <div className="space-y-16">
                   {pedidos.map((pedido) => (
-                    <CartaoPedido key={pedido.pedidoId} pedido={pedido} />
+                    <CartaoPedido key={pedido.pedidoId} pedido={pedido} token={token} />
                   ))}
                 </div>
               )}

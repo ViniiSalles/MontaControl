@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { StatusPedido as StatusPedidoCompartilhado } from '@montacontrol/shared';
 import { StatusPeca } from '../../generated/prisma';
+import { PedidoNaoEncontradoException } from '../pedidos/exceptions/pedido-nao-encontrado.exception';
 import { DashboardRepository } from './dashboard.repository';
 import type { EventosRecentes, PedidoParaAcompanhamento } from './dashboard.repository';
 import {
@@ -216,5 +217,59 @@ describe('DashboardService', () => {
     });
     expect(dashboard.pedidos[0].etapa).toBe('NO_ESTOQUE');
     expect(dashboard.geradoEm).toBe(agora.toISOString());
+  });
+});
+
+describe('DashboardService.rastrearPecas', () => {
+  async function criar(listarPecasRastreadas: jest.Mock) {
+    const modulo = await Test.createTestingModule({
+      providers: [DashboardService, DashboardRepository],
+    })
+      .overrideProvider(DashboardRepository)
+      .useValue({ listarPecasRastreadas })
+      .compile();
+    return modulo.get(DashboardService);
+  }
+
+  it('informa quem bipou na triagem e quem conferiu no descarregamento', async () => {
+    const triada = new Date('2026-10-19T12:00:00Z');
+    const conferida = new Date('2026-10-20T15:00:00Z');
+    const listar = jest.fn().mockResolvedValue([
+      {
+        id: 7,
+        descricao: 'Porta',
+        codigoBarras: 'COD-7',
+        ambiente: 'Cozinha',
+        quantidade: 1,
+        status: StatusPeca.DESCARREGADA,
+        triadaPor: 'Operador Ana',
+        triadaAt: triada,
+        conferidaPor: 'Montador João',
+        conferidaAt: conferida,
+      },
+    ]);
+    const service = await criar(listar);
+
+    await expect(service.rastrearPecas(1)).resolves.toEqual([
+      {
+        pecaId: 7,
+        descricao: 'Porta',
+        codigoBarras: 'COD-7',
+        ambiente: 'Cozinha',
+        quantidade: 1,
+        status: 'DESCARREGADA',
+        triadaPor: 'Operador Ana',
+        triadaEm: triada.toISOString(),
+        conferidaPor: 'Montador João',
+        conferidaEm: conferida.toISOString(),
+      },
+    ]);
+    expect(listar).toHaveBeenCalledWith(1);
+  });
+
+  it('devolve 404 quando o pedido não existe', async () => {
+    const service = await criar(jest.fn().mockResolvedValue(null));
+
+    await expect(service.rastrearPecas(999)).rejects.toThrow(PedidoNaoEncontradoException);
   });
 });
