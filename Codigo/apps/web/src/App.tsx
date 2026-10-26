@@ -12,6 +12,7 @@ const Login = lazy(() => import('./paginas/Login.tsx'))
 const Dashboard = lazy(() => import('./paginas/Dashboard.tsx'))
 const Pedidos = lazy(() => import('./paginas/Pedidos.tsx'))
 const Avarias = lazy(() => import('./paginas/Avarias.tsx'))
+const Colaboradores = lazy(() => import('./paginas/Colaboradores.tsx'))
 const Equipes = lazy(() => import('./paginas/Equipes.tsx'))
 const Clientes = lazy(() => import('./paginas/Clientes.tsx'))
 const Atestados = lazy(() => import('./paginas/Atestados.tsx'))
@@ -64,6 +65,14 @@ function App() {
             element={
               <RotaProtegida perfilExigido={Perfil.GESTOR}>
                 <Avarias />
+              </RotaProtegida>
+            }
+          />
+          <Route
+            path="/colaboradores"
+            element={
+              <RotaProtegida perfilExigido={Perfil.GESTOR}>
+                <Colaboradores />
               </RotaProtegida>
             }
           />

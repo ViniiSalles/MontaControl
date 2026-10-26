@@ -17,6 +17,11 @@ export interface DadosNovoUsuario {
   fotoPath: string | null;
 }
 
+export interface DadosAtualizacaoUsuario {
+  nome?: string;
+  telefone?: string | null;
+}
+
 /**
  * Checagem por forma (não `instanceof`): o cliente Prisma gerado no build
  * pode divergir, por identidade de módulo, da classe importada aqui.
@@ -144,6 +149,20 @@ export class UsuariosRepository {
     } catch (erro) {
       if (ehRegistroNaoEncontrado(erro)) return null;
       if (ehViolacaoDeUnicidade(erro)) return 'CPF_DUPLICADO';
+      throw erro;
+    }
+  }
+
+  /** Retorna `null` quando não existe usuário com esse id. */
+  async atualizar(id: number, dados: DadosAtualizacaoUsuario): Promise<UsuarioListado | null> {
+    try {
+      return await this.prisma.usuario.update({
+        where: { id },
+        data: dados,
+        select: SELECAO_USUARIO_LISTADO,
+      });
+    } catch (erro) {
+      if (ehRegistroNaoEncontrado(erro)) return null;
       throw erro;
     }
   }

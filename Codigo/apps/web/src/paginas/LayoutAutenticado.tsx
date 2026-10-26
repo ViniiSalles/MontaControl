@@ -31,6 +31,7 @@ const ITENS_POR_PERFIL: Record<PerfilWeb, ItemMenu[]> = {
     { rotulo: 'Clientes', caminho: '/clientes', icone: 'home_work' },
     { rotulo: 'Equipes', caminho: '/equipes', icone: 'groups' },
     { rotulo: 'Avarias', caminho: '/avarias', icone: 'report' },
+    { rotulo: 'Colaboradores', caminho: '/colaboradores', icone: 'account_circle' },
   ],
   [Perfil.DEPOSITO]: [{ rotulo: 'Triagem de Peças', caminho: '/triagem', icone: 'conveyor_belt' }],
 }

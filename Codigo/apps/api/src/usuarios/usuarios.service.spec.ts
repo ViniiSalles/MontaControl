@@ -27,6 +27,7 @@ describe('UsuariosService', () => {
     alterarAtivo: jest.Mock;
     definirCpf: jest.Mock;
     buscarPorId: jest.Mock;
+    atualizar: jest.Mock;
   };
   let supabase: { criarUsuario: jest.Mock; excluirUsuario: jest.Mock };
   let fotos: { enviar: jest.Mock; remover: jest.Mock; comUrls: jest.Mock };
@@ -39,6 +40,7 @@ describe('UsuariosService', () => {
       alterarAtivo: jest.fn(),
       definirCpf: jest.fn(),
       buscarPorId: jest.fn(),
+      atualizar: jest.fn(),
     };
     supabase = { criarUsuario: jest.fn(), excluirUsuario: jest.fn() };
     // Sem foto, `comUrls` é transparente: os testes antigos comparam o listado puro.
@@ -278,6 +280,40 @@ describe('UsuariosService', () => {
       repository.alterarAtivo.mockResolvedValue(null);
 
       await expect(service.alterarAtivo(999, false, 1)).rejects.toThrow(
+        UsuarioNaoEncontradoException,
+      );
+    });
+  });
+
+  describe('atualizar', () => {
+    const operador = {
+      id: 4,
+      nome: 'Operador',
+      email: 'op@montacontrol.local',
+      perfil: Perfil.DEPOSITO,
+      ativo: true,
+    };
+
+    it('apara o nome e troca telefone em branco por null', async () => {
+      repository.atualizar.mockResolvedValue({ ...operador, nome: 'Novo Nome', telefone: null });
+
+      await service.atualizar(4, { nome: '  Novo Nome ', telefone: '   ' });
+
+      expect(repository.atualizar).toHaveBeenCalledWith(4, { nome: 'Novo Nome', telefone: null });
+    });
+
+    it('não envia campos ausentes nem nome em branco', async () => {
+      repository.atualizar.mockResolvedValue(operador);
+
+      await service.atualizar(4, { nome: '   ' });
+
+      expect(repository.atualizar).toHaveBeenCalledWith(4, {});
+    });
+
+    it('devolve 404 quando o usuário não existe', async () => {
+      repository.atualizar.mockResolvedValue(null);
+
+      await expect(service.atualizar(999, { nome: 'X' })).rejects.toThrow(
         UsuarioNaoEncontradoException,
       );
     });

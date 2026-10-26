@@ -1,4 +1,4 @@
-import type { CadastrarUsuarioRequest, InformarCpfRequest, UsuarioDTO } from '@montacontrol/shared'
+import type { AtualizarUsuarioRequest, CadastrarUsuarioRequest, InformarCpfRequest, UsuarioDTO } from '@montacontrol/shared'
 import { requisitar } from './clienteHttp'
 
 export function listarUsuarios(token: string): Promise<UsuarioDTO[]> {
@@ -26,4 +26,8 @@ export function alterarAtivoUsuario(
 
 export function informarCpfUsuario(token: string, id: number, cpf: string): Promise<UsuarioDTO> {
   return requisitar<UsuarioDTO>(`/api/usuarios/${id}/cpf`, { token, metodo: 'PATCH', corpo: { cpf } satisfies InformarCpfRequest })
+}
+
+export function atualizarUsuario(token: string, id: number, dados: AtualizarUsuarioRequest): Promise<UsuarioDTO> {
+  return requisitar<UsuarioDTO>(`/api/usuarios/${id}`, { token, metodo: 'PATCH', corpo: dados })
 }
