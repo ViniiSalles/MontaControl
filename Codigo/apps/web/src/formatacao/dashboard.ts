@@ -1,3 +1,4 @@
+import { StatusPeca } from '@montacontrol/shared'
 import type {
   AcompanhamentoPedidoDTO,
   EtapaPedido,
@@ -13,6 +14,25 @@ export const ROTULO_ETAPA: Record<EtapaPedido, string> = {
   NO_ESTOQUE: 'No estoque',
   EM_DESCARREGAMENTO: 'Descarregando no cliente',
   NO_CLIENTE: 'Entregue no cliente',
+}
+
+/** Onde a peça está, do ponto de vista do rastreio de bipagens. */
+export const ROTULO_STATUS_PECA: Record<StatusPeca, string> = {
+  [StatusPeca.PENDENTE]: 'Aguardando triagem',
+  [StatusPeca.TRIADA]: 'No estoque',
+  [StatusPeca.CARREGADA]: 'Carregada',
+  [StatusPeca.DESCARREGADA]: 'No cliente',
+  [StatusPeca.INCONSISTENTE]: 'Obra errada',
+  [StatusPeca.ENTREGUE]: 'Entregue',
+}
+
+export const VARIANTE_STATUS_PECA: Record<StatusPeca, VarianteBadge> = {
+  [StatusPeca.PENDENTE]: 'neutro',
+  [StatusPeca.TRIADA]: 'info',
+  [StatusPeca.CARREGADA]: 'info',
+  [StatusPeca.DESCARREGADA]: 'sucesso',
+  [StatusPeca.INCONSISTENTE]: 'aviso',
+  [StatusPeca.ENTREGUE]: 'sucesso',
 }
 
 export const VARIANTE_ETAPA: Record<EtapaPedido, VarianteBadge> = {

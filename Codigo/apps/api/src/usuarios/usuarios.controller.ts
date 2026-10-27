@@ -5,6 +5,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UsuarioAutenticado } from '../auth/usuario-autenticado';
 import { AlterarAtivoDto } from './dto/alterar-ativo.dto';
+import { AtualizarUsuarioDto } from './dto/atualizar-usuario.dto';
 import { CadastrarUsuarioDto } from './dto/cadastrar-usuario.dto';
 import { InformarCpfDto } from './dto/informar-cpf.dto';
 import { UsuarioComFoto } from './usuario-listado';
@@ -28,6 +29,12 @@ export class UsuariosController {
   async cadastrar(@Body() dto: CadastrarUsuarioDto): Promise<UsuarioDTO> {
     const usuario = await this.usuarios.cadastrar(dto);
     return this.mapear(usuario);
+  }
+
+  @Roles(Perfil.RH, Perfil.GESTOR)
+  @Patch(':id')
+  async atualizar(@Param('id', ParseIntPipe) id: number, @Body() dto: AtualizarUsuarioDto): Promise<UsuarioDTO> {
+    return this.mapear(await this.usuarios.atualizar(id, dto));
   }
 
   @Roles(Perfil.RH, Perfil.GESTOR)

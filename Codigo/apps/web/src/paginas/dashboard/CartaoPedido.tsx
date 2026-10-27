@@ -1,9 +1,12 @@
+import { useState } from 'react'
 import type { AcompanhamentoPedidoDTO } from '@montacontrol/shared'
 import type { NomeIcone } from '@montacontrol/design-tokens/icones'
 import { formatarDataHoraCurta } from '../../formatacao/datas'
 import { percentual, ROTULO_ETAPA, VARIANTE_ETAPA } from '../../formatacao/dashboard'
 import { BadgeStatus } from '../../ui/BadgeStatus'
+import { Botao } from '../../ui/Botao'
 import { SimboloMaterial } from '../../ui/SimboloMaterial'
+import { RastreioPecas } from './RastreioPecas'
 
 interface PropsBarraEtapa {
   rotulo: string
@@ -53,7 +56,8 @@ function BarraEtapa({ rotulo, icone, feitas, total, corBarra, ultimaEm, descrica
  * Onde está o pedido: bipado no estoque pelo operador (triagem) e bipado no
  * cliente pelo montador (descarregamento), com o que exige ação do gestor.
  */
-export function CartaoPedido({ pedido }: { pedido: AcompanhamentoPedidoDTO }) {
+export function CartaoPedido({ pedido, token }: { pedido: AcompanhamentoPedidoDTO; token: string }) {
+  const [rastreioAberto, setRastreioAberto] = useState(false)
   return (
     <article
       aria-label={`Pedido ${pedido.numeroPedido}`}
@@ -111,7 +115,18 @@ export function CartaoPedido({ pedido }: { pedido: AcompanhamentoPedidoDTO }) {
             texto={`${pedido.avariasAbertas} ${pedido.avariasAbertas === 1 ? 'avaria' : 'avarias'}`}
           />
         )}
+        {pedido.pecasNoEstoque > 0 && (
+          <Botao
+            variante="fantasma"
+            tamanho={40}
+            forma="pilula"
+            icone="barcode_scanner"
+            texto={rastreioAberto ? 'Ocultar bipagens' : 'Quem bipou'}
+            aoPressionar={() => setRastreioAberto((aberto) => !aberto)}
+          />
+        )}
       </footer>
+      {rastreioAberto && <RastreioPecas token={token} pedidoId={pedido.pedidoId} />}
     </article>
   )
 }

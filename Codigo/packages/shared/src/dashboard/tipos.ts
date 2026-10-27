@@ -1,4 +1,4 @@
-import type { StatusPedido } from '../enums';
+import type { StatusPeca, StatusPedido } from '../enums';
 
 /**
  * Dashboard do gestor (US08/US09, Figura 37): onde está cada pedido — na
@@ -42,6 +42,27 @@ export interface AcompanhamentoPedidoDTO {
   ultimaTriagemEm: string | null;
   /** Última bipagem no descarregamento (ISO) — quando a carga chegou ao cliente. */
   ultimoDescarregamentoEm: string | null;
+}
+
+/**
+ * Rastreio de uma peça do pedido: quem bipou na triagem (operador do
+ * depósito) e quem conferiu no descarregamento (montador). Carregado sob
+ * demanda ao abrir o pedido — `GET /dashboard/pedidos/:id/pecas`.
+ */
+export interface RastreioPecaDTO {
+  pecaId: number;
+  descricao: string;
+  codigoBarras: string | null;
+  ambiente: string;
+  quantidade: number;
+  status: StatusPeca;
+  triadaPor: string | null;
+  /** ISO. */
+  triadaEm: string | null;
+  /** Só a conferência no pedido certo registra o conferente. */
+  conferidaPor: string | null;
+  /** ISO. */
+  conferidaEm: string | null;
 }
 
 export interface IndicadoresDashboardDTO {

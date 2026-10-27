@@ -6,13 +6,17 @@ import type {
   DashboardDTO,
   EtapaPedido,
   ProdutividadeDiaDTO,
+  RastreioPecaDTO,
+  StatusPeca as StatusPecaCompartilhado,
 } from '@montacontrol/shared';
 import { StatusPeca } from '../../generated/prisma';
 import { FUSO_OPERACAO } from '../common/fuso';
+import { PedidoNaoEncontradoException } from '../pedidos/exceptions/pedido-nao-encontrado.exception';
 import { DashboardRepository } from './dashboard.repository';
 import type {
   EventoDeBipagem,
   EventosRecentes,
+  PecaRastreada,
   PedidoParaAcompanhamento,
 } from './dashboard.repository';
 
@@ -63,6 +67,21 @@ export function montarAcompanhamento(pedido: PedidoParaAcompanhamento): Acompanh
     avariasAbertas: pecas.reduce((soma, peca) => soma + peca.avariasAbertas, 0),
     ultimaTriagemEm: maisRecente(pecas.map((peca) => peca.triadaAt)),
     ultimoDescarregamentoEm: maisRecente(pecas.map((peca) => peca.conferidaAt)),
+  };
+}
+
+export function montarRastreio(peca: PecaRastreada): RastreioPecaDTO {
+  return {
+    pecaId: peca.id,
+    descricao: peca.descricao,
+    codigoBarras: peca.codigoBarras,
+    ambiente: peca.ambiente,
+    quantidade: peca.quantidade,
+    status: peca.status as unknown as StatusPecaCompartilhado,
+    triadaPor: peca.triadaPor,
+    triadaEm: peca.triadaAt?.toISOString() ?? null,
+    conferidaPor: peca.conferidaPor,
+    conferidaEm: peca.conferidaAt?.toISOString() ?? null,
   };
 }
 
@@ -205,6 +224,13 @@ export function montarProdutividade(
 @Injectable()
 export class DashboardService {
   constructor(private readonly dashboard: DashboardRepository) {}
+
+  /** Quem bipou cada peça do pedido, na triagem e no descarregamento. */
+  async rastrearPecas(pedidoId: number): Promise<RastreioPecaDTO[]> {
+    const pecas = await this.dashboard.listarPecasRastreadas(pedidoId);
+    if (!pecas) throw new PedidoNaoEncontradoException();
+    return pecas.map(montarRastreio);
+  }
 
   /**
    * US08/US09 — visão da operação para o gestor. "Hoje" é o dia civil no fuso

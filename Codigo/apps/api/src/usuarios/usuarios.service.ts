@@ -9,7 +9,7 @@ import { CpfObrigatorioException } from './exceptions/cpf-obrigatorio.exception'
 import { InativacaoDoProprioUsuarioException } from './exceptions/inativacao-do-proprio-usuario.exception';
 import { UsuarioNaoEncontradoException } from './exceptions/usuario-nao-encontrado.exception';
 import { FotosUsuarios } from './fotos-usuarios';
-import { UsuariosRepository } from './usuarios.repository';
+import { DadosAtualizacaoUsuario, UsuariosRepository } from './usuarios.repository';
 import { UsuarioComFoto, UsuarioListado } from './usuario-listado';
 
 export interface DadosCadastroUsuario {
@@ -99,6 +99,18 @@ export class UsuariosService {
 
     const usuario = await this.usuarios.definirCpf(id, somenteDigitos(cpf));
     if (usuario === 'CPF_DUPLICADO') throw new CpfJaCadastradoException();
+    if (!usuario) throw new UsuarioNaoEncontradoException();
+    return this.comFoto(usuario);
+  }
+
+  /** Nome e telefone; strings em branco viram ausência (nome) ou `null` (telefone). */
+  async atualizar(id: number, dados: DadosAtualizacaoUsuario): Promise<UsuarioComFoto> {
+    const nome = dados.nome?.trim();
+    const telefone = dados.telefone === undefined ? undefined : dados.telefone?.trim() || null;
+    const usuario = await this.usuarios.atualizar(id, {
+      ...(nome ? { nome } : {}),
+      ...(telefone !== undefined ? { telefone } : {}),
+    });
     if (!usuario) throw new UsuarioNaoEncontradoException();
     return this.comFoto(usuario);
   }

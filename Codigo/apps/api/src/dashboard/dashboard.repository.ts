@@ -60,6 +60,19 @@ export interface EventosRecentes {
   inconsistencias: EventoDeInconsistencia[];
 }
 
+export interface PecaRastreada {
+  id: number;
+  descricao: string;
+  codigoBarras: string | null;
+  ambiente: string;
+  quantidade: number;
+  status: StatusPeca;
+  triadaPor: string | null;
+  triadaAt: Date | null;
+  conferidaPor: string | null;
+  conferidaAt: Date | null;
+}
+
 const NO_CLIENTE = [StatusPeca.DESCARREGADA, StatusPeca.ENTREGUE];
 
 /**
@@ -111,6 +124,51 @@ export class DashboardRepository {
         })),
       ),
     }));
+  }
+
+  /** Peças do pedido com quem as bipou — `null` quando o pedido não existe. */
+  async listarPecasRastreadas(pedidoId: number): Promise<PecaRastreada[] | null> {
+    const pedido = await this.prisma.pedido.findUnique({
+      where: { id: pedidoId },
+      select: {
+        ambientes: {
+          orderBy: { nome: 'asc' },
+          select: {
+            nome: true,
+            pecas: {
+              orderBy: { id: 'asc' },
+              select: {
+                id: true,
+                descricao: true,
+                codigoBarras: true,
+                quantidade: true,
+                status: true,
+                triadaAt: true,
+                conferidaAt: true,
+                triador: { select: { nome: true } },
+                conferente: { select: { nome: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!pedido) return null;
+
+    return pedido.ambientes.flatMap((ambiente) =>
+      ambiente.pecas.map((peca) => ({
+        id: peca.id,
+        descricao: peca.descricao,
+        codigoBarras: peca.codigoBarras,
+        ambiente: ambiente.nome,
+        quantidade: peca.quantidade,
+        status: peca.status,
+        triadaPor: peca.triador?.nome ?? null,
+        triadaAt: peca.triadaAt,
+        conferidaPor: peca.conferente?.nome ?? null,
+        conferidaAt: peca.conferidaAt,
+      })),
+    );
   }
 
   /** Montadores distintos com jornada aberta e check-in a partir de `desde`. */

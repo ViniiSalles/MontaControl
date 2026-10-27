@@ -518,6 +518,16 @@ export interface AlterarAtivoRequest {
   ativo: boolean;
 }
 
+/**
+ * Edição dos dados cadastrais de um usuário. E-mail, perfil e CPF ficam de
+ * fora: o e-mail é a credencial no Supabase Auth, o perfil define o acesso e
+ * o CPF é "definir uma vez" (`PATCH /usuarios/:id/cpf`). `telefone: null` limpa.
+ */
+export interface AtualizarUsuarioRequest {
+  nome?: string;
+  telefone?: string | null;
+}
+
 /** Linha do painel de banco de horas do RH. Horas decimais, como a coluna `Decimal(7,2)`. */
 export interface SaldoMontadorDTO extends BancoHorasDTO {
   usuarioNome: string;
