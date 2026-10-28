@@ -9,6 +9,8 @@ import { sincronizar } from './syncManager';
 /** Subconjunto do `Socket` do socket.io-client que este módulo usa; os testes injetam um falso. */
 export interface SocketLike {
   readonly connected: boolean;
+  /** `true` enquanto o Manager do Socket.io cuida da (re)conexão; `false` quando o socket foi destruído. */
+  readonly active: boolean;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   on(evento: string, ouvinte: (...args: any[]) => void): unknown;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -27,6 +29,11 @@ export interface OpcoesSocket {
 
 export type CriarSocket = (url: string, opcoes: OpcoesSocket) => SocketLike;
 
+/** Primeira espera antes de retentar depois de uma recusa; dobra a cada recusa seguida. */
+export const ATRASO_INICIAL_RETENTATIVA_MS = 2_000;
+/** Teto do atraso: uma recusa persistente gera no máximo uma tentativa por minuto. */
+export const ATRASO_MAXIMO_RETENTATIVA_MS = 60_000;
+
 const criarSocketPadrao: CriarSocket = (url, opcoes) => io(url, opcoes) as unknown as SocketLike;
 
 /**
@@ -36,11 +43,16 @@ const criarSocketPadrao: CriarSocket = (url, opcoes) => io(url, opcoes) as unkno
  *
  * - Conecta só enquanto `online` (NetInfo, publicado no store); some a rede,
  *   desconecta, volta, reconecta — sem deixar o Socket.io tentando no escuro.
- * - `auth` é função: cada (re)conexão pede o token atual (renovado, se for o
- *   caso). Sem sessão, responde sem token; o servidor recusa com
- *   `connect_error` e o Socket.io faz o backoff por conta própria.
- * - `connect_error` NÃO é logout: pode ser falha transitória do servidor. A
- *   sessão só acaba pelo fluxo de refresh (`tokenSessao`), nunca por aqui.
+ * - `auth` é função: cada (re)conexão pede o token em memória. Sem sessão,
+ *   responde sem token e o servidor recusa.
+ * - Recusa do servidor (`connect_error` do handshake ou `io server
+ *   disconnect`): o socket.io-client DESTRÓI o socket (`active` = false) e não
+ *   reconecta sozinho — só falha de transporte tem backoff do Manager. A
+ *   retentativa é daqui: espera com backoff (2 s dobrando até 60 s, de volta
+ *   a 2 s após um `connect`), roda `sincronizar` — cujo 401 renova o token,
+ *   porque `obterTokenValido` não confere validade — e então reconecta. Só
+ *   enquanto online e na mesma sessão. NUNCA desloga: a sessão só acaba pelo
+ *   fluxo de refresh (`tokenSessao`); uma recusa pode ser falha transitória.
  * - Ao conectar (inicial e reconexões) sincroniza, para recuperar o que
  *   chegou enquanto o socket estava fora.
  * - Evento de sessão antiga (logout/novo login depois do início) é ignorado.
@@ -66,30 +78,77 @@ export function iniciarSocket(
     },
   });
 
+  let ativo = true;
+  let temporizador: ReturnType<typeof setTimeout> | null = null;
+  let atraso = ATRASO_INICIAL_RETENTATIVA_MS;
+
+  const mesmaSessao = () => geracaoDaSessao() === geracao;
+  const podeConectar = () =>
+    ativo && mesmaSessao() && useSincronizacaoStore.getState().online;
+
+  const cancelarRetentativa = () => {
+    if (temporizador !== null) clearTimeout(temporizador);
+    temporizador = null;
+  };
+
   const sincronizarSeMesmaSessao = () => {
-    if (geracaoDaSessao() !== geracao) return;
+    if (!mesmaSessao()) return;
     // `sincronizar` já deduplica e publica o erro no store; aqui só evita rejeição solta.
     sincronizar(database).catch(() => undefined);
   };
 
-  socket.on(WS_EVENTS.NOTIFICACAO_NOVA, sincronizarSeMesmaSessao);
-  socket.on('connect', sincronizarSeMesmaSessao);
-
-  const ajustarConexao = (online: boolean) => {
-    if (online) socket.connect();
-    else socket.disconnect();
+  const aoConectar = () => {
+    cancelarRetentativa();
+    atraso = ATRASO_INICIAL_RETENTATIVA_MS;
+    sincronizarSeMesmaSessao();
   };
+
+  const agendarRetentativa = () => {
+    // `active`: o Manager ainda está tentando (falha de transporte) — não duplicar.
+    if (socket.active || temporizador !== null || !podeConectar()) return;
+    const espera = atraso;
+    atraso = Math.min(atraso * 2, ATRASO_MAXIMO_RETENTATIVA_MS);
+    temporizador = setTimeout(() => {
+      temporizador = null;
+      // O 401 do pull renova o token que o próximo `auth` vai ler; falha aqui não impede a tentativa.
+      sincronizar(database)
+        .catch(() => undefined)
+        .then(() => {
+          if (podeConectar() && !socket.active) socket.connect();
+        });
+    }, espera);
+  };
+
+  const aoDesconectar = (motivo: string) => {
+    if (motivo === 'io server disconnect') agendarRetentativa();
+  };
+
+  socket.on(WS_EVENTS.NOTIFICACAO_NOVA, sincronizarSeMesmaSessao);
+  socket.on('connect', aoConectar);
+  socket.on('connect_error', agendarRetentativa);
+  socket.on('disconnect', aoDesconectar);
 
   if (useSincronizacaoStore.getState().online) socket.connect();
 
   const soltarStore = useSincronizacaoStore.subscribe((estado, anterior) => {
-    if (estado.online !== anterior.online) ajustarConexao(estado.online);
+    if (estado.online === anterior.online) return;
+    cancelarRetentativa();
+    if (estado.online) {
+      atraso = ATRASO_INICIAL_RETENTATIVA_MS;
+      socket.connect();
+    } else {
+      socket.disconnect();
+    }
   });
 
   return () => {
+    ativo = false;
+    cancelarRetentativa();
     soltarStore();
     socket.off(WS_EVENTS.NOTIFICACAO_NOVA, sincronizarSeMesmaSessao);
-    socket.off('connect', sincronizarSeMesmaSessao);
+    socket.off('connect', aoConectar);
+    socket.off('connect_error', agendarRetentativa);
+    socket.off('disconnect', aoDesconectar);
     socket.disconnect();
   };
 }

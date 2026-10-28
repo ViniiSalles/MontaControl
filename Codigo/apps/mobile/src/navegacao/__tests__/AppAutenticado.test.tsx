@@ -20,6 +20,7 @@ import { AcaoPendente } from '../../db/AcaoPendente';
 import { criarBancoDeTeste, pullSemMudancas } from '../../db/__tests__/apoio';
 import { useSincronizacaoStore } from '../../estado/sincronizacaoStore';
 import { instalarGatilhosFalsos } from '../../sincronizacao/__tests__/gatilhosFalsos';
+import { useSocketDoApp } from '../../sincronizacao/useSocketDoApp';
 import { AppAutenticado } from '../AppAutenticado';
 
 const { mes: MES, ano: ANO } = periodoAtual(new Date().toISOString());
@@ -216,4 +217,10 @@ test('sem ponto aberto, "Ir para a Jornada" na Bipagem troca para a aba Jornada'
   await fireEvent.press(screen.getByText('Ir para a Jornada'));
 
   await waitFor(() => expect(screen.getByText('Jornada de Trabalho')).toBeTruthy());
+});
+
+test('liga o canal de tempo real junto com a sincronização do app autenticado', async () => {
+  await render(arvore());
+
+  expect(useSocketDoApp).toHaveBeenCalled();
 });
