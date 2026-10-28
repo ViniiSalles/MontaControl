@@ -44,6 +44,7 @@ function renderizar() {
           aoAbrirHistorico={abrirHistorico}
           aoAbrirBancoHoras={abrirBancoHoras}
           aoLancarEmAtraso={lancarEmAtraso}
+          aoAbrirNotificacoes={jest.fn()}
         />
       </ComSincronizacaoDoApp>
     </DatabaseProvider>,

@@ -23,6 +23,7 @@ import { useJornadaAtual } from '../jornada/useJornadaAtual';
 import { useObrasDoMontador } from '../pedidos/useObrasDoMontador';
 import { useSincronizacaoStore } from '../estado/sincronizacaoStore';
 import { useUiStore } from '../estado/uiStore';
+import { BotaoNotificacoes } from '../notificacoes/BotaoNotificacoes';
 import { BotaoSincronizacao } from '../sincronizacao/BotaoSincronizacao';
 import { AtalhosJornada } from './jornada/AtalhosJornada';
 import { BotaoAcaoPrincipal } from './jornada/BotaoAcaoPrincipal';
@@ -41,6 +42,7 @@ interface PropsJornada {
   aoAbrirHistorico: () => void;
   aoAbrirBancoHoras: () => void;
   aoLancarEmAtraso: () => void;
+  aoAbrirNotificacoes: () => void;
 }
 
 /**
@@ -53,7 +55,12 @@ interface PropsJornada {
  * linha, sem mapa) e todo aviso vem abaixo dele: um alerta que aparece não
  * pode empurrar o botão para longe do dedo.
  */
-export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso }: PropsJornada) {
+export function Jornada({
+  aoAbrirHistorico,
+  aoAbrirBancoHoras,
+  aoLancarEmAtraso,
+  aoAbrirNotificacoes,
+}: PropsJornada) {
   const database = useDatabaseOuFalha();
 
   // A sincronização automática (`useSincronizacaoDoApp`) e o status da fila vêm
@@ -160,6 +167,7 @@ export function Jornada({ aoAbrirHistorico, aoAbrirBancoHoras, aoLancarEmAtraso 
             </Texto>
             <Texto variante="headlineMd">Jornada de Trabalho</Texto>
           </View>
+          <BotaoNotificacoes aoPressionar={aoAbrirNotificacoes} />
           <BotaoSincronizacao aoSincronizar={() => void atualizar()} desabilitado={registrando} />
           <BotaoConta />
         </View>

@@ -47,7 +47,7 @@ async function bancoComReplica() {
 const irParaJornada = jest.fn();
 
 async function renderizar(database: ReturnType<typeof criarBancoDeTeste>) {
-  await render(<Avarias aoIrParaJornada={irParaJornada} />, { wrapper: comBancoESincronizacao(database) });
+  await render(<Avarias aoIrParaJornada={irParaJornada} aoAbrirNotificacoes={jest.fn()} />, { wrapper: comBancoESincronizacao(database) });
 }
 
 /** Toca em "Fotografar problema" e escolhe uma foto da galeria (o picker devolve o arquivo temporário). */

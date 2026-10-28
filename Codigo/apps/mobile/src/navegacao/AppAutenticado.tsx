@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import type { ComponentType } from 'react';
 import { View } from 'react-native';
 import { cores } from '@montacontrol/design-tokens/native';
@@ -7,10 +7,12 @@ import { ComBarraInferior } from '../ui/Tela';
 import { Atestados } from '../telas/Atestados';
 import { Avarias } from '../telas/Avarias';
 import { Bipagem } from '../telas/Bipagem';
+import { Notificacoes } from '../telas/Notificacoes';
 import { IndicadorDeSincronizacao } from '../sincronizacao/IndicadorDeSincronizacao';
 import { useSincronizacaoDoApp } from '../sincronizacao/useSincronizacaoDoApp';
 import { useSocketDoApp } from '../sincronizacao/useSocketDoApp';
 import { PilhaJornada } from './PilhaJornada';
+import { useVoltarDoAndroid } from './useVoltarDoAndroid';
 import { ABA_PADRAO, ABAS } from './abas';
 import type { IdAba } from './abas';
 import type { PropsTelaDaAba } from './telaDaAba';
@@ -37,6 +39,15 @@ export function AppAutenticado() {
   useSincronizacaoDoApp();
   useSocketDoApp();
   const [abaAtiva, setAbaAtiva] = useState<IdAba>(ABA_PADRAO);
+  // A tela de notificações fica por cima da aba ativa, sem trocá-la: fechar volta ao ponto de origem.
+  const [notificacoesAberta, setNotificacoesAberta] = useState(false);
+  const fecharNotificacoes = useCallback(() => setNotificacoesAberta(false), []);
+  useVoltarDoAndroid(notificacoesAberta, fecharNotificacoes);
+
+  function irParaAba(aba: IdAba) {
+    setAbaAtiva(aba);
+    setNotificacoesAberta(false);
+  }
 
   // Aba sem tela entregue cai na padrão, que sempre existe — a barra já as
   // mantém desabilitadas, então isto é rede de segurança, não fluxo normal.
@@ -47,14 +58,21 @@ export function AppAutenticado() {
     icone: aba.icone,
     ativo: aba.id === abaAtiva,
     desabilitado: !aba.disponivel,
-    aoPressionar: () => setAbaAtiva(aba.id),
+    aoPressionar: () => irParaAba(aba.id),
   }));
 
   return (
     <View style={{ flex: 1, backgroundColor: cores.background }}>
       <View style={{ flex: 1 }}>
         <ComBarraInferior>
-          <TelaAtiva aoIrParaJornada={() => setAbaAtiva('jornada')} />
+          {notificacoesAberta ? (
+            <Notificacoes aoVoltar={fecharNotificacoes} aoAbrirAba={irParaAba} />
+          ) : (
+            <TelaAtiva
+              aoIrParaJornada={() => setAbaAtiva('jornada')}
+              aoAbrirNotificacoes={() => setNotificacoesAberta(true)}
+            />
+          )}
         </ComBarraInferior>
       </View>
       {/* Acima da barra, fora do conteúdo da aba: o mesmo status em todas as telas. */}

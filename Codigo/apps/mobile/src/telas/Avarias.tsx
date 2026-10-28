@@ -4,6 +4,7 @@ import { cores, espacamento, espacamentoNomeado } from '@montacontrol/design-tok
 import { Alerta } from '../ui/Alerta';
 import { Badge } from '../ui/Badge';
 import { Botao } from '../ui/Botao';
+import { BotaoNotificacoes } from '../notificacoes/BotaoNotificacoes';
 import { BotaoSincronizacao } from '../sincronizacao/BotaoSincronizacao';
 import { Cartao } from '../ui/Cartao';
 import { Carregando } from '../ui/Carregando';
@@ -45,7 +46,7 @@ function ItemHistorico({ avaria }: { avaria: AvariaExibida }) {
 }
 
 /** Reporte de problemas com peças pelo montador em campo e acompanhamento da análise do gestor. */
-export function Avarias({ aoIrParaJornada }: PropsTelaDaAba) {
+export function Avarias({ aoIrParaJornada, aoAbrirNotificacoes }: PropsTelaDaAba) {
   const { pedidos, tipos, avarias, carregando, erro, recarregar } = useDadosAvarias();
   const { obra, motivo, carregando: carregandoObra } = useObraEmTrabalho();
   // Só se reporta peça da obra do ponto: abrir avaria em outro pedido era fácil demais.
@@ -64,6 +65,7 @@ export function Avarias({ aoIrParaJornada }: PropsTelaDaAba) {
           <View style={{ flex: 1 }}>
             <Texto variante="headlineMd">Avarias</Texto>
           </View>
+          <BotaoNotificacoes aoPressionar={aoAbrirNotificacoes} />
           <BotaoSincronizacao aoSincronizar={() => void recarregar()} />
         </View>
 

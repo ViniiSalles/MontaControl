@@ -54,7 +54,7 @@ async function semearAtestados(...linhas: SyncAtestadoRow[]) {
 }
 
 function renderizar() {
-  return render(<Atestados />, { wrapper: comBancoESincronizacao(database) });
+  return render(<Atestados aoAbrirNotificacoes={() => undefined} />, { wrapper: comBancoESincronizacao(database) });
 }
 
 beforeEach(() => {
