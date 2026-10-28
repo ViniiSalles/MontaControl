@@ -18,6 +18,20 @@ export interface NotificacaoCriada {
   notificacao: NotificacaoDTO;
 }
 
+/** Notificação como vai no pull de sincronização: sem `usuarioId` nem `chaveOrigem`. */
+export interface NotificacaoParaSync {
+  id: number;
+  tipo: TipoNotificacao;
+  titulo: string;
+  mensagem: string;
+  referenciaTipo: ReferenciaNotificacao | null;
+  referenciaId: number | null;
+  lida: boolean;
+  criadaEm: Date;
+}
+
+const DIA_MS = 24 * 60 * 60 * 1000;
+
 interface LinhaNotificacao {
   id: number;
   usuarioId: number;
@@ -73,6 +87,48 @@ export class NotificacoesRepository {
       take: limite,
     });
     return linhas.map(paraDTO);
+  }
+
+  /**
+   * Linhas do pull de sincronização: só as de `usuarioId`. Sem `desde` (primeiro
+   * pull), as criadas nos últimos `janelaDias` dias; com `desde` (incremental,
+   * já com a margem de segurança), sem janela, só as alteradas depois dele
+   * (marcar como lida atualiza `updatedAt`).
+   */
+  async listarParaSync(
+    usuarioId: number,
+    desde: Date | null,
+    janelaDias: number,
+  ): Promise<NotificacaoParaSync[]> {
+    const linhas = await this.prisma.notificacao.findMany({
+      where: {
+        usuarioId,
+        ...(desde
+          ? { updatedAt: { gt: desde } }
+          : { createdAt: { gte: new Date(Date.now() - janelaDias * DIA_MS) } }),
+      },
+      orderBy: { id: 'asc' },
+      select: {
+        id: true,
+        tipo: true,
+        titulo: true,
+        mensagem: true,
+        referenciaTipo: true,
+        referenciaId: true,
+        lida: true,
+        createdAt: true,
+      },
+    });
+    return linhas.map((linha) => ({
+      id: linha.id,
+      tipo: linha.tipo as TipoNotificacao,
+      titulo: linha.titulo,
+      mensagem: linha.mensagem,
+      referenciaTipo: linha.referenciaTipo as ReferenciaNotificacao | null,
+      referenciaId: linha.referenciaId,
+      lida: linha.lida,
+      criadaEm: linha.createdAt,
+    }));
   }
 
   contarNaoLidas(usuarioId: number): Promise<number> {

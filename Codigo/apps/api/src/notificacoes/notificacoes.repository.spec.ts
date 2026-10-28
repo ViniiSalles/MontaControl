@@ -175,4 +175,59 @@ describe('NotificacoesRepository', () => {
       });
     });
   });
+
+  describe('listarParaSync', () => {
+    const DIA_MS = 24 * 60 * 60 * 1000;
+    const AGORA = Date.parse('2026-10-27T12:00:00.000Z');
+
+    beforeEach(() => {
+      jest.useFakeTimers().setSystemTime(AGORA);
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('primeiro pull (desde nulo): só do usuário, na janela de created_at', async () => {
+      prisma.notificacao.findMany.mockResolvedValue([]);
+
+      await repository.listarParaSync(3, null, 30);
+
+      expect(prisma.notificacao.findMany).toHaveBeenCalledWith({
+        where: { usuarioId: 3, createdAt: { gte: new Date(AGORA - 30 * DIA_MS) } },
+        orderBy: { id: 'asc' },
+        select: expect.any(Object),
+      });
+    });
+
+    it('incremental: só do usuário, por updated_at depois de desde e sem janela', async () => {
+      prisma.notificacao.findMany.mockResolvedValue([]);
+      const desde = new Date('2026-10-27T11:00:00.000Z');
+
+      await repository.listarParaSync(3, desde, 30);
+
+      expect(prisma.notificacao.findMany).toHaveBeenCalledWith({
+        where: { usuarioId: 3, updatedAt: { gt: desde } },
+        orderBy: { id: 'asc' },
+        select: expect.any(Object),
+      });
+    });
+
+    it('devolve as linhas em termos de domínio, com criadaEm', async () => {
+      prisma.notificacao.findMany.mockResolvedValue([linha({ id: 9 })]);
+
+      await expect(repository.listarParaSync(3, null, 30)).resolves.toEqual([
+        {
+          id: 9,
+          tipo: 'AVARIA_REPORTADA',
+          titulo: 'Avaria reportada',
+          mensagem: 'Peça 12 chegou quebrada',
+          referenciaTipo: 'AVARIA',
+          referenciaId: 123,
+          lida: false,
+          criadaEm: CRIADA_EM,
+        },
+      ]);
+    });
+  });
 });

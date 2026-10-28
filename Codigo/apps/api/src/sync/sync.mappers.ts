@@ -4,6 +4,7 @@ import type {
   SyncAvariaRow,
   SyncBancoHorasRow,
   SyncJornadaRow,
+  SyncNotificacaoRow,
   SyncPecaRow,
   SyncPedidoRow,
   SyncTipoAvariaRow,
@@ -14,6 +15,7 @@ import type { AvariaParaSync } from '../avarias/avarias.repository';
 import type { TipoAvariaParaSync } from '../avarias/tipos-avaria.repository';
 import type { BancoHorasParaSync } from '../banco-horas/banco-horas.repository';
 import type { JornadaParaSync } from '../jornadas/jornadas.repository';
+import type { NotificacaoParaSync } from '../notificacoes/notificacoes.repository';
 import type { PecaParaSync } from '../pecas/pecas.repository';
 import type { PedidoParaSync } from '../pedidos/pedidos.repository';
 
@@ -130,5 +132,18 @@ export function paraLinhaAtestado(atestado: AtestadoParaSync): SyncAtestadoRow {
     motivo_rejeicao: atestado.motivoRejeicao,
     validado_em: paraIsoOuNulo(atestado.validadoEm),
     criado_em: paraIso(atestado.criadoEm),
+  };
+}
+
+export function paraLinhaNotificacao(notificacao: NotificacaoParaSync): SyncNotificacaoRow {
+  return {
+    id: paraId(notificacao.id),
+    tipo: notificacao.tipo,
+    titulo: notificacao.titulo,
+    mensagem: notificacao.mensagem,
+    referencia_tipo: notificacao.referenciaTipo,
+    referencia_id: notificacao.referenciaId === null ? null : paraId(notificacao.referenciaId),
+    lida: notificacao.lida,
+    criada_em: paraIso(notificacao.criadaEm),
   };
 }

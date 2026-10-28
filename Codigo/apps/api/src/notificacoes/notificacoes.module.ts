@@ -22,6 +22,6 @@ import { NotificacoesService } from './notificacoes.service';
     // Mesma instância do gateway: o service só conhece a porta abstrata.
     { provide: EmissorNotificacao, useExisting: NotificacoesGateway },
   ],
-  exports: [NotificacoesService],
+  exports: [NotificacoesService, NotificacoesRepository],
 })
 export class NotificacoesModule {}

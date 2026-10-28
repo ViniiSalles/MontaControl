@@ -8,6 +8,7 @@ import {
   StatusPedido,
   SYNC_JANELA_ATESTADOS_DIAS,
   SYNC_JANELA_AVARIAS_DIAS,
+  SYNC_JANELA_NOTIFICACOES_DIAS,
   SYNC_JANELA_JORNADAS_DIAS,
   SYNC_SCHEMA_VERSION,
   TABELAS_SYNC,
@@ -19,6 +20,7 @@ import { TiposAvariaRepository } from '../avarias/tipos-avaria.repository';
 import { BancoHorasRepository } from '../banco-horas/banco-horas.repository';
 import { BancoHorasService } from '../banco-horas/banco-horas.service';
 import { JornadasRepository } from '../jornadas/jornadas.repository';
+import { NotificacoesRepository } from '../notificacoes/notificacoes.repository';
 import { PecasRepository } from '../pecas/pecas.repository';
 import { PedidosRepository } from '../pedidos/pedidos.repository';
 import { SyncExclusaoRepository } from './sync-exclusao.repository';
@@ -41,6 +43,7 @@ describe('SyncService', () => {
   let tiposAvaria: { listarParaSync: jest.Mock };
   let avarias: { listarParaSync: jest.Mock };
   let atestados: { listarParaSync: jest.Mock };
+  let notificacoes: { listarParaSync: jest.Mock };
   let exclusoes: { listarDesde: jest.Mock };
 
   beforeEach(async () => {
@@ -54,6 +57,7 @@ describe('SyncService', () => {
     tiposAvaria = { listarParaSync: jest.fn().mockResolvedValue([]) };
     avarias = { listarParaSync: jest.fn().mockResolvedValue([]) };
     atestados = { listarParaSync: jest.fn().mockResolvedValue([]) };
+    notificacoes = { listarParaSync: jest.fn().mockResolvedValue([]) };
     exclusoes = { listarDesde: jest.fn().mockResolvedValue([]) };
 
     const modulo = await Test.createTestingModule({
@@ -68,6 +72,7 @@ describe('SyncService', () => {
         { provide: TiposAvariaRepository, useValue: tiposAvaria },
         { provide: AvariasRepository, useValue: avarias },
         { provide: AtestadosRepository, useValue: atestados },
+        { provide: NotificacoesRepository, useValue: notificacoes },
         { provide: SyncExclusaoRepository, useValue: exclusoes },
       ],
     }).compile();
@@ -99,6 +104,13 @@ describe('SyncService', () => {
     );
   });
 
+  describe('schemaVersion 2 → 426', () => {
+    it('schemaVersion 2 → 426', () => {
+      expect(SYNC_SCHEMA_VERSION).toBe(3);
+      expect(() => service.verificarVersaoSchema(2)).toThrow(VersaoSchemaIncompativelException);
+    });
+  });
+
   describe('primeiro pull (sem lastPulledAt)', () => {
     it('aplica as janelas do contrato e não filtra por data de alteração', async () => {
       await service.pull(USUARIO_ID);
@@ -128,6 +140,77 @@ describe('SyncService', () => {
       expect(ambientes.listarParaSync).toHaveBeenCalledWith(USUARIO_ID, undefined);
       expect(pecas.listarParaSync).toHaveBeenCalledWith(USUARIO_ID, undefined);
       expect(tiposAvaria.listarParaSync).toHaveBeenCalledWith(undefined);
+    });
+
+    it('pull inclui notificacoes do usuário na janela de 30 dias', async () => {
+      notificacoes.listarParaSync.mockResolvedValue([
+        {
+          id: 61,
+          tipo: 'AVARIA_ATUALIZADA',
+          titulo: 'Avaria em análise',
+          mensagem: 'Sua avaria está em análise.',
+          referenciaTipo: 'AVARIA',
+          referenciaId: 77,
+          lida: false,
+          criadaEm: new Date('2026-10-16T15:00:00.000Z'),
+        },
+        {
+          id: 62,
+          tipo: 'ATESTADO_VALIDADO',
+          titulo: 'Atestado validado',
+          mensagem: 'Seu atestado foi validado.',
+          referenciaTipo: null,
+          referenciaId: null,
+          lida: true,
+          criadaEm: new Date('2026-10-17T10:00:00.000Z'),
+        },
+      ]);
+
+      const { changes } = await service.pull(USUARIO_ID);
+
+      expect(SYNC_JANELA_NOTIFICACOES_DIAS).toBe(30);
+      expect(notificacoes.listarParaSync).toHaveBeenCalledWith(
+        USUARIO_ID,
+        null,
+        SYNC_JANELA_NOTIFICACOES_DIAS,
+      );
+      expect(changes.notificacoes).toEqual({
+        created: [],
+        updated: [
+          {
+            id: '61',
+            tipo: 'AVARIA_ATUALIZADA',
+            titulo: 'Avaria em análise',
+            mensagem: 'Sua avaria está em análise.',
+            referencia_tipo: 'AVARIA',
+            referencia_id: '77',
+            lida: false,
+            criada_em: '2026-10-16T15:00:00.000Z',
+          },
+          {
+            id: '62',
+            tipo: 'ATESTADO_VALIDADO',
+            titulo: 'Atestado validado',
+            mensagem: 'Seu atestado foi validado.',
+            referencia_tipo: null,
+            referencia_id: null,
+            lida: true,
+            criada_em: '2026-10-17T10:00:00.000Z',
+          },
+        ],
+        deleted: [],
+      });
+    });
+
+    it('não vaza notificação de outro usuário', async () => {
+      await service.pull(USUARIO_ID);
+      await service.pull(USUARIO_ID + 1);
+
+      // O escopo é sempre o usuário autenticado: o service nunca lê de outro.
+      expect(notificacoes.listarParaSync.mock.calls.map(([usuarioId]) => usuarioId)).toEqual([
+        USUARIO_ID,
+        USUARIO_ID + 1,
+      ]);
     });
 
     it('janela do banco de horas atravessa a virada do ano (janeiro vê novembro e dezembro)', async () => {
@@ -187,6 +270,16 @@ describe('SyncService', () => {
       expect(pecas.listarParaSync).toHaveBeenCalledWith(USUARIO_ID, desdeEsperado);
       expect(tiposAvaria.listarParaSync).toHaveBeenCalledWith(desdeEsperado);
       expect(exclusoes.listarDesde).toHaveBeenCalledWith(USUARIO_ID, desdeEsperado);
+    });
+
+    it('incremental respeita updated_at com a margem de segurança', async () => {
+      await service.pull(USUARIO_ID, ultimoPull);
+
+      expect(notificacoes.listarParaSync).toHaveBeenCalledWith(
+        USUARIO_ID,
+        desdeEsperado,
+        SYNC_JANELA_NOTIFICACOES_DIAS,
+      );
     });
 
     it('a margem de segurança é de 5 minutos', () => {
