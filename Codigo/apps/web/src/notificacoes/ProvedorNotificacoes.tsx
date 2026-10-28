@@ -11,11 +11,11 @@ import {
 import { useAuth } from '../auth/AuthContext'
 import {
   anexarPagina,
-  aplicarLista,
   aplicarNova,
   ESTADO_NOTIFICACOES_VAZIO,
   marcarLidaNoEstado,
   marcarTodasNoEstado,
+  mesclarLista,
 } from './estado'
 import type { EstadoNotificacoes } from './estado'
 
@@ -76,16 +76,25 @@ function ConexaoNotificacoes({
   const [estado, setEstado] = useState<EstadoNotificacoes>(ESTADO_NOTIFICACOES_VAZIO)
   const [proximoCursor, setProximoCursor] = useState<number | null>(null)
   const [conectado, setConectado] = useState(false)
+  // Lido só na criação: correto porque `ProvedorNotificacoes` remonta este
+  // componente (`key={accessToken}`) a cada token novo — se essa `key` sair,
+  // o ref precisa passar a acompanhar a prop.
   const tokenRef = useRef(accessToken)
   const carregandoMaisRef = useRef(false)
+  // Geração da lista: cada recarga abre uma nova; resposta de geração anterior
+  // (recarga sobreposta ou `carregarMais` que voou durante a recarga) é descartada.
+  const geracaoRef = useRef(0)
 
   // Primeira página por REST: carga inicial, catch-up após reconexão e
-  // "rollback" de ação otimista que falhou. Falha de rede é silenciosa — o
-  // estado atual segue e o próximo `connect` tenta de novo.
+  // "rollback" de ação otimista que falhou. É MESCLADA ao estado atual (evento
+  // ao vivo e marcação local posteriores ao snapshot sobrevivem). Falha de
+  // rede é silenciosa — o estado atual segue e o próximo `connect` tenta de novo.
   const recarregar = useCallback(async () => {
+    const geracao = ++geracaoRef.current
     try {
       const lista = await listarNotificacoes(tokenRef.current)
-      setEstado(aplicarLista(lista))
+      if (geracao !== geracaoRef.current) return
+      setEstado((atual) => mesclarLista(atual, lista))
       setProximoCursor(lista.proximoCursor)
     } catch {
       // mantém o que já está na tela
@@ -132,11 +141,14 @@ function ConexaoNotificacoes({
     [recarregar],
   )
 
+  // Sucesso ou falha, termina reconciliando com o servidor: uma recarga que
+  // estivesse em voo foi calculada antes desta marcação e itens que o estado
+  // local ainda não conhecia podem ter vindo como não lidos.
   const marcarTodasComoLidas = useCallback(async () => {
     setEstado((atual) => marcarTodasNoEstado(atual))
     try {
       await marcarTodasNotificacoesLidas(tokenRef.current)
-    } catch {
+    } finally {
       await recarregar()
     }
   }, [recarregar])
@@ -144,8 +156,10 @@ function ConexaoNotificacoes({
   const carregarMais = useCallback(async () => {
     if (proximoCursor === null || carregandoMaisRef.current) return
     carregandoMaisRef.current = true
+    const geracao = geracaoRef.current
     try {
       const lista = await listarNotificacoes(tokenRef.current, { antesDe: proximoCursor })
+      if (geracao !== geracaoRef.current) return
       setEstado((atual) => anexarPagina(atual, lista))
       setProximoCursor(lista.proximoCursor)
     } catch {

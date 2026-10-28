@@ -6,6 +6,7 @@ import {
   aplicarLista,
   aplicarNova,
   marcarLidaNoEstado,
+  mesclarLista,
   marcarTodasNoEstado,
 } from '../estado.ts'
 
@@ -84,4 +85,70 @@ test('anexarPagina acrescenta ao fim sem repetir ids e adota naoLidas do servido
     [3, 2, 1],
   )
   assert.equal(estado.naoLidas, 4)
+})
+
+test('mesclarLista mantém notificação ao vivo que chegou durante o fetch', () => {
+  // Estado local já tem a 11 (evento) enquanto a resposta é um snapshot anterior a ela.
+  const atual = { itens: [notificacao({ id: 11 }), notificacao({ id: 10 })], naoLidas: 2 }
+  const estado = mesclarLista(atual, {
+    itens: [notificacao({ id: 10 }), notificacao({ id: 9 })],
+    naoLidas: 2,
+    proximoCursor: null,
+  })
+  assert.deepEqual(
+    estado.itens.map((n) => n.id),
+    [11, 10, 9],
+  )
+  assert.equal(estado.naoLidas, 3)
+})
+
+test('mesclarLista não conta duas vezes o item que já está na resposta', () => {
+  const atual = { itens: [notificacao({ id: 10 })], naoLidas: 1 }
+  const estado = mesclarLista(atual, {
+    itens: [notificacao({ id: 10 }), notificacao({ id: 9 })],
+    naoLidas: 2,
+    proximoCursor: null,
+  })
+  assert.equal(estado.itens.length, 2)
+  assert.equal(estado.naoLidas, 2)
+})
+
+test('mesclarLista mantém lida a notificação marcada localmente após snapshot antigo', () => {
+  const atual = { itens: [notificacao({ id: 2, lida: true }), notificacao({ id: 1 })], naoLidas: 1 }
+  const estado = mesclarLista(atual, {
+    itens: [notificacao({ id: 2, lida: false }), notificacao({ id: 1, lida: false })],
+    naoLidas: 2,
+    proximoCursor: null,
+  })
+  assert.equal(estado.itens.find((n) => n.id === 2)?.lida, true)
+  assert.equal(estado.itens.find((n) => n.id === 1)?.lida, false)
+  assert.equal(estado.naoLidas, 1)
+})
+
+test('mesclarLista com resposta antiga e sobreposta não desfaz o estado mais novo', () => {
+  const resposta2 = {
+    itens: [notificacao({ id: 10 }), notificacao({ id: 9, lida: true })],
+    naoLidas: 1,
+    proximoCursor: null,
+  }
+  const resposta1Antiga = {
+    itens: [notificacao({ id: 9, lida: false }), notificacao({ id: 8 })],
+    naoLidas: 2,
+    proximoCursor: null,
+  }
+  const depoisDaNova = mesclarLista({ itens: [], naoLidas: 0 }, resposta2)
+  const estado = mesclarLista(depoisDaNova, resposta1Antiga)
+  assert.deepEqual(
+    estado.itens.map((n) => n.id),
+    [10, 9, 8],
+  )
+  assert.equal(estado.itens.find((n) => n.id === 9)?.lida, true)
+  assert.equal(estado.naoLidas, 2)
+})
+
+test('mesclarLista com resposta vazia preserva o que chegou ao vivo', () => {
+  const atual = { itens: [notificacao({ id: 1 })], naoLidas: 1 }
+  const estado = mesclarLista(atual, { itens: [], naoLidas: 0, proximoCursor: null })
+  assert.equal(estado.itens.length, 1)
+  assert.equal(estado.naoLidas, 1)
 })
