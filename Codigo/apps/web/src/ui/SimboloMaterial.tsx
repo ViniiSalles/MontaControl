@@ -18,6 +18,7 @@ import conveyorBelt from '@material-symbols/svg-400/outlined/conveyor_belt.svg?r
 import dashboard from '@material-symbols/svg-400/outlined/dashboard.svg?raw';
 import database from '@material-symbols/svg-400/outlined/database.svg?raw';
 import description from '@material-symbols/svg-400/outlined/description.svg?raw';
+import doneAll from '@material-symbols/svg-400/outlined/done_all.svg?raw';
 import editDocument from '@material-symbols/svg-400/outlined/edit_document.svg?raw';
 import eventNote from '@material-symbols/svg-400/outlined/event_note.svg?raw';
 import fingerprint from '@material-symbols/svg-400/outlined/fingerprint.svg?raw';
@@ -32,6 +33,7 @@ import logout from '@material-symbols/svg-400/outlined/logout.svg?raw';
 import mail from '@material-symbols/svg-400/outlined/mail.svg?raw';
 import menu from '@material-symbols/svg-400/outlined/menu.svg?raw';
 import menuBook from '@material-symbols/svg-400/outlined/menu_book.svg?raw';
+import notifications from '@material-symbols/svg-400/outlined/notifications.svg?raw';
 import pendingActions from '@material-symbols/svg-400/outlined/pending_actions.svg?raw';
 import radioButtonUnchecked from '@material-symbols/svg-400/outlined/radio_button_unchecked.svg?raw';
 import personOff from '@material-symbols/svg-400/outlined/person_off.svg?raw';
@@ -78,6 +80,7 @@ const svgPorIcone: Record<NomeIcone, string> = {
   dashboard: comCorAtual(dashboard),
   database: comCorAtual(database),
   description: comCorAtual(description),
+  done_all: comCorAtual(doneAll),
   edit_document: comCorAtual(editDocument),
   event_note: comCorAtual(eventNote),
   fingerprint: comCorAtual(fingerprint),
@@ -92,6 +95,7 @@ const svgPorIcone: Record<NomeIcone, string> = {
   mail: comCorAtual(mail),
   menu: comCorAtual(menu),
   menu_book: comCorAtual(menuBook),
+  notifications: comCorAtual(notifications),
   pending_actions: comCorAtual(pendingActions),
   radio_button_unchecked: comCorAtual(radioButtonUnchecked),
   person_off: comCorAtual(personOff),

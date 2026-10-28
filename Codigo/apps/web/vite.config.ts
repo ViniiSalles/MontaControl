@@ -5,8 +5,11 @@ import { defineConfig } from 'vite'
 // Proxy de /api para a API NestJS (porta 3000 em dev, ver apps/api/.env.example)
 // — evita configurar CORS na API só para o dev server local; o cliente web
 // (`src/auth/clienteAuth.ts`) sempre fala com o mesmo-origin `/api/...`.
+// `/socket.io` leva o WebSocket de notificações (`src/notificacoes`) à mesma API;
+// `ws: true` é o que faz o proxy aceitar o upgrade do protocolo.
 const proxyApi = {
   '/api': { target: 'http://localhost:3000', changeOrigin: true },
+  '/socket.io': { target: 'http://localhost:3000', changeOrigin: true, ws: true },
 }
 
 // https://vite.dev/config/
