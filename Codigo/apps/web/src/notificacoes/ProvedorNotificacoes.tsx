@@ -12,6 +12,7 @@ import { useAuth } from '../auth/AuthContext'
 import {
   anexarPagina,
   aplicarNova,
+  desmarcarLidasNoEstado,
   ESTADO_NOTIFICACOES_VAZIO,
   marcarLidaNoEstado,
   marcarTodasNoEstado,
@@ -84,6 +85,19 @@ function ConexaoNotificacoes({
   // Geração da lista: cada recarga abre uma nova; resposta de geração anterior
   // (recarga sobreposta ou `carregarMais` que voou durante a recarga) é descartada.
   const geracaoRef = useRef(0)
+  // Recargas em voo: `carregarMais` não começa enquanto houver uma, senão a
+  // recarga voltaria a lista à página 1 e a página antiga anexada deixaria um
+  // buraco de itens nunca carregados.
+  const recargasEmVooRef = useRef(0)
+  // Marcações de leitura locais cujo PATCH ainda não terminou: só elas
+  // sobrevivem a um snapshot mais antigo (ver `mesclarLista`).
+  const lidasPendentesRef = useRef(new Set<number>())
+  const todasPendentesRef = useRef(0)
+  // Espelho do estado para saber, ao marcar, o que estava não lido (para desfazer em falha).
+  const estadoRef = useRef(estado)
+  useEffect(() => {
+    estadoRef.current = estado
+  }, [estado])
 
   // Primeira página por REST: carga inicial, catch-up após reconexão e
   // "rollback" de ação otimista que falhou. É MESCLADA ao estado atual (evento
@@ -91,13 +105,20 @@ function ConexaoNotificacoes({
   // rede é silenciosa — o estado atual segue e o próximo `connect` tenta de novo.
   const recarregar = useCallback(async () => {
     const geracao = ++geracaoRef.current
+    recargasEmVooRef.current += 1
     try {
       const lista = await listarNotificacoes(tokenRef.current)
       if (geracao !== geracaoRef.current) return
-      setEstado((atual) => mesclarLista(atual, lista))
+      const pendentes = {
+        ids: new Set(lidasPendentesRef.current),
+        todas: todasPendentesRef.current > 0,
+      }
+      setEstado((atual) => mesclarLista(atual, lista, pendentes))
       setProximoCursor(lista.proximoCursor)
     } catch {
       // mantém o que já está na tela
+    } finally {
+      recargasEmVooRef.current -= 1
     }
   }, [])
 
@@ -127,34 +148,46 @@ function ConexaoNotificacoes({
     }
   }, [recarregar])
 
-  // Otimista: a UI muda na hora; se o REST falhar, recarrega a primeira página
-  // para voltar ao que o servidor tem.
+  // Otimista: a UI muda na hora e o id fica "pendente" até o PATCH terminar —
+  // enquanto isso um snapshot mais antigo não o reverte. Em falha, a marcação é
+  // desfeita localmente. Sucesso ou falha, termina com uma recarga: ela invalida
+  // (geração) qualquer recarga iniciada antes do fim do PATCH, que poderia trazer
+  // o item como não lido, e deixa o servidor decidir o estado final. Nunca rejeita.
   const marcarComoLida = useCallback(
     async (id: number) => {
+      const eraNaoLida = estadoRef.current.itens.some((n) => n.id === id && !n.lida)
+      lidasPendentesRef.current.add(id)
       setEstado((atual) => marcarLidaNoEstado(atual, id))
       try {
         await marcarNotificacaoLida(tokenRef.current, id)
       } catch {
-        await recarregar()
+        if (eraNaoLida) setEstado((atual) => desmarcarLidasNoEstado(atual, [id]))
+      } finally {
+        lidasPendentesRef.current.delete(id)
       }
+      await recarregar()
     },
     [recarregar],
   )
 
-  // Sucesso ou falha, termina reconciliando com o servidor: uma recarga que
-  // estivesse em voo foi calculada antes desta marcação e itens que o estado
-  // local ainda não conhecia podem ter vindo como não lidos.
+  // Mesma lógica de `marcarComoLida`, para todas as que estavam não lidas; o
+  // "pendente" aqui é um contador porque podem se sobrepor. Também nunca rejeita.
   const marcarTodasComoLidas = useCallback(async () => {
+    const eramNaoLidas = estadoRef.current.itens.filter((n) => !n.lida).map((n) => n.id)
+    todasPendentesRef.current += 1
     setEstado((atual) => marcarTodasNoEstado(atual))
     try {
       await marcarTodasNotificacoesLidas(tokenRef.current)
+    } catch {
+      setEstado((atual) => desmarcarLidasNoEstado(atual, eramNaoLidas))
     } finally {
-      await recarregar()
+      todasPendentesRef.current -= 1
     }
+    await recarregar()
   }, [recarregar])
 
   const carregarMais = useCallback(async () => {
-    if (proximoCursor === null || carregandoMaisRef.current) return
+    if (proximoCursor === null || carregandoMaisRef.current || recargasEmVooRef.current > 0) return
     carregandoMaisRef.current = true
     const geracao = geracaoRef.current
     try {

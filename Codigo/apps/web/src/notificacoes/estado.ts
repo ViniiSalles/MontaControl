@@ -45,13 +45,37 @@ export function marcarTodasNoEstado(estado: EstadoNotificacoes): EstadoNotificac
   }
 }
 
+/** Marcações de leitura locais cujo PATCH ainda não terminou (ver `mesclarLista`). */
+export interface LeiturasPendentes {
+  ids: ReadonlySet<number>
+  /** Há um "marcar todas" em voo: toda notificação lida localmente segue lida. */
+  todas: boolean
+}
+
+export const SEM_LEITURAS_PENDENTES: LeiturasPendentes = { ids: new Set(), todas: false }
+
+/** Desfaz uma marcação otimista que o servidor recusou: volta a não lida e devolve a contagem. */
+export function desmarcarLidasNoEstado(
+  estado: EstadoNotificacoes,
+  ids: readonly number[],
+): EstadoNotificacoes {
+  const alvos = new Set(ids)
+  const revertidas = estado.itens.filter((n) => alvos.has(n.id) && n.lida).length
+  if (revertidas === 0) return estado
+  return {
+    itens: estado.itens.map((n) => (alvos.has(n.id) && n.lida ? { ...n, lida: false } : n)),
+    naoLidas: estado.naoLidas + revertidas,
+  }
+}
+
 /**
  * Primeira página do REST aplicada sobre um estado que pode ter avançado
- * enquanto a requisição voava (catch-up após `connect`, rollback de ação):
+ * enquanto a requisição voava (catch-up após `connect`, reconciliação de ação):
  * - notificação ao vivo mais nova que o snapshot (id maior que tudo na
  *   resposta) e ausente dele é mantida no topo;
- * - "lida" só avança: id marcado localmente segue lido mesmo que o snapshot
- *   (anterior ao PATCH) o traga como não lido;
+ * - marcação local AINDA PENDENTE (`pendentes`) segue lida mesmo que o snapshot,
+ *   anterior ao PATCH, a traga como não lida; quem não está pendente adota o
+ *   `lida` do servidor — é isso que faz um PATCH que falhou terminar não lido;
  * - `naoLidas` parte da contagem do servidor e é corrigida por esses dois
  *   ajustes, sem contar duas vezes o que já está na resposta.
  * Páginas mais antigas já carregadas (`carregarMais`) são descartadas, como em
@@ -60,15 +84,17 @@ export function marcarTodasNoEstado(estado: EstadoNotificacoes): EstadoNotificac
 export function mesclarLista(
   atual: EstadoNotificacoes,
   lista: ListaNotificacoesDTO,
+  pendentes: LeiturasPendentes = SEM_LEITURAS_PENDENTES,
 ): EstadoNotificacoes {
   const lidasLocalmente = new Set(atual.itens.filter((n) => n.lida).map((n) => n.id))
   const idsDaResposta = new Set(lista.itens.map((n) => n.id))
   const maiorIdDaResposta = lista.itens.reduce((maior, n) => Math.max(maior, n.id), -Infinity)
 
-  let jaLidasAqui = 0
+  let mantidasLidas = 0
   const doServidor = lista.itens.map((n) => {
-    if (n.lida || !lidasLocalmente.has(n.id)) return n
-    jaLidasAqui += 1
+    const segueLida = lidasLocalmente.has(n.id) && (pendentes.todas || pendentes.ids.has(n.id))
+    if (n.lida || !segueLida) return n
+    mantidasLidas += 1
     return { ...n, lida: true }
   })
   const maisNovas = atual.itens.filter((n) => !idsDaResposta.has(n.id) && n.id > maiorIdDaResposta)
@@ -76,6 +102,6 @@ export function mesclarLista(
 
   return {
     itens: [...maisNovas, ...doServidor],
-    naoLidas: Math.max(0, lista.naoLidas - jaLidasAqui + naoLidasMaisNovas),
+    naoLidas: Math.max(0, lista.naoLidas - mantidasLidas + naoLidasMaisNovas),
   }
 }

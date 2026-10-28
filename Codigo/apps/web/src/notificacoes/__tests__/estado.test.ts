@@ -5,6 +5,7 @@ import {
   anexarPagina,
   aplicarLista,
   aplicarNova,
+  desmarcarLidasNoEstado,
   marcarLidaNoEstado,
   mesclarLista,
   marcarTodasNoEstado,
@@ -115,17 +116,63 @@ test('mesclarLista não conta duas vezes o item que já está na resposta', () =
 
 test('mesclarLista mantém lida a notificação marcada localmente após snapshot antigo', () => {
   const atual = { itens: [notificacao({ id: 2, lida: true }), notificacao({ id: 1 })], naoLidas: 1 }
-  const estado = mesclarLista(atual, {
-    itens: [notificacao({ id: 2, lida: false }), notificacao({ id: 1, lida: false })],
-    naoLidas: 2,
-    proximoCursor: null,
-  })
+  const estado = mesclarLista(
+    atual,
+    {
+      itens: [notificacao({ id: 2, lida: false }), notificacao({ id: 1, lida: false })],
+      naoLidas: 2,
+      proximoCursor: null,
+    },
+    { ids: new Set([2]), todas: false },
+  )
   assert.equal(estado.itens.find((n) => n.id === 2)?.lida, true)
   assert.equal(estado.itens.find((n) => n.id === 1)?.lida, false)
   assert.equal(estado.naoLidas, 1)
 })
 
-test('mesclarLista com resposta antiga e sobreposta não desfaz o estado mais novo', () => {
+test('mesclarLista: com "marcar todas" pendente, tudo lido localmente segue lido', () => {
+  const atual = {
+    itens: [notificacao({ id: 2, lida: true }), notificacao({ id: 1, lida: true })],
+    naoLidas: 0,
+  }
+  const estado = mesclarLista(
+    atual,
+    { itens: [notificacao({ id: 2 }), notificacao({ id: 1 })], naoLidas: 2, proximoCursor: null },
+    { ids: new Set(), todas: true },
+  )
+  assert.ok(estado.itens.every((n) => n.lida))
+  assert.equal(estado.naoLidas, 0)
+})
+
+test('mesclarLista: id não pendente adota o lida do servidor (rollback de PATCH que falhou)', () => {
+  // PATCH falhou, a pendência já foi liberada e a UI ainda mostra o item como lido.
+  const atual = { itens: [notificacao({ id: 2, lida: true }), notificacao({ id: 1 })], naoLidas: 1 }
+  const estado = mesclarLista(atual, {
+    itens: [notificacao({ id: 2 }), notificacao({ id: 1 })],
+    naoLidas: 2,
+    proximoCursor: null,
+  })
+  assert.equal(estado.itens.find((n) => n.id === 2)?.lida, false)
+  assert.equal(estado.naoLidas, 2)
+})
+
+test('desmarcarLidasNoEstado volta a não lida e devolve a contagem', () => {
+  const inicial = {
+    itens: [notificacao({ id: 2, lida: true }), notificacao({ id: 1, lida: true })],
+    naoLidas: 0,
+  }
+  const estado = desmarcarLidasNoEstado(inicial, [2])
+  assert.equal(estado.itens.find((n) => n.id === 2)?.lida, false)
+  assert.equal(estado.itens.find((n) => n.id === 1)?.lida, true)
+  assert.equal(estado.naoLidas, 1)
+})
+
+test('desmarcarLidasNoEstado ignora id desconhecido ou já não lido', () => {
+  const inicial = { itens: [notificacao({ id: 1 })], naoLidas: 1 }
+  assert.equal(desmarcarLidasNoEstado(inicial, [1, 99]), inicial)
+})
+
+test('mesclarLista com snapshot mais antigo preserva item ao vivo e leitura pendente', () => {
   const resposta2 = {
     itens: [notificacao({ id: 10 }), notificacao({ id: 9, lida: true })],
     naoLidas: 1,
@@ -137,7 +184,7 @@ test('mesclarLista com resposta antiga e sobreposta não desfaz o estado mais no
     proximoCursor: null,
   }
   const depoisDaNova = mesclarLista({ itens: [], naoLidas: 0 }, resposta2)
-  const estado = mesclarLista(depoisDaNova, resposta1Antiga)
+  const estado = mesclarLista(depoisDaNova, resposta1Antiga, { ids: new Set([9]), todas: false })
   assert.deepEqual(
     estado.itens.map((n) => n.id),
     [10, 9, 8],
