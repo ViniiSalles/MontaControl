@@ -13,6 +13,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { HealthController } from './common/health.controller';
 import { criarOpcoesThrottler } from './common/ip-cliente';
 import { validate } from './config/env.validation';
+import { EpisModule } from './epis/epis.module';
 import { EquipesModule } from './equipes/equipes.module';
 import { EspelhoPontoModule } from './espelho-ponto/espelho-ponto.module';
 import { JornadasModule } from './jornadas/jornadas.module';
@@ -46,6 +47,7 @@ import { SyncModule } from './sync/sync.module';
     AvariasModule,
     DashboardModule,
     EquipesModule,
+    EpisModule,
     SyncModule,
   ],
   controllers: [HealthController],
