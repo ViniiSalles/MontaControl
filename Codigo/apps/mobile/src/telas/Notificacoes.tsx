@@ -150,6 +150,7 @@ export function Notificacoes({ aoVoltar, aoAbrirAba }: PropsNotificacoes) {
                         ? () => void escrever(() => marcarNotificacaoLida(Number(notificacao.id)))
                         : undefined
                     }
+                    desabilitado={!notificacao.lida && (!online || ocupado)}
                     aoAbrir={aba ? () => abrirDestino(notificacao, aba) : undefined}
                   />
                 );

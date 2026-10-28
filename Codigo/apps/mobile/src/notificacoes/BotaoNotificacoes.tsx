@@ -36,6 +36,9 @@ export function BotaoNotificacoes({ aoPressionar }: PropsBotaoNotificacoes) {
         <View
           testID="selo-notificacoes"
           pointerEvents="none"
+          // O número já está no rótulo do botão; lido de novo seria ruído.
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
           style={{
             position: 'absolute',
             top: espacamento[2],

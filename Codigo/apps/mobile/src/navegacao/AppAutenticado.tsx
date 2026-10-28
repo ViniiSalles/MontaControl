@@ -11,6 +11,7 @@ import { Notificacoes } from '../telas/Notificacoes';
 import { IndicadorDeSincronizacao } from '../sincronizacao/IndicadorDeSincronizacao';
 import { useSincronizacaoDoApp } from '../sincronizacao/useSincronizacaoDoApp';
 import { useSocketDoApp } from '../sincronizacao/useSocketDoApp';
+import { AbaVisivelContext } from './AbaVisivel';
 import { PilhaJornada } from './PilhaJornada';
 import { useVoltarDoAndroid } from './useVoltarDoAndroid';
 import { ABA_PADRAO, ABAS } from './abas';
@@ -39,7 +40,8 @@ export function AppAutenticado() {
   useSincronizacaoDoApp();
   useSocketDoApp();
   const [abaAtiva, setAbaAtiva] = useState<IdAba>(ABA_PADRAO);
-  // A tela de notificações fica por cima da aba ativa, sem trocá-la: fechar volta ao ponto de origem.
+  // A tela de notificações fica por cima da aba ativa, sem trocá-la: a aba só é escondida (continua
+  // montada), então o que o montador digitou e as fotos anexadas sobrevivem a abrir e fechar.
   const [notificacoesAberta, setNotificacoesAberta] = useState(false);
   const fecharNotificacoes = useCallback(() => setNotificacoesAberta(false), []);
   useVoltarDoAndroid(notificacoesAberta, fecharNotificacoes);
@@ -65,14 +67,15 @@ export function AppAutenticado() {
     <View style={{ flex: 1, backgroundColor: cores.background }}>
       <View style={{ flex: 1 }}>
         <ComBarraInferior>
-          {notificacoesAberta ? (
-            <Notificacoes aoVoltar={fecharNotificacoes} aoAbrirAba={irParaAba} />
-          ) : (
-            <TelaAtiva
-              aoIrParaJornada={() => setAbaAtiva('jornada')}
-              aoAbrirNotificacoes={() => setNotificacoesAberta(true)}
-            />
-          )}
+          <View style={{ flex: 1, display: notificacoesAberta ? 'none' : 'flex' }}>
+            <AbaVisivelContext.Provider value={!notificacoesAberta}>
+              <TelaAtiva
+                aoIrParaJornada={() => setAbaAtiva('jornada')}
+                aoAbrirNotificacoes={() => setNotificacoesAberta(true)}
+              />
+            </AbaVisivelContext.Provider>
+          </View>
+          {notificacoesAberta && <Notificacoes aoVoltar={fecharNotificacoes} aoAbrirAba={irParaAba} />}
         </ComBarraInferior>
       </View>
       {/* Acima da barra, fora do conteúdo da aba: o mesmo status em todas as telas. */}

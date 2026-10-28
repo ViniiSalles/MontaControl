@@ -314,3 +314,65 @@ describe('notificações', () => {
     expect(screen.queryByText('Avaria em análise')).toBeNull();
   });
 });
+
+describe('aba preservada sob as notificações', () => {
+  const ROTULO_DO_SINO = /^Notificações, \d+ não lidas?$/;
+  type Ouvinte = Parameters<typeof BackHandler.addEventListener>[1];
+
+  /** Mantém a lista dos ouvintes do voltar do Android ainda registrados (remover tira da lista). */
+  function espionarVoltarDoAndroid() {
+    const registrados: Ouvinte[] = [];
+    jest.spyOn(BackHandler, 'addEventListener').mockImplementation((_evento, ouvinte) => {
+      registrados.push(ouvinte);
+      return { remove: () => void registrados.splice(registrados.indexOf(ouvinte), 1) };
+    });
+    return registrados;
+  }
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  test('abrir notificações mantém a aba ativa montada (estado preservado)', async () => {
+    await render(arvore());
+    await irParaAba('Atestados');
+    await fireEvent.changeText(screen.getByPlaceholderText('Descreva brevemente o motivo…'), 'Consulta de rotina');
+
+    await fireEvent.press(screen.getByLabelText(ROTULO_DO_SINO));
+
+    await waitFor(() => expect(screen.getByText('Nenhuma mensagem nova')).toBeTruthy());
+    // Escondida, não desmontada: o formulário (não persistido, com dados de saúde) segue de pé.
+    expect(screen.queryByPlaceholderText('Descreva brevemente o motivo…')).toBeNull();
+    expect(screen.getByPlaceholderText('Descreva brevemente o motivo…', { includeHiddenElements: true })).toBeTruthy();
+
+    await fireEvent.press(screen.getByLabelText('Voltar'));
+
+    await waitFor(() => expect(screen.getByDisplayValue('Consulta de rotina')).toBeTruthy());
+  });
+
+  test('voltar do Android fecha as notificações sem acionar a pilha da aba oculta', async () => {
+    const registrados = espionarVoltarDoAndroid();
+    await render(arvore());
+    // A pilha da Jornada abre o histórico (registra o voltar dela) e volta.
+    await fireEvent.press(screen.getByText('Histórico de pontos'));
+    await waitFor(() => expect(registrados).toHaveLength(1));
+    await act(async () => {
+      registrados[0]({} as Parameters<Ouvinte>[0]);
+    });
+    await waitFor(() => expect(screen.getByText('Jornada de Trabalho')).toBeTruthy());
+    expect(registrados).toHaveLength(0);
+
+    await fireEvent.press(screen.getByLabelText(ROTULO_DO_SINO));
+    await waitFor(() => expect(screen.getByText('Nenhuma mensagem nova')).toBeTruthy());
+
+    // Só o ouvinte das notificações está ativo; a pilha (montada, oculta) não compete por ele.
+    expect(registrados).toHaveLength(1);
+    await act(async () => {
+      expect(registrados[0]({} as Parameters<Ouvinte>[0])).toBe(true);
+    });
+
+    await waitFor(() => expect(screen.getByText('Jornada de Trabalho')).toBeTruthy());
+    expect(screen.queryByText('Nenhuma mensagem nova')).toBeNull();
+    expect(registrados).toHaveLength(0);
+  });
+});

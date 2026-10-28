@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { useAbaVisivel } from '../../navegacao/AbaVisivel';
 import type { BarcodeScanningResult, BarcodeType } from 'expo-camera';
 import { cores, espacamento, espacamentoNomeado, raio } from '@montacontrol/design-tokens/native';
 import { Botao } from '../../ui/Botao';
@@ -78,6 +79,7 @@ function Mira() {
 }
 
 function AreaDaCamera({ aoLer }: PropsLeitorCodigoBarras) {
+  const abaVisivel = useAbaVisivel();
   const [permissao, pedirPermissao] = useCameraPermissions();
   const ultimaLeitura = useRef<{ codigo: string; em: number } | null>(null);
 
@@ -90,6 +92,9 @@ function AreaDaCamera({ aoLer }: PropsLeitorCodigoBarras) {
     ultimaLeitura.current = { codigo, em: agora };
     aoLer(codigo);
   }
+
+  // Aba escondida sob as notificações: sem câmera ligada nem leitura em segundo plano.
+  if (!abaVisivel) return null;
 
   if (!permissao) {
     return (

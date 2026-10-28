@@ -21,7 +21,9 @@ describe('BotaoNotificacoes', () => {
     const aoPressionar = await renderizar(database);
 
     await waitFor(() => expect(screen.getByLabelText('Notificações, 2 não lidas')).toBeTruthy());
-    expect(screen.getByText('2')).toBeTruthy();
+    // O número é redundante com o rótulo do botão: o selo fica fora do alcance dos leitores de tela.
+    expect(screen.getByText('2', { includeHiddenElements: true })).toBeTruthy();
+    expect(screen.queryByText('2')).toBeNull();
 
     await fireEvent.press(screen.getByLabelText('Notificações, 2 não lidas'));
     expect(aoPressionar).toHaveBeenCalledTimes(1);
@@ -56,7 +58,7 @@ describe('BotaoNotificacoes', () => {
 
     await renderizar(database);
 
-    await waitFor(() => expect(screen.getByText('9+')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('9+', { includeHiddenElements: true })).toBeTruthy());
     expect(screen.getByLabelText('Notificações, 12 não lidas')).toBeTruthy();
   });
 });

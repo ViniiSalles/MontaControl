@@ -26,6 +26,8 @@ interface PropsCartaoNotificacao {
   hora: string;
   /** Tocar no cartão (marca como lida). Ausente quando não há o que fazer: já lida ou sem conexão. */
   aoPressionar?: () => void;
+  /** Marcar como lida está indisponível agora (sem conexão ou em andamento): anunciado como desabilitado. */
+  desabilitado?: boolean;
   /** Ação "Ver detalhes". Ausente quando o tipo não tem destino. */
   aoAbrir?: () => void;
 }
@@ -37,7 +39,7 @@ interface PropsCartaoNotificacao {
  * divisórias (DESIGN.md §5): a diferença entre lida e não lida é só tom de
  * fundo, sombra, peso do texto e o ponto azul.
  */
-export function CartaoNotificacao({ notificacao, hora, aoPressionar, aoAbrir }: PropsCartaoNotificacao) {
+export function CartaoNotificacao({ notificacao, hora, aoPressionar, desabilitado = false, aoAbrir }: PropsCartaoNotificacao) {
   const cor = corPorTom[tomDaNotificacao(notificacao.tipo)];
   const lida = notificacao.lida;
 
@@ -60,7 +62,9 @@ export function CartaoNotificacao({ notificacao, hora, aoPressionar, aoAbrir }: 
         <Pressable
           disabled={!aoPressionar}
           onPress={aoPressionar}
-          accessibilityRole={aoPressionar ? 'button' : undefined}
+          accessibilityRole={aoPressionar || desabilitado ? 'button' : undefined}
+          accessibilityLabel={`${lida ? '' : 'Não lida. '}${notificacao.titulo}. ${notificacao.mensagem}`}
+          accessibilityState={{ disabled: desabilitado }}
           accessibilityHint={aoPressionar ? 'Marca como lida' : undefined}
           style={{ flexDirection: 'row', gap: espacamento[16] }}
         >
