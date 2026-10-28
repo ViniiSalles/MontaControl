@@ -6,6 +6,7 @@ import type {
   StatusPeca,
   StatusPedido,
 } from '../enums';
+import type { ReferenciaNotificacao, TipoNotificacao } from '../notificacoes/tipos';
 
 /**
  * Contrato do pull de sincronização (`GET /api/sync/pull`) — protocolo
@@ -33,7 +34,7 @@ import type {
  * precisa atualizar). As duas versões são independentes de propósito: o contrato
  * subir não implica migração local, nem o contrário.
  */
-export const SYNC_SCHEMA_VERSION = 2;
+export const SYNC_SCHEMA_VERSION = 3;
 
 /** Tabelas replicadas. Fonte única de `TabelaSync`; a ordem aqui não é significativa para o protocolo. */
 export const TABELAS_SYNC = [
@@ -45,6 +46,7 @@ export const TABELAS_SYNC = [
   'tipos_avaria',
   'avarias',
   'atestados',
+  'notificacoes',
 ] as const;
 
 export type TabelaSync = (typeof TABELAS_SYNC)[number];
@@ -175,6 +177,23 @@ export interface SyncAtestadoRow {
   criado_em: string;
 }
 
+/**
+ * Notificação do montador logado (a mesma que chega pelo WebSocket). Não tem
+ * `deleted`: notificação não é apagada, só marcada como lida.
+ */
+export interface SyncNotificacaoRow {
+  id: string;
+  tipo: TipoNotificacao;
+  titulo: string;
+  mensagem: string;
+  /** Entidade-alvo do "Ver detalhes"; `null` quando a notificação não aponta para nada. */
+  referencia_tipo: ReferenciaNotificacao | null;
+  /** Id do servidor da entidade-alvo, como string (convenção dos ids do contrato). */
+  referencia_id: string | null;
+  lida: boolean;
+  criada_em: string;
+}
+
 /** Tabela → tipo da linha. É a única fonte do que cada tabela carrega. */
 export interface SyncLinhasPorTabela {
   jornadas: SyncJornadaRow;
@@ -185,6 +204,7 @@ export interface SyncLinhasPorTabela {
   tipos_avaria: SyncTipoAvariaRow;
   avarias: SyncAvariaRow;
   atestados: SyncAtestadoRow;
+  notificacoes: SyncNotificacaoRow;
 }
 
 export type SyncLinha<T extends TabelaSync> = SyncLinhasPorTabela[T];

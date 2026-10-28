@@ -16,3 +16,6 @@ export const SYNC_JANELA_AVARIAS_DIAS = 30;
 
 /** Dias de atestados do montador, contados por `criado_em`. */
 export const SYNC_JANELA_ATESTADOS_DIAS = 90;
+
+/** Dias de notificações do montador, contados por `criada_em`. */
+export const SYNC_JANELA_NOTIFICACOES_DIAS = 30;
