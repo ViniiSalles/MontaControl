@@ -107,9 +107,9 @@ async function seedTiposEpi(): Promise<void> {
   if ((await prisma.tipoEpi.count()) > 0) return;
   await prisma.tipoEpi.createMany({
     data: [
-      { nome: 'Luva de Proteção', descricao: 'Luva para manuseio de peças', validadeMeses: 6 },
-      { nome: 'Óculos de Proteção', descricao: 'Óculos contra impacto', validadeMeses: 12 },
-      { nome: 'Calçado de Segurança', descricao: 'Calçado com biqueira reforçada', validadeMeses: 12 },
+      { nome: 'Luva de Proteção', descricao: 'Luva para manuseio de peças', validadeMeses: 6, estoque: 20 },
+      { nome: 'Óculos de Proteção', descricao: 'Óculos contra impacto', validadeMeses: 12, estoque: 10 },
+      { nome: 'Calçado de Segurança', descricao: 'Calçado com biqueira reforçada', validadeMeses: 12, estoque: 8 },
     ],
   });
 }
