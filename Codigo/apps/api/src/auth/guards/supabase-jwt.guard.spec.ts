@@ -4,6 +4,7 @@ import { Reflector } from '@nestjs/core';
 import { jwtVerify } from 'jose';
 import { Perfil } from '../../../generated/prisma';
 import { UsuariosRepository } from '../../usuarios/usuarios.repository';
+import { VerificadorTokenService } from '../verificador-token.service';
 import { SupabaseJwtGuard } from './supabase-jwt.guard';
 
 jest.mock('jose', () => ({
@@ -38,7 +39,11 @@ describe('SupabaseJwtGuard', () => {
     config = {
       getOrThrow: jest.fn().mockReturnValue('https://jtwuwsdmrncaqirqrjrt.supabase.co/auth/v1'),
     } as unknown as ConfigService;
-    guard = new SupabaseJwtGuard(new Reflector(), config, usuarios as unknown as UsuariosRepository);
+    const verificador = new VerificadorTokenService(
+      config,
+      usuarios as unknown as UsuariosRepository,
+    );
+    guard = new SupabaseJwtGuard(new Reflector(), verificador);
   });
 
   it('permite acesso sem verificar token em rota marcada @Public()', async () => {
