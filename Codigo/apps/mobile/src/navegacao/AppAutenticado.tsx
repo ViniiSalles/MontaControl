@@ -9,6 +9,7 @@ import { Avarias } from '../telas/Avarias';
 import { Bipagem } from '../telas/Bipagem';
 import { IndicadorDeSincronizacao } from '../sincronizacao/IndicadorDeSincronizacao';
 import { useSincronizacaoDoApp } from '../sincronizacao/useSincronizacaoDoApp';
+import { useSocketDoApp } from '../sincronizacao/useSocketDoApp';
 import { PilhaJornada } from './PilhaJornada';
 import { ABA_PADRAO, ABAS } from './abas';
 import type { IdAba } from './abas';
@@ -34,6 +35,7 @@ const telaPorAba: Partial<Record<IdAba, ComponentType<PropsTelaDaAba>>> = {
 
 export function AppAutenticado() {
   useSincronizacaoDoApp();
+  useSocketDoApp();
   const [abaAtiva, setAbaAtiva] = useState<IdAba>(ABA_PADRAO);
 
   // Aba sem tela entregue cai na padrão, que sempre existe — a barra já as

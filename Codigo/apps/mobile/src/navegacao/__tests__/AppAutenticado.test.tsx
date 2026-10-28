@@ -5,6 +5,8 @@ jest.mock('../../auth/armazenamentoSessao', () => ({
 jest.mock('../../banco-horas/clienteBancoHoras');
 jest.mock('../../avarias/clienteAvarias');
 jest.mock('../../atestados/clienteAtestados');
+// O canal de tempo real é coberto em iniciarSocket.test.ts; aqui não abre socket de verdade.
+jest.mock('../../sincronizacao/useSocketDoApp');
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { DatabaseProvider } from '@nozbe/watermelondb/react';
