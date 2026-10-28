@@ -30,6 +30,7 @@ export const espacamentoNomeado = {
   gradeIcone: 24,
   larguraBarraLateral: 256,
   larguraPainelLateral: 440,
+  larguraGavetaNotificacoes: 450,
   alturaGrafico: 160,
   alturaPreviaDocumento: 320,
   topoPainelLateral: 96,

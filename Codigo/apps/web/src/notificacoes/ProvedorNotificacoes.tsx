@@ -27,6 +27,12 @@ interface ContextoNotificacoes {
   conectado: boolean
   /** Há página mais antiga a buscar com `carregarMais`. */
   temMais: boolean
+  /**
+   * Quantas notificações NOVAS chegaram ao vivo desde que a sessão abriu. Só o
+   * evento do socket incrementa (carga inicial, catch-up e marcar como lida
+   * não) — telas que reagem a "algo aconteceu" (dashboard) observam este número.
+   */
+  contadorNovas: number
   marcarComoLida: (id: number) => Promise<void>
   marcarTodasComoLidas: () => Promise<void>
   carregarMais: () => Promise<void>
@@ -38,6 +44,7 @@ const SEM_SESSAO: ContextoNotificacoes = {
   ...ESTADO_NOTIFICACOES_VAZIO,
   conectado: false,
   temMais: false,
+  contadorNovas: 0,
   marcarComoLida: () => Promise.resolve(),
   marcarTodasComoLidas: () => Promise.resolve(),
   carregarMais: () => Promise.resolve(),
@@ -77,6 +84,7 @@ function ConexaoNotificacoes({
   const [estado, setEstado] = useState<EstadoNotificacoes>(ESTADO_NOTIFICACOES_VAZIO)
   const [proximoCursor, setProximoCursor] = useState<number | null>(null)
   const [conectado, setConectado] = useState(false)
+  const [contadorNovas, setContadorNovas] = useState(0)
   // Lido só na criação: correto porque `ProvedorNotificacoes` remonta este
   // componente (`key={accessToken}`) a cada token novo — se essa `key` sair,
   // o ref precisa passar a acompanhar a prop.
@@ -141,6 +149,7 @@ function ConexaoNotificacoes({
     socket.on('connect_error', () => setConectado(false))
     socket.on(WS_EVENTS.NOTIFICACAO_NOVA, (nova: NotificacaoDTO) => {
       setEstado((atual) => aplicarNova(atual, nova))
+      setContadorNovas((atual) => atual + 1)
     })
 
     return () => {
@@ -208,11 +217,12 @@ function ConexaoNotificacoes({
       naoLidas: estado.naoLidas,
       conectado,
       temMais: proximoCursor !== null,
+      contadorNovas,
       marcarComoLida,
       marcarTodasComoLidas,
       carregarMais,
     }),
-    [estado, conectado, proximoCursor, marcarComoLida, marcarTodasComoLidas, carregarMais],
+    [estado, conectado, proximoCursor, contadorNovas, marcarComoLida, marcarTodasComoLidas, carregarMais],
   )
 
   return (

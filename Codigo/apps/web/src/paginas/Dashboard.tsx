@@ -5,6 +5,8 @@ import { buscarDashboard } from '../api/dashboard'
 import { ErroApi } from '../api/clienteHttp'
 import { formatarHora } from '../formatacao/datas'
 import { filtrarPedidos, temPendencia, type FiltroPedidos } from '../formatacao/dashboard'
+import { useNotificacoes } from '../notificacoes/ProvedorNotificacoes'
+import { deveFazerPolling } from '../notificacoes/tempoReal'
 import { Alerta } from '../ui/Alerta'
 import { Botao } from '../ui/Botao'
 import { CartaoIndicador } from '../ui/CartaoIndicador'
@@ -15,8 +17,15 @@ import { FeedAlertas } from './dashboard/FeedAlertas'
 import { GraficoProdutividade } from './dashboard/GraficoProdutividade'
 
 /**
- * "Tempo real" por consulta periódica: enquanto não há WebSocket na API, o
- * dashboard se atualiza sozinho neste intervalo (e no botão Atualizar).
+ * "Tempo real" por WebSocket: cada notificação nova (avaria, peça na obra
+ * errada, atestado...) sinaliza que a operação mudou, e o dashboard se
+ * recarrega depois deste atraso — junta rajadas de eventos numa só consulta.
+ */
+const ATRASO_RECARGA_POR_EVENTO_MS = 1_000
+
+/**
+ * Plano B: com o socket caído (`conectado === false`) o dashboard volta a se
+ * atualizar sozinho neste intervalo. Com o socket de pé não há polling.
  */
 const INTERVALO_ATUALIZACAO_MS = 30_000
 
@@ -32,6 +41,7 @@ const mensagemDe = (causa: unknown) =>
 export default function Dashboard() {
   const { sessao } = useAuth()
   const token = sessao?.accessToken ?? ''
+  const { conectado, contadorNovas } = useNotificacoes()
   const [dados, setDados] = useState<DashboardDTO | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const [carregando, setCarregando] = useState(true)
@@ -59,14 +69,28 @@ export default function Dashboard() {
     }
 
     carregar()
-    const intervalo = window.setInterval(carregar, INTERVALO_ATUALIZACAO_MS)
     document.addEventListener('visibilitychange', carregar)
     return () => {
       ativo = false
-      window.clearInterval(intervalo)
       document.removeEventListener('visibilitychange', carregar)
     }
   }, [token, recarregar])
+
+  // Polling só enquanto o socket está fora: reaproveita a carga acima pelo
+  // contador `recarregar`, em vez de duplicar o fetch.
+  useEffect(() => {
+    if (!deveFazerPolling(conectado)) return
+    const intervalo = window.setInterval(() => setRecarregar((valor) => valor + 1), INTERVALO_ATUALIZACAO_MS)
+    return () => window.clearInterval(intervalo)
+  }, [conectado])
+
+  // Notificação nova ao vivo → recarrega com debounce (o cleanup cancela o
+  // disparo pendente quando chega outra antes do atraso).
+  useEffect(() => {
+    if (contadorNovas === 0) return
+    const atraso = window.setTimeout(() => setRecarregar((valor) => valor + 1), ATRASO_RECARGA_POR_EVENTO_MS)
+    return () => window.clearTimeout(atraso)
+  }, [contadorNovas])
 
   const pedidos = dados ? filtrarPedidos(dados.pedidos, filtro) : []
   const comPendencia = dados ? dados.pedidos.filter(temPendencia).length : 0

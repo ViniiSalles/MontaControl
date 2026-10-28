@@ -5,7 +5,8 @@ import { CAMINHO_POR_PERFIL } from './perfilDestino'
 import type { PerfilWeb } from './perfilDestino'
 
 interface PropsRotaProtegida {
-  perfilExigido: PerfilWeb
+  /** Um perfil, ou a lista dos que podem ver a tela (ex.: notificações, comum aos três). */
+  perfilExigido: PerfilWeb | readonly PerfilWeb[]
   children: ReactNode
 }
 
@@ -18,7 +19,8 @@ export function RotaProtegida({ perfilExigido, children }: PropsRotaProtegida) {
 
   if (!sessao) return <Navigate to="/login" replace />
 
-  if (sessao.usuario.perfil !== perfilExigido) {
+  const permitidos: readonly string[] = Array.isArray(perfilExigido) ? perfilExigido : [perfilExigido]
+  if (!permitidos.includes(sessao.usuario.perfil)) {
     return <Navigate to={CAMINHO_POR_PERFIL[sessao.usuario.perfil as PerfilWeb]} replace />
   }
 

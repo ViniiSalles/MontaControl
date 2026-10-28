@@ -4,8 +4,12 @@ import { Perfil } from '@montacontrol/shared'
 import type { NomeIcone } from '@montacontrol/design-tokens/icones'
 import type { PerfilWeb } from '../auth/perfilDestino'
 import { useAuth } from '../auth/AuthContext'
+import { rotuloAcessivelSino, rotuloContadorNotificacoes } from '../notificacoes/tempoReal'
+import { useNotificacoes } from '../notificacoes/ProvedorNotificacoes'
 import { Avatar } from '../ui/Avatar'
+import { GavetaLateral } from '../ui/GavetaLateral'
 import { SimboloMaterial } from '../ui/SimboloMaterial'
+import { ListaNotificacoes } from './notificacoes/ListaNotificacoes'
 
 interface ItemMenu {
   rotulo: string
@@ -51,11 +55,51 @@ interface PropsLayoutAutenticado {
   children: ReactNode
 }
 
+interface PropsSinoNotificacoes {
+  naoLidas: number
+  conectado: boolean
+  aoAbrir: () => void
+}
+
+function SinoNotificacoes({ naoLidas, conectado, aoAbrir }: PropsSinoNotificacoes) {
+  const contador = rotuloContadorNotificacoes(naoLidas)
+  return (
+    <button
+      type="button"
+      onClick={(evento) => {
+        // Safari não foca o botão ao clicar; sem isso a gaveta não teria para
+        // onde devolver o foco ao fechar.
+        evento.currentTarget.focus()
+        aoAbrir()
+      }}
+      aria-label={rotuloAcessivelSino(naoLidas)}
+      aria-haspopup="dialog"
+      title={conectado ? undefined : 'Tempo real pausado — reconectando'}
+      className="relative flex h-40 w-40 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-surface-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+    >
+      <SimboloMaterial nome="notifications" className="text-2xl" />
+      {contador && (
+        <span
+          aria-hidden="true"
+          className="absolute right-0 top-0 flex h-16 min-w-16 items-center justify-center rounded-full bg-error px-4 text-label-sm text-on-error"
+        >
+          {contador}
+        </span>
+      )}
+      {!conectado && (
+        <span aria-hidden="true" className="absolute bottom-4 right-4 h-8 w-8 rounded-full border-2 border-surface bg-outline" />
+      )}
+    </button>
+  )
+}
+
 /** Casca das telas web autenticadas: sidebar "âncora" + cabeçalho de vidro (DESIGN.md §2 e §4). */
 export function LayoutAutenticado({ itemAtivo, titulo, complementoTitulo, children }: PropsLayoutAutenticado) {
   const { sessao, sair } = useAuth()
   const navigate = useNavigate()
+  const { naoLidas, conectado, marcarTodasComoLidas } = useNotificacoes()
   const [menuAberto, setMenuAberto] = useState(false)
+  const [gavetaAberta, setGavetaAberta] = useState(false)
   const refBotaoAbrir = useRef<HTMLButtonElement>(null)
   const refBotaoFechar = useRef<HTMLButtonElement>(null)
   const perfil = sessao?.usuario.perfil as PerfilWeb | undefined
@@ -170,6 +214,7 @@ export function LayoutAutenticado({ itemAtivo, titulo, complementoTitulo, childr
           </div>
           {sessao && perfil && (
             <div className="flex items-center gap-12">
+              <SinoNotificacoes naoLidas={naoLidas} conectado={conectado} aoAbrir={() => setGavetaAberta(true)} />
               <div className="hidden text-right sm:block">
                 <p className="text-title-sm text-on-surface">{sessao.usuario.nome}</p>
                 <p className="text-label-sm uppercase text-on-surface-variant">{ROTULO_PERFIL[perfil]}</p>
@@ -180,6 +225,33 @@ export function LayoutAutenticado({ itemAtivo, titulo, complementoTitulo, childr
         </header>
         <main className="p-32 print:p-0">{children}</main>
       </div>
+      <GavetaLateral
+        aberta={gavetaAberta}
+        aoFechar={() => setGavetaAberta(false)}
+        titulo="Notificações"
+        acaoCabecalho={
+          <button
+            type="button"
+            onClick={() => void marcarTodasComoLidas()}
+            disabled={naoLidas === 0}
+            className="text-label-lg text-primary hover:underline disabled:pointer-events-none disabled:opacity-40"
+          >
+            Marcar todas como lidas
+          </button>
+        }
+        rodape={
+          <Link
+            to="/notificacoes"
+            onClick={() => setGavetaAberta(false)}
+            className="flex items-center justify-center gap-8 text-label-lg text-primary hover:underline"
+          >
+            Ver todas as notificações
+            <SimboloMaterial nome="chevron_right" className="text-xl" />
+          </Link>
+        }
+      >
+        <ListaNotificacoes aoNavegar={() => setGavetaAberta(false)} />
+      </GavetaLateral>
     </div>
   )
 }
