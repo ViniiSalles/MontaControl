@@ -128,6 +128,9 @@ model Usuario {
   avariasAnalisadas  Avaria[]           @relation("AvariaAnalista")
   cautelas           Cautela[]
   epis               Epi[]
+  alugueisEpi        AluguelEpi[]       @relation("AluguelEpiUsuario")
+  alugueisEpiFeitos  AluguelEpi[]       @relation("AluguelEpiRegistrador")
+  devolucoesEpi      AluguelEpi[]       @relation("AluguelEpiDevolucao")
   marcacoesPonto     MarcacaoPonto[]
   notificacoes       Notificacao[]
 
@@ -508,13 +511,43 @@ model Cautela {
 
 model TipoEpi {
   id            Int    @id @default(autoincrement())
-  nome          String
+  nome          String @unique
   descricao     String
   validadeMeses Int    @map("validade_meses")
+  /// Unidades do almoxarifado que o gestor pode alugar ao mesmo tempo.
+  estoque       Int    @default(0)
 
-  epis Epi[]
+  epis     Epi[]
+  alugueis AluguelEpi[]
 
   @@map("tipo_epi")
+}
+
+/// Aluguel (empréstimo temporário) de EPI do almoxarifado, registrado pelo
+/// gestor: período reservado (`inicio` → `fimPrevisto`) e a devolução real.
+/// O status (reservado, em uso, atrasado, devolvido) é derivado dessas datas.
+model AluguelEpi {
+  id                     Int       @id @default(autoincrement())
+  tipoEpiId              Int       @map("tipo_epi_id")
+  usuarioId              Int       @map("usuario_id")
+  quantidade             Int       @default(1)
+  inicio                 DateTime  @map("inicio")
+  fimPrevisto            DateTime  @map("fim_previsto")
+  devolvidoEm            DateTime? @map("devolvido_em")
+  observacao             String?
+  registradoPor          Int       @map("registrado_por")
+  devolucaoRegistradaPor Int?      @map("devolucao_registrada_por")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+
+  tipoEpi              TipoEpi  @relation(fields: [tipoEpiId], references: [id])
+  usuario              Usuario  @relation("AluguelEpiUsuario", fields: [usuarioId], references: [id])
+  registrador          Usuario  @relation("AluguelEpiRegistrador", fields: [registradoPor], references: [id])
+  registradorDevolucao Usuario? @relation("AluguelEpiDevolucao", fields: [devolucaoRegistradaPor], references: [id])
+
+  /// Checagem de disponibilidade: aluguéis em aberto de um tipo.
+  @@index([tipoEpiId, devolvidoEm])
+  @@map("aluguel_epi")
 }
 
 model Epi {
