@@ -338,5 +338,36 @@ describe('/api/notificacoes (e2e)', () => {
 
       expect(await receber(sid)).toBe(`42${JSON.stringify([WS_EVENTS.NOTIFICACAO_NOVA, dto])}`);
     });
+
+    it('notificacao:nova chega só ao destinatário, nunca ao socket de outro usuário', async () => {
+      const montador = await conectar({ token: 'token-montador' });
+      const gestor = await conectar({ token: 'token-gestor' });
+      expect(montador.resposta.startsWith('40{"sid"')).toBe(true);
+      expect(gestor.resposta.startsWith('40{"sid"')).toBe(true);
+
+      // Poll pendente do montador: qualquer pacote que vazar para ele o resolve.
+      let montadorRecebeu = false;
+      const pollMontador = receber(montador.sid).then((texto) => {
+        montadorRecebeu = true;
+        return texto;
+      });
+
+      const gateway = app.get(NotificacoesGateway);
+      const doGestor = paraDTO(linha(77, GESTOR.id));
+      gateway.emitirParaUsuario(GESTOR.id, doGestor);
+
+      expect(await receber(gestor.sid)).toBe(
+        `42${JSON.stringify([WS_EVENTS.NOTIFICACAO_NOVA, doGestor])}`,
+      );
+      await new Promise((resolver) => setTimeout(resolver, 300));
+      expect(montadorRecebeu).toBe(false);
+
+      // Encerra o poll do montador com um pacote dele: o que chegar tem de ser só esse.
+      const sentinela = paraDTO(linha(78, MONTADOR.id));
+      gateway.emitirParaUsuario(MONTADOR.id, sentinela);
+      expect(await pollMontador).toBe(
+        `42${JSON.stringify([WS_EVENTS.NOTIFICACAO_NOVA, sentinela])}`,
+      );
+    });
   });
 });

@@ -125,21 +125,51 @@ describe('UsuariosRepository', () => {
     });
   });
 
-  describe('listarIdsAtivosPorPerfil', () => {
-    it('devolve só ids de usuários ativos dos perfis informados', async () => {
-      prisma.usuario.findMany.mockResolvedValue([{ id: 1 }, { id: 4 }]);
+  describe('listarIdsAtivos', () => {
+    it('numa só consulta: ativos dos perfis OU dos ids informados', async () => {
+      prisma.usuario.findMany.mockResolvedValue([{ id: 1 }, { id: 4 }, { id: 9 }]);
 
-      const ids = await repository.listarIdsAtivosPorPerfil([Perfil.RH, Perfil.DEPOSITO]);
+      const ids = await repository.listarIdsAtivos({
+        perfis: [Perfil.RH, Perfil.DEPOSITO],
+        ids: [9, 12],
+      });
 
-      expect(ids).toEqual([1, 4]);
+      expect(ids).toEqual([1, 4, 9]);
+      expect(prisma.usuario.findMany).toHaveBeenCalledTimes(1);
       expect(prisma.usuario.findMany).toHaveBeenCalledWith({
-        where: { perfil: { in: [Perfil.RH, Perfil.DEPOSITO] }, ativo: true },
+        where: {
+          ativo: true,
+          OR: [{ perfil: { in: [Perfil.RH, Perfil.DEPOSITO] } }, { id: { in: [9, 12] } }],
+        },
         select: { id: true },
       });
     });
 
-    it('lista vazia de perfis não consulta o banco', async () => {
-      await expect(repository.listarIdsAtivosPorPerfil([])).resolves.toEqual([]);
+    it('só perfis: não monta condição por id', async () => {
+      prisma.usuario.findMany.mockResolvedValue([{ id: 1 }]);
+
+      await repository.listarIdsAtivos({ perfis: [Perfil.RH], ids: [] });
+
+      expect(prisma.usuario.findMany).toHaveBeenCalledWith({
+        where: { ativo: true, OR: [{ perfil: { in: [Perfil.RH] } }] },
+        select: { id: true },
+      });
+    });
+
+    it('só ids: filtra os inativos', async () => {
+      prisma.usuario.findMany.mockResolvedValue([{ id: 3 }]);
+
+      const ids = await repository.listarIdsAtivos({ perfis: [], ids: [3, 5] });
+
+      expect(ids).toEqual([3]);
+      expect(prisma.usuario.findMany).toHaveBeenCalledWith({
+        where: { ativo: true, OR: [{ id: { in: [3, 5] } }] },
+        select: { id: true },
+      });
+    });
+
+    it('sem perfis nem ids não consulta o banco', async () => {
+      await expect(repository.listarIdsAtivos({ perfis: [], ids: [] })).resolves.toEqual([]);
       expect(prisma.usuario.findMany).not.toHaveBeenCalled();
     });
   });

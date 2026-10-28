@@ -76,10 +76,14 @@ describe('validate — CORS do gateway WebSocket', () => {
     expect(validate({ ...BASE_VALIDA, WS_CORS_ORIGENS: origens }).WS_CORS_ORIGENS).toBe(origens);
   });
 
-  it.each(['*', 'app.montacontrol.com.br', 'https://ok.com,,https://b.com'])(
-    'rejeita WS_CORS_ORIGENS=%s',
-    (valor) => {
-      expect(() => validate({ ...BASE_VALIDA, WS_CORS_ORIGENS: valor })).toThrow();
-    },
-  );
+  it.each([
+    '*',
+    'app.montacontrol.com.br',
+    'https://ok.com,,https://b.com',
+    // Origem é esquema+host(+porta): barra final ou caminho nunca casam com o `Origin`.
+    'https://ok.com/',
+    'https://ok.com/app',
+  ])('rejeita WS_CORS_ORIGENS=%s', (valor) => {
+    expect(() => validate({ ...BASE_VALIDA, WS_CORS_ORIGENS: valor })).toThrow();
+  });
 });

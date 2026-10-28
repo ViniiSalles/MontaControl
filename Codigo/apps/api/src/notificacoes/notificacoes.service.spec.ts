@@ -36,7 +36,7 @@ describe('NotificacoesService', () => {
     marcarLida: jest.Mock;
     marcarTodasLidas: jest.Mock;
   };
-  let usuarios: { listarIdsAtivosPorPerfil: jest.Mock };
+  let usuarios: { listarIdsAtivos: jest.Mock };
   let emissor: { emitirParaUsuario: jest.Mock };
   let service: NotificacoesService;
 
@@ -48,7 +48,7 @@ describe('NotificacoesService', () => {
       marcarLida: jest.fn(),
       marcarTodasLidas: jest.fn(),
     };
-    usuarios = { listarIdsAtivosPorPerfil: jest.fn().mockResolvedValue([]) };
+    usuarios = { listarIdsAtivos: jest.fn().mockResolvedValue([]) };
     emissor = { emitirParaUsuario: jest.fn() };
     service = new NotificacoesService(
       repo as unknown as NotificacoesRepository,
@@ -58,8 +58,8 @@ describe('NotificacoesService', () => {
   });
 
   describe('notificar', () => {
-    it('resolve perfis em ids ativos e deduplica com usuarioIds', async () => {
-      usuarios.listarIdsAtivosPorPerfil.mockResolvedValue([1, 2, 3]);
+    it('resolve perfis e usuarioIds em ids ativos numa só consulta, sem duplicar', async () => {
+      usuarios.listarIdsAtivos.mockResolvedValue([1, 2, 3, 9]);
 
       await service.notificar({
         ...entradaBase,
@@ -67,7 +67,11 @@ describe('NotificacoesService', () => {
         usuarioIds: [3, 9, 9],
       });
 
-      expect(usuarios.listarIdsAtivosPorPerfil).toHaveBeenCalledWith([Perfil.RH, Perfil.DEPOSITO]);
+      expect(usuarios.listarIdsAtivos).toHaveBeenCalledTimes(1);
+      expect(usuarios.listarIdsAtivos).toHaveBeenCalledWith({
+        perfis: [Perfil.RH, Perfil.DEPOSITO],
+        ids: [3, 9],
+      });
       const gravadas = repo.criarVarias.mock.calls[0][0] as Array<Record<string, unknown>>;
       expect(gravadas.map((g) => g.usuarioId).sort()).toEqual([1, 2, 3, 9]);
       expect(gravadas[0]).toEqual(
@@ -82,7 +86,36 @@ describe('NotificacoesService', () => {
       );
     });
 
+    it('destinatário inativo em usuarioIds não recebe e não emite', async () => {
+      const aviso = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      // 5 está inativo: a consulta só devolve o 4.
+      usuarios.listarIdsAtivos.mockResolvedValue([4]);
+      repo.criarVarias.mockResolvedValue([{ usuarioId: 4, notificacao: dto(20) }]);
+
+      await service.notificar({ ...entradaBase, usuarioIds: [4, 5] });
+
+      expect(usuarios.listarIdsAtivos).toHaveBeenCalledWith({ perfis: [], ids: [4, 5] });
+      const gravadas = repo.criarVarias.mock.calls[0][0] as Array<Record<string, unknown>>;
+      expect(gravadas.map((g) => g.usuarioId)).toEqual([4]);
+      expect(emissor.emitirParaUsuario).toHaveBeenCalledTimes(1);
+      expect(emissor.emitirParaUsuario).not.toHaveBeenCalledWith(5, expect.anything());
+      expect(aviso).toHaveBeenCalledWith(expect.stringContaining('5'));
+      aviso.mockRestore();
+    });
+
+    it('nenhum usuarioId ativo: não grava nem emite', async () => {
+      const aviso = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      usuarios.listarIdsAtivos.mockResolvedValue([]);
+
+      await service.notificar({ ...entradaBase, usuarioIds: [5] });
+
+      expect(repo.criarVarias).not.toHaveBeenCalled();
+      expect(emissor.emitirParaUsuario).not.toHaveBeenCalled();
+      aviso.mockRestore();
+    });
+
     it('emite só as notificações realmente criadas', async () => {
+      usuarios.listarIdsAtivos.mockResolvedValue([1, 2, 3]);
       // O banco descartou a do usuário 2 (chaveOrigem repetida).
       repo.criarVarias.mockResolvedValue([
         { usuarioId: 1, notificacao: dto(10) },
@@ -97,7 +130,7 @@ describe('NotificacoesService', () => {
     });
 
     it('não notifica nem lança quando não há destinatários', async () => {
-      usuarios.listarIdsAtivosPorPerfil.mockResolvedValue([]);
+      usuarios.listarIdsAtivos.mockResolvedValue([]);
 
       await expect(
         service.notificar({ ...entradaBase, perfis: [Perfil.RH] }),
@@ -109,6 +142,7 @@ describe('NotificacoesService', () => {
 
     it('engole e loga erro do repositório', async () => {
       const erroLog = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      usuarios.listarIdsAtivos.mockResolvedValue([1]);
       repo.criarVarias.mockRejectedValue(new Error('banco fora'));
 
       await expect(

@@ -569,6 +569,7 @@ model Notificacao {
 
   @@unique([usuarioId, chaveOrigem])
   @@index([usuarioId, lida, createdAt])
+  @@index([usuarioId, updatedAt])
   @@map("notificacao")
 }
 

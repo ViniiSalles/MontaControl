@@ -30,6 +30,9 @@ CREATE TABLE "notificacao" (
 CREATE INDEX "notificacao_usuario_id_lida_created_at_idx" ON "notificacao"("usuario_id", "lida", "created_at");
 
 -- CreateIndex
+CREATE INDEX "notificacao_usuario_id_updated_at_idx" ON "notificacao"("usuario_id", "updated_at");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "notificacao_usuario_id_chave_origem_key" ON "notificacao"("usuario_id", "chave_origem");
 
 -- AddForeignKey

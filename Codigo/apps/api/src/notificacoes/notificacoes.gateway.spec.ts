@@ -122,16 +122,28 @@ describe('NotificacoesGateway', () => {
     expect(next).toHaveBeenCalledWith(
       expect.objectContaining({ message: 'credenciais inválidas' }),
     );
+    // Token recusado é esperado: só aviso, sem poluir o log de erro.
+    expect(Logger.prototype.warn).toHaveBeenCalledWith(
+      expect.stringContaining('Usuário inválido ou inativo'),
+    );
+    expect(Logger.prototype.error).not.toHaveBeenCalled();
   });
 
   it('recusa com mensagem genérica quando a verificação falha por erro inesperado', async () => {
-    verificador.verificar.mockRejectedValue(new Error('banco fora do ar'));
+    const falha = new Error('banco fora do ar');
+    verificador.verificar.mockRejectedValue(falha);
 
     const next = await handshake(criarSocket({ token: 'token' }));
 
     expect(next).toHaveBeenCalledWith(
       expect.objectContaining({ message: 'credenciais inválidas' }),
     );
+    // Falha de infraestrutura vira `error` com stack no servidor — nunca chega ao cliente.
+    expect(Logger.prototype.error).toHaveBeenCalledWith(
+      expect.stringContaining('banco fora do ar'),
+      falha.stack,
+    );
+    expect(Logger.prototype.warn).not.toHaveBeenCalled();
   });
 
   it('aceita o token no cabeçalho Authorization: Bearer', async () => {

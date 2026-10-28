@@ -9,6 +9,7 @@ import { WS_EVENTS, type NotificacaoDTO } from '@montacontrol/shared';
 import type { Server, Socket } from 'socket.io';
 import { UsuarioAutenticado } from '../auth/usuario-autenticado';
 import { VerificadorTokenService } from '../auth/verificador-token.service';
+import { TokenInvalidoException } from '../common/exceptions/token-invalido.exception';
 import { EmissorNotificacao } from './notificacoes.emissor';
 
 /** Única mensagem de recusa do handshake: nunca revela qual etapa falhou. */
@@ -111,9 +112,14 @@ export class NotificacoesGateway
       usuario = await this.verificador.verificar(token);
     } catch (erro) {
       // Detalhe só no log do servidor; o cliente recebe a mensagem genérica.
-      this.logger.warn(
-        `Handshake recusado: ${erro instanceof Error ? erro.message : String(erro)}`,
-      );
+      // Token recusado é rotina (`warn`); qualquer outra falha (banco, JWKS...)
+      // é incidente e vai como `error` com stack.
+      const detalhe = `Handshake recusado: ${erro instanceof Error ? erro.message : String(erro)}`;
+      if (erro instanceof TokenInvalidoException) {
+        this.logger.warn(detalhe);
+      } else {
+        this.logger.error(detalhe, erro instanceof Error ? erro.stack : undefined);
+      }
       next(new Error(MENSAGEM_RECUSA));
       return;
     }

@@ -52,7 +52,7 @@ class EnvironmentVariables {
    * Lida em runtime por `resolverOrigemCors` (gateway de notificações).
    */
   @IsOptional()
-  @Matches(/^https?:\/\/[^\s,]+(\s*,\s*https?:\/\/[^\s,]+)*$/, {
+  @Matches(/^https?:\/\/[^\s,/]+(\s*,\s*https?:\/\/[^\s,/]+)*$/, {
     message: 'WS_CORS_ORIGENS deve ser uma lista de origens http(s) separadas por vírgula',
   })
   WS_CORS_ORIGENS?: string;

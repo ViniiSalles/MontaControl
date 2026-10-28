@@ -38,10 +38,20 @@ export class NotificacoesService {
    */
   async notificar(entrada: EntradaNotificacao): Promise<void> {
     try {
-      const idsDosPerfis = entrada.perfis?.length
-        ? await this.usuarios.listarIdsAtivosPorPerfil(entrada.perfis)
-        : [];
-      const destinatarios = [...new Set([...(entrada.usuarioIds ?? []), ...idsDosPerfis])];
+      // Uma só consulta resolve perfis e ids explícitos, sempre filtrando `ativo`:
+      // usuário desativado não recebe notificação nem por id direto (spec §7.1).
+      const idsPedidos = [...new Set(entrada.usuarioIds ?? [])];
+      const destinatarios = [
+        ...new Set(
+          await this.usuarios.listarIdsAtivos({ perfis: entrada.perfis ?? [], ids: idsPedidos }),
+        ),
+      ];
+      const descartados = idsPedidos.filter((id) => !destinatarios.includes(id));
+      if (descartados.length > 0) {
+        this.logger.warn(
+          `Notificação ${entrada.chaveOrigem}: destinatários inativos ou inexistentes ignorados (${descartados.join(', ')})`,
+        );
+      }
       if (destinatarios.length === 0) return;
 
       const criadas = await this.repositorio.criarVarias(

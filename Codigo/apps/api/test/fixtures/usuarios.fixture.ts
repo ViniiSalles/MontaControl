@@ -150,6 +150,8 @@ export async function apagarUsuarioFixture(
           prisma.equipeMembro.deleteMany({ where: porUsuario }),
           prisma.cautela.deleteMany({ where: porUsuario }),
           prisma.epi.deleteMany({ where: porUsuario }),
+          // FK ON DELETE RESTRICT: as notificações do usuário precisam sair antes dele.
+          prisma.notificacao.deleteMany({ where: porUsuario }),
           prisma.usuario.delete({ where: { id } }),
         ]);
         bancoLimpo = true;
