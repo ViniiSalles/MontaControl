@@ -3,7 +3,6 @@ import assert from 'node:assert/strict'
 import type { NotificacaoDTO } from '@montacontrol/shared'
 import {
   anexarPagina,
-  aplicarLista,
   aplicarNova,
   desmarcarLidasNoEstado,
   marcarLidaNoEstado,
@@ -24,13 +23,6 @@ function notificacao(sobrescritas: Partial<NotificacaoDTO>): NotificacaoDTO {
     ...sobrescritas,
   }
 }
-
-test('aplicarLista copia itens e contagem de não lidas do servidor', () => {
-  const itens = [notificacao({ id: 2 }), notificacao({ id: 1, lida: true })]
-  const estado = aplicarLista({ itens, naoLidas: 7, proximoCursor: 1 })
-  assert.deepEqual(estado.itens, itens)
-  assert.equal(estado.naoLidas, 7)
-})
 
 test('aplicarNova ignora id repetido', () => {
   const inicial = { itens: [notificacao({ id: 5 })], naoLidas: 1 }

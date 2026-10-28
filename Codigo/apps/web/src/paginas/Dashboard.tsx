@@ -6,7 +6,7 @@ import { ErroApi } from '../api/clienteHttp'
 import { formatarHora } from '../formatacao/datas'
 import { filtrarPedidos, temPendencia, type FiltroPedidos } from '../formatacao/dashboard'
 import { useNotificacoes } from '../notificacoes/ProvedorNotificacoes'
-import { deveFazerPolling } from '../notificacoes/tempoReal'
+import { deveFazerPolling, INTERVALO_PLANO_B_MS } from '../notificacoes/tempoReal'
 import { Alerta } from '../ui/Alerta'
 import { Botao } from '../ui/Botao'
 import { CartaoIndicador } from '../ui/CartaoIndicador'
@@ -22,12 +22,6 @@ import { GraficoProdutividade } from './dashboard/GraficoProdutividade'
  * recarrega depois deste atraso — junta rajadas de eventos numa só consulta.
  */
 const ATRASO_RECARGA_POR_EVENTO_MS = 1_000
-
-/**
- * Plano B: com o socket caído (`conectado === false`) o dashboard volta a se
- * atualizar sozinho neste intervalo. Com o socket de pé não há polling.
- */
-const INTERVALO_ATUALIZACAO_MS = 30_000
 
 const mensagemDe = (causa: unknown) =>
   causa instanceof ErroApi ? causa.message : 'Falha ao carregar o dashboard.'
@@ -76,11 +70,11 @@ export default function Dashboard() {
     }
   }, [token, recarregar])
 
-  // Polling só enquanto o socket está fora: reaproveita a carga acima pelo
-  // contador `recarregar`, em vez de duplicar o fetch.
+  // Plano B — polling só enquanto o socket está fora (`conectado === false`):
+  // reaproveita a carga acima pelo contador `recarregar`, em vez de duplicar o fetch.
   useEffect(() => {
     if (!deveFazerPolling(conectado)) return
-    const intervalo = window.setInterval(() => setRecarregar((valor) => valor + 1), INTERVALO_ATUALIZACAO_MS)
+    const intervalo = window.setInterval(() => setRecarregar((valor) => valor + 1), INTERVALO_PLANO_B_MS)
     return () => window.clearInterval(intervalo)
   }, [conectado])
 

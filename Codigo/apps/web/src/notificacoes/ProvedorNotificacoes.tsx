@@ -19,6 +19,13 @@ import {
   mesclarLista,
 } from './estado'
 import type { EstadoNotificacoes } from './estado'
+import {
+  ATRASO_INICIAL,
+  deveFazerPolling,
+  INTERVALO_PLANO_B_MS,
+  proximoAtraso,
+  urlDoSocket,
+} from './tempoReal'
 
 interface ContextoNotificacoes {
   itens: NotificacaoDTO[]
@@ -107,10 +114,12 @@ function ConexaoNotificacoes({
     estadoRef.current = estado
   }, [estado])
 
-  // Primeira página por REST: carga inicial, catch-up após reconexão e
-  // "rollback" de ação otimista que falhou. É MESCLADA ao estado atual (evento
-  // ao vivo e marcação local posteriores ao snapshot sobrevivem). Falha de
-  // rede é silenciosa — o estado atual segue e o próximo `connect` tenta de novo.
+  // Primeira página por REST: carga inicial, plano B com o socket fora,
+  // catch-up após (re)conexão e reconciliação de marcação. É MESCLADA ao estado
+  // atual (evento ao vivo e marcação local posteriores ao snapshot sobrevivem).
+  // Toda recarga passa por aqui, então a geração descarta resposta superada.
+  // Falha de rede é silenciosa — o estado atual segue e o plano B (ou o
+  // próximo `connect`) tenta de novo.
   const recarregar = useCallback(async () => {
     const geracao = ++geracaoRef.current
     recargasEmVooRef.current += 1
@@ -130,51 +139,106 @@ function ConexaoNotificacoes({
     }
   }, [])
 
+  // Carga inicial por REST, independente do socket (spec §3.3): handshake
+  // recusado ou API inalcançável pelo socket não deixam o sino e a lista vazios.
   useEffect(() => {
-    // `connect` dispara também a cada reconexão automática — é o catch-up de
-    // eventos perdidos enquanto o socket estava fora. `connect_error` e
-    // `disconnect` só sinalizam offline: pode ser oscilação de infraestrutura,
-    // por isso não deslogam nem limpam estado, e a reconexão padrão com backoff
-    // do Socket.io segue ativa.
-    const socket = io({
+    void recarregar()
+  }, [recarregar])
+
+  // Plano B: enquanto o socket estiver fora, a lista se atualiza por REST.
+  useEffect(() => {
+    if (!deveFazerPolling(conectado)) return
+    const intervalo = window.setInterval(() => void recarregar(), INTERVALO_PLANO_B_MS)
+    return () => window.clearInterval(intervalo)
+  }, [conectado, recarregar])
+
+  useEffect(() => {
+    // `connect` dispara também a cada reconexão — é o catch-up de eventos
+    // perdidos enquanto o socket estava fora (inclusive no intervalo entre a
+    // carga inicial e a entrada na sala).
+    //
+    // Falha de transporte: o Manager do Socket.io reconecta sozinho, com
+    // backoff (`socket.active` segue `true`). Recusa do servidor (`connect_error`
+    // do handshake ou `io server disconnect`): o socket.io-client DESTRÓI o
+    // socket (`active` = false) e não tenta de novo — a retentativa é daqui,
+    // com espera de 2 s dobrando até 60 s, de volta a 2 s após um `connect`.
+    // Nenhum dos casos desloga nem limpa estado: pode ser falha transitória.
+    const opcoes = {
       path: '/socket.io',
-      auth: (entregar) => entregar({ token: tokenRef.current }),
-    })
+      transports: ['websocket', 'polling'],
+      auth: (entregar: (dados: { token: string }) => void) => entregar({ token: tokenRef.current }),
+    }
+    const url = urlDoSocket(import.meta.env)
+    const socket = url ? io(url, opcoes) : io(opcoes)
+
+    let temporizador: number | null = null
+    let atraso = ATRASO_INICIAL
+
+    const cancelarRetentativa = () => {
+      if (temporizador !== null) window.clearTimeout(temporizador)
+      temporizador = null
+    }
+
+    const agendarRetentativa = () => {
+      // `active`: o Manager ainda está tentando (falha de transporte) — não duplicar.
+      if (socket.active || temporizador !== null) return
+      const espera = atraso
+      atraso = proximoAtraso(atraso)
+      temporizador = window.setTimeout(() => {
+        temporizador = null
+        if (!socket.active) socket.connect()
+      }, espera)
+    }
 
     socket.on('connect', () => {
+      cancelarRetentativa()
+      atraso = ATRASO_INICIAL
       setConectado(true)
       void recarregar()
     })
-    socket.on('disconnect', () => setConectado(false))
-    socket.on('connect_error', () => setConectado(false))
+    socket.on('disconnect', (motivo) => {
+      setConectado(false)
+      if (motivo === 'io server disconnect') agendarRetentativa()
+    })
+    socket.on('connect_error', () => {
+      setConectado(false)
+      agendarRetentativa()
+    })
     socket.on(WS_EVENTS.NOTIFICACAO_NOVA, (nova: NotificacaoDTO) => {
       setEstado((atual) => aplicarNova(atual, nova))
       setContadorNovas((atual) => atual + 1)
     })
 
     return () => {
+      cancelarRetentativa()
       socket.close()
     }
   }, [recarregar])
 
   // Otimista: a UI muda na hora e o id fica "pendente" até o PATCH terminar —
-  // enquanto isso um snapshot mais antigo não o reverte. Em falha, a marcação é
-  // desfeita localmente. Sucesso ou falha, termina com uma recarga: ela invalida
-  // (geração) qualquer recarga iniciada antes do fim do PATCH, que poderia trazer
-  // o item como não lido, e deixa o servidor decidir o estado final. Nunca rejeita.
+  // enquanto isso um snapshot mais antigo não o reverte. Depois do PATCH:
+  // - falha: desfaz a marcação localmente e recarrega (o servidor decide);
+  // - sucesso: só recarrega se houver recarga EM VOO — ela partiu antes de o
+  //   PATCH terminar, pode trazer o item como não lido e, com a pendência já
+  //   liberada, revertê-lo; a nova recarga a invalida pela geração. Sem recarga
+  //   em voo, qualquer recarga futura já lê o estado gravado, e não recarregar
+  //   preserva as páginas carregadas por `carregarMais`.
+  // Nunca rejeita.
   const marcarComoLida = useCallback(
     async (id: number) => {
       const eraNaoLida = estadoRef.current.itens.some((n) => n.id === id && !n.lida)
       lidasPendentesRef.current.add(id)
       setEstado((atual) => marcarLidaNoEstado(atual, id))
+      let falhou = false
       try {
         await marcarNotificacaoLida(tokenRef.current, id)
       } catch {
+        falhou = true
         if (eraNaoLida) setEstado((atual) => desmarcarLidasNoEstado(atual, [id]))
       } finally {
         lidasPendentesRef.current.delete(id)
       }
-      await recarregar()
+      if (falhou || recargasEmVooRef.current > 0) await recarregar()
     },
     [recarregar],
   )
@@ -185,14 +249,16 @@ function ConexaoNotificacoes({
     const eramNaoLidas = estadoRef.current.itens.filter((n) => !n.lida).map((n) => n.id)
     todasPendentesRef.current += 1
     setEstado((atual) => marcarTodasNoEstado(atual))
+    let falhou = false
     try {
       await marcarTodasNotificacoesLidas(tokenRef.current)
     } catch {
+      falhou = true
       setEstado((atual) => desmarcarLidasNoEstado(atual, eramNaoLidas))
     } finally {
       todasPendentesRef.current -= 1
     }
-    await recarregar()
+    if (falhou || recargasEmVooRef.current > 0) await recarregar()
   }, [recarregar])
 
   const carregarMais = useCallback(async () => {

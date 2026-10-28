@@ -8,11 +8,6 @@ export interface EstadoNotificacoes {
 
 export const ESTADO_NOTIFICACOES_VAZIO: EstadoNotificacoes = { itens: [], naoLidas: 0 }
 
-/** Primeira página vinda do REST: substitui tudo (também no catch-up após reconectar). */
-export function aplicarLista(lista: ListaNotificacoesDTO): EstadoNotificacoes {
-  return { itens: lista.itens, naoLidas: lista.naoLidas }
-}
-
 /** Páginas seguintes (rolagem): anexa ao fim sem repetir ids e adota a contagem mais recente do servidor. */
 export function anexarPagina(estado: EstadoNotificacoes, lista: ListaNotificacoesDTO): EstadoNotificacoes {
   const jaPresentes = new Set(estado.itens.map((n) => n.id))
@@ -78,8 +73,8 @@ export function desmarcarLidasNoEstado(
  *   `lida` do servidor — é isso que faz um PATCH que falhou terminar não lido;
  * - `naoLidas` parte da contagem do servidor e é corrigida por esses dois
  *   ajustes, sem contar duas vezes o que já está na resposta.
- * Páginas mais antigas já carregadas (`carregarMais`) são descartadas, como em
- * `aplicarLista`; o provedor reinicia o cursor junto.
+ * Páginas mais antigas já carregadas (`carregarMais`) são descartadas — o
+ * resultado é só a primeira página — e o provedor reinicia o cursor junto.
  */
 export function mesclarLista(
   atual: EstadoNotificacoes,
