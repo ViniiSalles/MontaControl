@@ -122,6 +122,16 @@ export class UsuariosRepository {
     return linhas.map((linha) => linha.id);
   }
 
+  /** Ids dos usuários ativos dos perfis informados (destinatários de notificação). */
+  async listarIdsAtivosPorPerfil(perfis: Perfil[]): Promise<number[]> {
+    if (perfis.length === 0) return [];
+    const linhas = await this.prisma.usuario.findMany({
+      where: { perfil: { in: perfis }, ativo: true },
+      select: { id: true },
+    });
+    return linhas.map((linha) => linha.id);
+  }
+
   async listar(): Promise<UsuarioListado[]> {
     return this.prisma.usuario.findMany({
       select: SELECAO_USUARIO_LISTADO,

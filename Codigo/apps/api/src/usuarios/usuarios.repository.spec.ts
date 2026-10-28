@@ -125,6 +125,25 @@ describe('UsuariosRepository', () => {
     });
   });
 
+  describe('listarIdsAtivosPorPerfil', () => {
+    it('devolve só ids de usuários ativos dos perfis informados', async () => {
+      prisma.usuario.findMany.mockResolvedValue([{ id: 1 }, { id: 4 }]);
+
+      const ids = await repository.listarIdsAtivosPorPerfil([Perfil.RH, Perfil.DEPOSITO]);
+
+      expect(ids).toEqual([1, 4]);
+      expect(prisma.usuario.findMany).toHaveBeenCalledWith({
+        where: { perfil: { in: [Perfil.RH, Perfil.DEPOSITO] }, ativo: true },
+        select: { id: true },
+      });
+    });
+
+    it('lista vazia de perfis não consulta o banco', async () => {
+      await expect(repository.listarIdsAtivosPorPerfil([])).resolves.toEqual([]);
+      expect(prisma.usuario.findMany).not.toHaveBeenCalled();
+    });
+  });
+
   describe('listar', () => {
     it('retorna os usuários ordenados por nome, sem o authUserId', async () => {
       const usuarios = [

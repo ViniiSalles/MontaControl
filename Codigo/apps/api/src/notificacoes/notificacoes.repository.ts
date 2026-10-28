@@ -12,8 +12,15 @@ export interface NovaNotificacao {
   chaveOrigem: string;
 }
 
+/** Notificação recém-gravada junto do destinatário (o DTO não carrega `usuarioId`). */
+export interface NotificacaoCriada {
+  usuarioId: number;
+  notificacao: NotificacaoDTO;
+}
+
 interface LinhaNotificacao {
   id: number;
+  usuarioId: number;
   tipo: string;
   titulo: string;
   mensagem: string;
@@ -45,13 +52,13 @@ export class NotificacoesRepository {
    * ignorado pelo banco, então o retorno traz só as notificações realmente
    * criadas (as que devem ser empurradas em tempo real).
    */
-  async criarVarias(dados: NovaNotificacao[]): Promise<NotificacaoDTO[]> {
+  async criarVarias(dados: NovaNotificacao[]): Promise<NotificacaoCriada[]> {
     if (dados.length === 0) return [];
     const criadas = await this.prisma.notificacao.createManyAndReturn({
       data: dados,
       skipDuplicates: true,
     });
-    return criadas.map(paraDTO);
+    return criadas.map((linha) => ({ usuarioId: linha.usuarioId, notificacao: paraDTO(linha) }));
   }
 
   /** Mais recentes primeiro; `antesDe` é o cursor (id) da página anterior. */

@@ -71,14 +71,17 @@ describe('NotificacoesRepository', () => {
       });
       expect(criadas).toEqual([
         {
-          id: 7,
-          tipo: 'AVARIA_REPORTADA',
-          titulo: 'Avaria reportada',
-          mensagem: 'Peça 12 chegou quebrada',
-          referenciaTipo: 'AVARIA',
-          referenciaId: 123,
-          lida: false,
-          criadaEm: '2026-10-27T12:00:00.000Z',
+          usuarioId: 3,
+          notificacao: {
+            id: 7,
+            tipo: 'AVARIA_REPORTADA',
+            titulo: 'Avaria reportada',
+            mensagem: 'Peça 12 chegou quebrada',
+            referenciaTipo: 'AVARIA',
+            referenciaId: 123,
+            lida: false,
+            criadaEm: '2026-10-27T12:00:00.000Z',
+          },
         },
       ]);
     });
@@ -92,8 +95,8 @@ describe('NotificacoesRepository', () => {
         { usuarioId: 3, tipo: 'AVARIA_REPORTADA', titulo: 't', mensagem: 'm', chaveOrigem: 'k' },
       ]);
 
-      expect(criada.referenciaTipo).toBeNull();
-      expect(criada.referenciaId).toBeNull();
+      expect(criada.notificacao.referenciaTipo).toBeNull();
+      expect(criada.notificacao.referenciaId).toBeNull();
     });
 
     it('lista vazia não consulta o banco', async () => {
