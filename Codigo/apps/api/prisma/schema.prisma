@@ -84,6 +84,20 @@ enum TipoMarcacao {
   SAIDA
 }
 
+/// Tipos de notificação em tempo real — espelha `TIPOS_NOTIFICACAO` em
+/// `@montacontrol/shared`.
+enum TipoNotificacao {
+  AVARIA_REPORTADA
+  AVARIA_ATUALIZADA
+  ATESTADO_ENVIADO
+  ATESTADO_VALIDADO
+  ATESTADO_REJEITADO
+  PECA_INCONSISTENTE
+  PONTO_ATRASO_SOLICITADO
+  PONTO_ATRASO_APROVADO
+  PONTO_ATRASO_REJEITADO
+}
+
 // ─── Usuário e Autenticação ──────────────────────────────────────────────────
 
 model Usuario {
@@ -115,6 +129,7 @@ model Usuario {
   cautelas           Cautela[]
   epis               Epi[]
   marcacoesPonto     MarcacaoPonto[]
+  notificacoes       Notificacao[]
 
   @@map("usuario")
 }
@@ -528,6 +543,33 @@ model Norma {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("norma")
+}
+
+// ─── Notificações ────────────────────────────────────────────────────────────
+
+/// Uma linha por destinatário (fan-out na gravação). `chaveOrigem` identifica o
+/// fato que gerou a notificação (ex.: `avaria:123:reportada`) e, junto do
+/// destinatário, garante idempotência: repetir o gatilho não duplica a linha.
+model Notificacao {
+  id             Int             @id @default(autoincrement())
+  usuarioId      Int             @map("usuario_id")
+  tipo           TipoNotificacao
+  titulo         String
+  mensagem       String
+  /// Entidade-alvo do "Ver detalhes" (`AVARIA`, `ATESTADO`, `PECA`, `PONTO_ATRASO`).
+  referenciaTipo String?         @map("referencia_tipo")
+  referenciaId   Int?            @map("referencia_id")
+  chaveOrigem    String          @map("chave_origem")
+  lida           Boolean         @default(false)
+  lidaAt         DateTime?       @map("lida_at")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@unique([usuarioId, chaveOrigem])
+  @@index([usuarioId, lida, createdAt])
+  @@map("notificacao")
 }
 
 // ─── Sincronização (offline-first) ───────────────────────────────────────────
