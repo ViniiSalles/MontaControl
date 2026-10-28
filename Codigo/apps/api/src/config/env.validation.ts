@@ -45,6 +45,18 @@ class EnvironmentVariables {
   @IsIn(CABECALHOS_IP_CLIENTE)
   CLIENT_IP_HEADER?: CabecalhoIpCliente;
 
+  /**
+   * Origens de navegador liberadas no CORS do handshake Socket.io, separadas
+   * por vírgula (ex.: `https://app.exemplo.com,http://localhost:5173`).
+   * Ausente: nenhuma — o web em dev usa o proxy do Vite e o mobile não usa CORS.
+   * Lida em runtime por `resolverOrigemCors` (gateway de notificações).
+   */
+  @IsOptional()
+  @Matches(/^https?:\/\/[^\s,/]+(\s*,\s*https?:\/\/[^\s,/]+)*$/, {
+    message: 'WS_CORS_ORIGENS deve ser uma lista de origens http(s) separadas por vírgula',
+  })
+  WS_CORS_ORIGENS?: string;
+
   @IsString()
   DATABASE_URL!: string;
 

@@ -10,6 +10,7 @@ export const WS_EVENTS = {
   ATESTADO_ENVIADO: 'atestado:enviado',
   PECA_INCONSISTENTE: 'peca:inconsistente',
   REPOSICAO_SOLICITADA: 'avaria:reposicao_solicitada',
+  NOTIFICACAO_NOVA: 'notificacao:nova',
 } as const;
 
 export type WsEvent = (typeof WS_EVENTS)[keyof typeof WS_EVENTS];

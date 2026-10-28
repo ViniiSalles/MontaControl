@@ -5,6 +5,7 @@ import { cores, espacamento, espacamentoNomeado } from '@montacontrol/design-tok
 import { Alerta } from '../ui/Alerta';
 import { Badge } from '../ui/Badge';
 import { Botao } from '../ui/Botao';
+import { BotaoNotificacoes } from '../notificacoes/BotaoNotificacoes';
 import { BotaoSincronizacao } from '../sincronizacao/BotaoSincronizacao';
 import { Carregando } from '../ui/Carregando';
 import { Tela } from '../ui/Tela';
@@ -40,7 +41,7 @@ const VIBRACAO_ALERTA = [0, 250, 120, 250];
  * a fila e sobe quando houver sinal; o checklist já a mostra conferida pela
  * sobreposição.
  */
-export function Bipagem({ aoIrParaJornada }: PropsTelaDaAba) {
+export function Bipagem({ aoIrParaJornada, aoAbrirNotificacoes }: PropsTelaDaAba) {
   const database = useDatabaseOuFalha();
   const { pedidos, leiturasNaFila, carregando, erro, recarregar } = useDadosConferencia();
   const { obra, motivo, carregando: carregandoObra } = useObraEmTrabalho();
@@ -90,6 +91,7 @@ export function Bipagem({ aoIrParaJornada }: PropsTelaDaAba) {
           <View style={{ flex: 1 }}>
             <Texto variante="headlineMd">Bipagem</Texto>
           </View>
+          <BotaoNotificacoes aoPressionar={aoAbrirNotificacoes} />
           <BotaoSincronizacao aoSincronizar={() => void recarregar()} />
         </View>
 

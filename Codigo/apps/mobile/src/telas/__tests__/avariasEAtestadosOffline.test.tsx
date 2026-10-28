@@ -211,7 +211,7 @@ afterEach(async () => {
 
 describe('avaria sem rede', () => {
   it('abre o formulário com a réplica, enfileira com 2 fotos, aparece aguardando envio e sobe quando a rede volta', async () => {
-    await renderizar(<Avarias aoIrParaJornada={() => undefined} />);
+    await renderizar(<Avarias aoIrParaJornada={() => undefined} aoAbrirNotificacoes={() => undefined} />);
 
     // Sem rede o formulário está lá, com pedido, peças e tipos da réplica.
     await waitFor(() => expect(screen.getByText('Enviar problema')).toBeTruthy());
@@ -256,7 +256,7 @@ describe('avaria sem rede', () => {
   });
 
   it('recusa de regra na subida: a ação sai da fila, a tela mostra o texto do servidor e os arquivos são apagados', async () => {
-    await renderizar(<Avarias aoIrParaJornada={() => undefined} />);
+    await renderizar(<Avarias aoIrParaJornada={() => undefined} aoAbrirNotificacoes={() => undefined} />);
     await reportarAvariaComDuasFotos();
     await waitFor(() => expect(screen.getByText('AGUARDANDO ENVIO')).toBeTruthy());
     expect(fotosGuardadas()).toHaveLength(2);
@@ -285,7 +285,7 @@ describe('avaria sem rede', () => {
 
 describe('atestado sem rede', () => {
   it('enfileira com 2 fotos, aparece aguardando envio e sobe quando a rede volta', async () => {
-    await renderizar(<Atestados />);
+    await renderizar(<Atestados aoAbrirNotificacoes={() => undefined} />);
     await waitFor(() => expect(screen.getByText('Enviar Atestado')).toBeTruthy());
     expect(screen.queryByText('Não foi possível carregar seus atestados')).toBeNull();
 
@@ -324,7 +324,7 @@ describe('atestado sem rede', () => {
   });
 
   it('recusa do servidor com a rede de volta: a ação sai da fila, a tela mostra o texto do servidor e os arquivos são apagados', async () => {
-    await renderizar(<Atestados />);
+    await renderizar(<Atestados aoAbrirNotificacoes={() => undefined} />);
     await waitFor(() => expect(screen.getByText('Enviar Atestado')).toBeTruthy());
     await enviarAtestadoComDuasFotos();
     await waitFor(() => expect(screen.getByText('AGUARDANDO ENVIO')).toBeTruthy());

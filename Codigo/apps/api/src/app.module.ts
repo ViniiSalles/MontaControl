@@ -17,6 +17,7 @@ import { EpisModule } from './epis/epis.module';
 import { EquipesModule } from './equipes/equipes.module';
 import { EspelhoPontoModule } from './espelho-ponto/espelho-ponto.module';
 import { JornadasModule } from './jornadas/jornadas.module';
+import { NotificacoesModule } from './notificacoes/notificacoes.module';
 import { PecasModule } from './pecas/pecas.module';
 import { PedidosModule } from './pedidos/pedidos.module';
 import { PontosEmAtrasoModule } from './pontos-em-atraso/pontos-em-atraso.module';
@@ -49,6 +50,7 @@ import { SyncModule } from './sync/sync.module';
     EquipesModule,
     EpisModule,
     SyncModule,
+    NotificacoesModule,
   ],
   controllers: [HealthController],
   providers: [

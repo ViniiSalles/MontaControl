@@ -7,7 +7,7 @@ import { appSchema, tableSchema } from '@nozbe/watermelondb';
  * enviadas).
  *
  * Tabelas da réplica (`jornadas`, `banco_horas`, `pedidos`, `ambientes`,
- * `pecas`, `tipos_avaria`, `avarias`, `atestados`) espelham o contrato de pull
+ * `pecas`, `tipos_avaria`, `avarias`, `atestados`, `notificacoes`) espelham o contrato de pull
  * de `@montacontrol/shared` (`src/sync/tipos.ts`): colunas em `snake_case`
  * idênticas aos campos da linha do contrato (menos `id`, gerido pelo
  * WatermelonDB — o id local é o id do servidor, como string).
@@ -20,9 +20,11 @@ import { appSchema, tableSchema } from '@nozbe/watermelondb';
  * o que o montador marcou e ainda não subiu vive só em `acoes_pendentes`). O
  * WatermelonDB não remove coluna em migração — nos aparelhos migrados a coluna
  * física fica órfã, sem efeito (nenhuma coluna é `NOT NULL` no SQLite).
+ *
+ * v4: acrescenta a réplica de `notificacoes` (centro de notificações do montador).
  */
 export const schema = appSchema({
-  version: 3,
+  version: 4,
   tables: [
     tableSchema({
       name: 'jornadas',
@@ -120,6 +122,18 @@ export const schema = appSchema({
         { name: 'motivo_rejeicao', type: 'string', isOptional: true },
         { name: 'validado_em', type: 'string', isOptional: true },
         { name: 'criado_em', type: 'string' },
+      ],
+    }),
+    tableSchema({
+      name: 'notificacoes',
+      columns: [
+        { name: 'tipo', type: 'string' },
+        { name: 'titulo', type: 'string' },
+        { name: 'mensagem', type: 'string' },
+        { name: 'referencia_tipo', type: 'string', isOptional: true },
+        { name: 'referencia_id', type: 'string', isOptional: true },
+        { name: 'lida', type: 'boolean', isIndexed: true },
+        { name: 'criada_em', type: 'string', isIndexed: true },
       ],
     }),
     tableSchema({

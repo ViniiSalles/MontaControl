@@ -23,6 +23,7 @@ import { Peca } from '../Peca';
 import { TipoAvaria } from '../TipoAvaria';
 import { Avaria } from '../Avaria';
 import { Atestado } from '../Atestado';
+import { Notificacao } from '../Notificacao';
 
 // O LokiJSAdapter loga cada etapa de setup/migração (e avisa do `useIncrementalIndexedDB:
 // false`) em `console.log/warn` — ruído em toda suíte de banco. Os testes verificam
@@ -40,6 +41,7 @@ export const modelClasses = [
   TipoAvaria,
   Avaria,
   Atestado,
+  Notificacao,
 ];
 
 /** Banco local em memória, para teste — mesmo schema/modelos/migrações do app real, sem SQLite nativo. */

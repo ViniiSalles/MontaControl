@@ -4,6 +4,7 @@ import {
   SYNC_JANELA_AVARIAS_DIAS,
   SYNC_JANELA_BANCO_HORAS_MESES,
   SYNC_JANELA_JORNADAS_DIAS,
+  SYNC_JANELA_NOTIFICACOES_DIAS,
   SYNC_SCHEMA_VERSION,
   TABELAS_SYNC,
   diaNoFuso,
@@ -18,6 +19,7 @@ import type { CompetenciaInicial } from '../banco-horas/banco-horas.repository';
 import { BancoHorasService } from '../banco-horas/banco-horas.service';
 import { FUSO_OPERACAO } from '../common/fuso';
 import { JornadasRepository } from '../jornadas/jornadas.repository';
+import { NotificacoesRepository } from '../notificacoes/notificacoes.repository';
 import { PecasRepository } from '../pecas/pecas.repository';
 import { PedidosRepository } from '../pedidos/pedidos.repository';
 import { VersaoSchemaIncompativelException } from './exceptions/versao-schema-incompativel.exception';
@@ -29,6 +31,7 @@ import {
   paraLinhaAvaria,
   paraLinhaBancoHoras,
   paraLinhaJornada,
+  paraLinhaNotificacao,
   paraLinhaPeca,
   paraLinhaPedido,
   paraLinhaTipoAvaria,
@@ -71,6 +74,7 @@ export class SyncService {
     private readonly tiposAvaria: TiposAvariaRepository,
     private readonly avarias: AvariasRepository,
     private readonly atestados: AtestadosRepository,
+    private readonly notificacoes: NotificacoesRepository,
     private readonly exclusoes: SyncExclusaoRepository,
   ) {}
 
@@ -129,6 +133,7 @@ export class SyncService {
       tiposAvaria,
       avarias,
       atestados,
+      notificacoes,
       excluidos,
     ] = await Promise.all([
       this.jornadas.listarParaSync(usuarioId, desdeJornadas, alteradosDesde),
@@ -139,6 +144,11 @@ export class SyncService {
       this.tiposAvaria.listarParaSync(alteradosDesde),
       this.avarias.listarParaSync(usuarioId, desdeAvarias, alteradosDesde),
       this.atestados.listarParaSync(usuarioId, desdeAtestados, alteradosDesde),
+      this.notificacoes.listarParaSync(
+        usuarioId,
+        alteradosDesde ?? null,
+        SYNC_JANELA_NOTIFICACOES_DIAS,
+      ),
       alteradosDesde ? this.exclusoes.listarDesde(usuarioId, alteradosDesde) : [],
     ]);
 
@@ -152,6 +162,7 @@ export class SyncService {
         tipos_avaria: { ...mudancasVazias(), updated: tiposAvaria.map(paraLinhaTipoAvaria) },
         avarias: { ...mudancasVazias(), updated: avarias.map(paraLinhaAvaria) },
         atestados: { ...mudancasVazias(), updated: atestados.map(paraLinhaAtestado) },
+        notificacoes: { ...mudancasVazias(), updated: notificacoes.map(paraLinhaNotificacao) },
       },
       timestamp,
     };

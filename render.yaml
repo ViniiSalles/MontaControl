@@ -16,10 +16,14 @@
 # `DIRECT_URL`). Se a migração falhar, o deploy falha e a versão anterior
 # continua no ar.
 #
-# O Web sempre chama `/api/...` no mesmo origin (ver apps/web/vite.config.ts),
+# A REST do Web chama `/api/...` no mesmo origin (ver apps/web/vite.config.ts),
 # então o site estático reescreve `/api/*` para a API do seu ambiente — sem
-# CORS. Se o Render atribuir à API um subdomínio diferente do nome do serviço
-# (ex.: com sufixo aleatório), atualizar o destino da rota abaixo.
+# CORS. O WebSocket de notificações (`/socket.io`) NÃO passa por esse rewrite
+# (o Render não faz proxy de WebSocket em site estático): o Web conecta direto
+# na API pela URL de build `VITE_WS_URL`, e a API libera a origem do Web em
+# `WS_CORS_ORIGENS`. Se o Render atribuir à API ou ao Web um subdomínio
+# diferente do nome do serviço (ex.: com sufixo aleatório), atualizar o
+# destino da rota `/api/*`, o `VITE_WS_URL` e o `WS_CORS_ORIGENS` abaixo.
 
 projects:
   - name: montacontrol
@@ -72,6 +76,9 @@ projects:
                 sync: false
               - key: PASSWORD_RESET_REDIRECT_URL
                 value: https://montacontrol-web.onrender.com/login
+              # Origem do Web liberada no CORS do handshake do WebSocket.
+              - key: WS_CORS_ORIGENS
+                value: https://montacontrol-web.onrender.com
               - key: SUPABASE_BUCKET_ATESTADOS
                 value: atestados
               - key: SUPABASE_BUCKET_AVARIAS
@@ -111,6 +118,9 @@ projects:
             envVars:
               - key: NODE_VERSION
                 value: "22"
+              # Lida no build (Vite): o socket de notificações conecta direto na API.
+              - key: VITE_WS_URL
+                value: https://montacontrol-api.onrender.com
             routes:
               # Ordem importa: a primeira regra que casa vence.
               - type: rewrite
@@ -168,6 +178,9 @@ projects:
                 sync: false
               - key: PASSWORD_RESET_REDIRECT_URL
                 value: https://montacontrol-web-dev.onrender.com/login
+              # Origem do Web liberada no CORS do handshake do WebSocket.
+              - key: WS_CORS_ORIGENS
+                value: https://montacontrol-web-dev.onrender.com
               - key: SUPABASE_BUCKET_ATESTADOS
                 value: atestados
               - key: SUPABASE_BUCKET_AVARIAS
@@ -207,6 +220,9 @@ projects:
             envVars:
               - key: NODE_VERSION
                 value: "22"
+              # Lida no build (Vite): o socket de notificações conecta direto na API.
+              - key: VITE_WS_URL
+                value: https://montacontrol-api-dev.onrender.com
             routes:
               - type: rewrite
                 source: /api/*

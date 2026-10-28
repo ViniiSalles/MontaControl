@@ -4,6 +4,7 @@ import { Perfil } from '@montacontrol/shared'
 import { ProvedorAuth } from './auth/AuthContext'
 import { RotaInicial } from './auth/RotaInicial'
 import { RotaProtegida } from './auth/RotaProtegida'
+import { ProvedorNotificacoes } from './notificacoes/ProvedorNotificacoes'
 
 // Rotas carregadas sob demanda (code-splitting por rota) — cada página é seu
 // próprio módulo, sem barril, para não puxar telas não visitadas para o
@@ -21,120 +22,131 @@ const Triagem = lazy(() => import('./paginas/Triagem.tsx'))
 const Montadores = lazy(() => import('./paginas/Montadores.tsx'))
 const BancoHoras = lazy(() => import('./paginas/BancoHoras.tsx'))
 const EspelhoPonto = lazy(() => import('./paginas/EspelhoPonto.tsx'))
+const Notificacoes = lazy(() => import('./paginas/Notificacoes.tsx'))
 
 function App() {
   return (
     <ProvedorAuth>
-      <Suspense fallback={null}>
-        <Routes>
-          <Route path="/" element={<RotaInicial />} />
-          <Route path="/login" element={<Login />} />
-          <Route
-            path="/dashboard"
-            element={
-              <RotaProtegida perfilExigido={Perfil.GESTOR}>
-                <Dashboard />
-              </RotaProtegida>
-            }
-          />
-          <Route
-            path="/pedidos"
-            element={
-              <RotaProtegida perfilExigido={Perfil.GESTOR}>
-                <Pedidos />
-              </RotaProtegida>
-            }
-          />
-          <Route
-            path="/clientes"
-            element={
-              <RotaProtegida perfilExigido={Perfil.GESTOR}>
-                <Clientes />
-              </RotaProtegida>
-            }
-          />
-          <Route
-            path="/equipes"
-            element={
-              <RotaProtegida perfilExigido={Perfil.GESTOR}>
-                <Equipes />
-              </RotaProtegida>
-            }
-          />
-          <Route
-            path="/epis"
-            element={
-              <RotaProtegida perfilExigido={Perfil.GESTOR}>
-                <Epis />
-              </RotaProtegida>
-            }
-          />
-          <Route
-            path="/avarias"
-            element={
-              <RotaProtegida perfilExigido={Perfil.GESTOR}>
-                <Avarias />
-              </RotaProtegida>
-            }
-          />
-          <Route
-            path="/colaboradores"
-            element={
-              <RotaProtegida perfilExigido={Perfil.GESTOR}>
-                <Colaboradores />
-              </RotaProtegida>
-            }
-          />
-          <Route
-            path="/atestados"
-            element={
-              <RotaProtegida perfilExigido={Perfil.RH}>
-                <Atestados />
-              </RotaProtegida>
-            }
-          />
-          <Route
-            path="/triagem"
-            element={
-              <RotaProtegida perfilExigido={Perfil.DEPOSITO}>
-                <Triagem />
-              </RotaProtegida>
-            }
-          />
-          <Route
-            path="/montadores"
-            element={
-              <RotaProtegida perfilExigido={Perfil.RH}>
-                <Montadores />
-              </RotaProtegida>
-            }
-          />
-          <Route
-            path="/banco-horas"
-            element={
-              <RotaProtegida perfilExigido={Perfil.RH}>
-                <BancoHoras />
-              </RotaProtegida>
-            }
-          />
-          <Route
-            path="/espelho-ponto"
-            element={
-              <RotaProtegida perfilExigido={Perfil.RH}>
-                <EspelhoPonto />
-              </RotaProtegida>
-            }
-          />
-          <Route
-            path="/espelho-ponto/:usuarioId"
-            element={
-              <RotaProtegida perfilExigido={Perfil.RH}>
-                <EspelhoPonto />
-              </RotaProtegida>
-            }
-          />
-        </Routes>
-      </Suspense>
+      <ProvedorNotificacoes>
+        <Suspense fallback={null}>
+          <Routes>
+            <Route path="/" element={<RotaInicial />} />
+            <Route path="/login" element={<Login />} />
+            <Route
+              path="/dashboard"
+              element={
+                <RotaProtegida perfilExigido={Perfil.GESTOR}>
+                  <Dashboard />
+                </RotaProtegida>
+              }
+            />
+            <Route
+              path="/pedidos"
+              element={
+                <RotaProtegida perfilExigido={Perfil.GESTOR}>
+                  <Pedidos />
+                </RotaProtegida>
+              }
+            />
+            <Route
+              path="/clientes"
+              element={
+                <RotaProtegida perfilExigido={Perfil.GESTOR}>
+                  <Clientes />
+                </RotaProtegida>
+              }
+            />
+            <Route
+              path="/equipes"
+              element={
+                <RotaProtegida perfilExigido={Perfil.GESTOR}>
+                  <Equipes />
+                </RotaProtegida>
+              }
+            />
+            <Route
+              path="/epis"
+              element={
+                <RotaProtegida perfilExigido={Perfil.GESTOR}>
+                  <Epis />
+                </RotaProtegida>
+              }
+            />
+            <Route
+              path="/avarias"
+              element={
+                <RotaProtegida perfilExigido={Perfil.GESTOR}>
+                  <Avarias />
+                </RotaProtegida>
+              }
+            />
+            <Route
+              path="/colaboradores"
+              element={
+                <RotaProtegida perfilExigido={Perfil.GESTOR}>
+                  <Colaboradores />
+                </RotaProtegida>
+              }
+            />
+            <Route
+              path="/atestados"
+              element={
+                <RotaProtegida perfilExigido={Perfil.RH}>
+                  <Atestados />
+                </RotaProtegida>
+              }
+            />
+            <Route
+              path="/triagem"
+              element={
+                <RotaProtegida perfilExigido={Perfil.DEPOSITO}>
+                  <Triagem />
+                </RotaProtegida>
+              }
+            />
+            <Route
+              path="/montadores"
+              element={
+                <RotaProtegida perfilExigido={Perfil.RH}>
+                  <Montadores />
+                </RotaProtegida>
+              }
+            />
+            <Route
+              path="/banco-horas"
+              element={
+                <RotaProtegida perfilExigido={Perfil.RH}>
+                  <BancoHoras />
+                </RotaProtegida>
+              }
+            />
+            <Route
+              path="/espelho-ponto"
+              element={
+                <RotaProtegida perfilExigido={Perfil.RH}>
+                  <EspelhoPonto />
+                </RotaProtegida>
+              }
+            />
+            <Route
+              path="/espelho-ponto/:usuarioId"
+              element={
+                <RotaProtegida perfilExigido={Perfil.RH}>
+                  <EspelhoPonto />
+                </RotaProtegida>
+              }
+            />
+            <Route
+              path="/notificacoes"
+              element={
+                <RotaProtegida perfilExigido={[Perfil.GESTOR, Perfil.RH, Perfil.DEPOSITO]}>
+                  <Notificacoes />
+                </RotaProtegida>
+              }
+            />
+          </Routes>
+        </Suspense>
+      </ProvedorNotificacoes>
     </ProvedorAuth>
   )
 }

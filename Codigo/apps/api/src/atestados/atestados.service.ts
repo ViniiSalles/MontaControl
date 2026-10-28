@@ -1,4 +1,4 @@
-import { BadGatewayException, Injectable } from '@nestjs/common';
+import { BadGatewayException, Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type {
   AtestadoDTO,
@@ -7,8 +7,10 @@ import type {
   FotoBase64,
 } from '@montacontrol/shared';
 import { diaNoFuso, somarDias } from '@montacontrol/shared';
-import { StatusAtestado } from '../../generated/prisma';
+import { Perfil, StatusAtestado } from '../../generated/prisma';
 import { FUSO_OPERACAO } from '../common/fuso';
+import { notificarSemFalhar } from '../notificacoes/notificar-sem-falhar';
+import { NotificacoesService } from '../notificacoes/notificacoes.service';
 import { SupabaseStorageGateway } from '../supabase/supabase-storage.gateway';
 import { AtestadosRepository, FotoArmazenada } from './atestados.repository';
 import { AtestadoJaAnalisadoException } from './exceptions/atestado-ja-analisado.exception';
@@ -23,11 +25,19 @@ const EXTENSAO_POR_MIME: Record<string, string> = {
   'image/png': 'png',
 };
 
+/** `2026-09-01` -> `01/09/2026`, para o texto da notificação. */
+function formatarDia(dia: string): string {
+  return dia.split('-').reverse().join('/');
+}
+
 @Injectable()
 export class AtestadosService {
+  private readonly logger = new Logger(AtestadosService.name);
+
   constructor(
     private readonly atestados: AtestadosRepository,
     private readonly storage: SupabaseStorageGateway,
+    private readonly notificacoes: NotificacoesService,
   ) {}
 
   /**
@@ -47,7 +57,7 @@ export class AtestadosService {
       enviadas.push(await this.subirFoto(usuarioId, foto, enviadas));
     }
 
-    return this.atestados.criar({
+    const criado = await this.atestados.criar({
       usuarioId,
       idCliente: dados.idCliente,
       dataInicio: dados.dataInicio,
@@ -55,6 +65,20 @@ export class AtestadosService {
       observacao: dados.observacao?.trim() || null,
       fotos: enviadas,
     });
+
+    await notificarSemFalhar(
+      this.notificacoes,
+      {
+        perfis: [Perfil.RH],
+        tipo: 'ATESTADO_ENVIADO',
+        titulo: 'Atestado recebido',
+        mensagem: `${criado.usuarioNome} enviou um atestado de ${formatarDia(criado.dataInicio)} a ${formatarDia(criado.dataFim)}.`,
+        referencia: { tipo: 'ATESTADO', id: criado.id },
+        chaveOrigem: `atestado:${criado.id}:enviado`,
+      },
+      this.logger,
+    );
+    return criado;
   }
 
   async listarPendentes(): Promise<AtestadoDTO[]> {
@@ -93,11 +117,25 @@ export class AtestadosService {
 
   async validar(id: number, analistaId: number): Promise<AtestadoDTO> {
     await this.garantirPendente(id);
-    return this.atestados.analisar(id, {
+    const validado = await this.atestados.analisar(id, {
       status: StatusAtestado.VALIDADO,
       analistaId,
       motivoRejeicao: null,
     });
+
+    await notificarSemFalhar(
+      this.notificacoes,
+      {
+        usuarioIds: [validado.usuarioId],
+        tipo: 'ATESTADO_VALIDADO',
+        titulo: 'Atestado validado',
+        mensagem: `Seu atestado de ${formatarDia(validado.dataInicio)} a ${formatarDia(validado.dataFim)} foi validado.`,
+        referencia: { tipo: 'ATESTADO', id: validado.id },
+        chaveOrigem: `atestado:${validado.id}:validado`,
+      },
+      this.logger,
+    );
+    return validado;
   }
 
   async rejeitar(id: number, analistaId: number, motivo: string): Promise<AtestadoDTO> {
@@ -108,11 +146,25 @@ export class AtestadosService {
       throw new PeriodoAtestadoInvalidoException('a rejeição exige motivo preenchido');
     }
 
-    return this.atestados.analisar(id, {
+    const rejeitado = await this.atestados.analisar(id, {
       status: StatusAtestado.REJEITADO,
       analistaId,
       motivoRejeicao: motivoAparado,
     });
+
+    await notificarSemFalhar(
+      this.notificacoes,
+      {
+        usuarioIds: [rejeitado.usuarioId],
+        tipo: 'ATESTADO_REJEITADO',
+        titulo: 'Atestado rejeitado',
+        mensagem: `Seu atestado de ${formatarDia(rejeitado.dataInicio)} a ${formatarDia(rejeitado.dataFim)} foi rejeitado: ${motivoAparado}`,
+        referencia: { tipo: 'ATESTADO', id: rejeitado.id },
+        chaveOrigem: `atestado:${rejeitado.id}:rejeitado`,
+      },
+      this.logger,
+    );
+    return rejeitado;
   }
 
   private async garantirPendente(id: number): Promise<void> {

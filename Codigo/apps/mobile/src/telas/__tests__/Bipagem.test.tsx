@@ -9,6 +9,8 @@ jest.mock('../../sincronizacao/outbox', () => ({
 }));
 jest.mock('../../conferencia/useDadosConferencia', () => ({ useDadosConferencia: jest.fn() }));
 jest.mock('../../jornada/useObraEmTrabalho', () => ({ useObraEmTrabalho: jest.fn() }));
+// O sino do cabeçalho lê a réplica; aqui o banco é um objeto vazio.
+jest.mock('../../notificacoes/useNotificacoes', () => ({ useNotificacoes: () => ({ itens: [], naoLidas: 0 }) }));
 
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { StatusAmbiente, StatusPeca, StatusPedido } from '@montacontrol/shared';
@@ -68,7 +70,7 @@ async function digitarCodigo(codigo: string) {
 }
 
 test('mostra o progresso e o checklist do pedido ativo', async () => {
-  await render(<Bipagem aoIrParaJornada={irParaJornada} />);
+  await render(<Bipagem aoIrParaJornada={irParaJornada} aoAbrirNotificacoes={jest.fn()} />);
 
   expect(screen.getByText('STATUS DA BIPAGEM')).toBeTruthy();
   expect(screen.getByText('Faltam 1'.toUpperCase())).toBeTruthy();
@@ -76,7 +78,7 @@ test('mostra o progresso e o checklist do pedido ativo', async () => {
 });
 
 test('N4T1: peça do pedido ativo é conferida e a leitura vai para a fila', async () => {
-  await render(<Bipagem aoIrParaJornada={irParaJornada} />);
+  await render(<Bipagem aoIrParaJornada={irParaJornada} aoAbrirNotificacoes={jest.fn()} />);
   await digitarCodigo('COD-A');
 
   expect(screen.getByText('CONFERIDA')).toBeTruthy();
@@ -87,7 +89,7 @@ test('N4T1: peça do pedido ativo é conferida e a leitura vai para a fila', asy
 });
 
 test('N4T2: peça de outro pedido dispara o alerta de inconsistência', async () => {
-  await render(<Bipagem aoIrParaJornada={irParaJornada} />);
+  await render(<Bipagem aoIrParaJornada={irParaJornada} aoAbrirNotificacoes={jest.fn()} />);
   await digitarCodigo('COD-X');
 
   expect(screen.getByText('Peça de outro pedido — não descarregue')).toBeTruthy();
@@ -99,7 +101,7 @@ test('N4T2: peça de outro pedido dispara o alerta de inconsistência', async ()
 
 test('confere o pedido da obra em trabalho, não o primeiro da réplica', async () => {
   jest.mocked(useObraEmTrabalho).mockReturnValue({ obra: PEDIDOS[1], motivo: null, carregando: false });
-  await render(<Bipagem aoIrParaJornada={irParaJornada} />);
+  await render(<Bipagem aoIrParaJornada={irParaJornada} aoAbrirNotificacoes={jest.fn()} />);
   await digitarCodigo('COD-X');
 
   expect(screen.getByText('CONFERIDA')).toBeTruthy();
@@ -110,7 +112,7 @@ test('confere o pedido da obra em trabalho, não o primeiro da réplica', async 
 });
 
 test('não oferece escolher pedido: a obra aparece só para leitura', async () => {
-  await render(<Bipagem aoIrParaJornada={irParaJornada} />);
+  await render(<Bipagem aoIrParaJornada={irParaJornada} aoAbrirNotificacoes={jest.fn()} />);
 
   expect(screen.getByText('Cliente 1')).toBeTruthy();
   expect(screen.queryByText('PEDIDO EM DESCARREGAMENTO')).toBeNull();
@@ -119,7 +121,7 @@ test('não oferece escolher pedido: a obra aparece só para leitura', async () =
 
 test('sem ponto aberto, bloqueia e leva à Jornada', async () => {
   jest.mocked(useObraEmTrabalho).mockReturnValue({ obra: null, motivo: 'sem_ponto', carregando: false });
-  await render(<Bipagem aoIrParaJornada={irParaJornada} />);
+  await render(<Bipagem aoIrParaJornada={irParaJornada} aoAbrirNotificacoes={jest.fn()} />);
 
   expect(screen.getByText('Bata o ponto de entrada para conferir peças')).toBeTruthy();
   expect(screen.queryByText('Digitar código manualmente')).toBeNull();
@@ -133,14 +135,14 @@ test('obra do ponto sem as peças no aparelho pede para sincronizar', async () =
     motivo: null,
     carregando: false,
   });
-  await render(<Bipagem aoIrParaJornada={irParaJornada} />);
+  await render(<Bipagem aoIrParaJornada={irParaJornada} aoAbrirNotificacoes={jest.fn()} />);
 
   expect(screen.getByText('Dados da obra fora do aparelho')).toBeTruthy();
 });
 
 test('enquanto a obra carrega, mostra o carregamento e não o bloqueio', async () => {
   jest.mocked(useObraEmTrabalho).mockReturnValue({ obra: null, motivo: 'sem_ponto', carregando: true });
-  await render(<Bipagem aoIrParaJornada={irParaJornada} />);
+  await render(<Bipagem aoIrParaJornada={irParaJornada} aoAbrirNotificacoes={jest.fn()} />);
 
   expect(screen.queryByText('Bata o ponto de entrada para conferir peças')).toBeNull();
   expect(screen.queryByText('Ir para a Jornada')).toBeNull();

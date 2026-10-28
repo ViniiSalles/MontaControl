@@ -4,6 +4,7 @@ import { AtestadosModule } from '../atestados/atestados.module';
 import { AvariasModule } from '../avarias/avarias.module';
 import { BancoHorasModule } from '../banco-horas/banco-horas.module';
 import { JornadasModule } from '../jornadas/jornadas.module';
+import { NotificacoesModule } from '../notificacoes/notificacoes.module';
 import { PecasModule } from '../pecas/pecas.module';
 import { PedidosModule } from '../pedidos/pedidos.module';
 import { SyncExclusaoModule } from './sync-exclusao.module';
@@ -21,6 +22,7 @@ import { SyncService } from './sync.service';
     PecasModule,
     AvariasModule,
     AtestadosModule,
+    NotificacoesModule,
   ],
   controllers: [SyncController],
   providers: [SyncService],

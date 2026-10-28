@@ -7,6 +7,7 @@ import { Alerta } from '../ui/Alerta';
 import { Badge } from '../ui/Badge';
 import type { VarianteBadge } from '@montacontrol/ui-contracts/badge';
 import { Botao } from '../ui/Botao';
+import { BotaoNotificacoes } from '../notificacoes/BotaoNotificacoes';
 import { BotaoSincronizacao } from '../sincronizacao/BotaoSincronizacao';
 import { Cartao } from '../ui/Cartao';
 import { Icone } from '../ui/Icone';
@@ -17,6 +18,7 @@ import { textoPeriodo } from '../atestados/formatarPeriodo';
 import type { AtestadoExibido } from '../atestados/atestadosComPendentes';
 import { atestadosRecentes } from '../atestados/recentes';
 import { useMeusAtestados } from '../atestados/useMeusAtestados';
+import type { PropsTelaDaAba } from '../navegacao/telaDaAba';
 import { AvisosDeAcoesRecusadas } from './AvisosDeAcoesRecusadas';
 import { NovoAtestado } from './atestados/NovoAtestado';
 
@@ -73,7 +75,7 @@ function ItemHistorico({ atestado }: { atestado: AtestadoExibido }) {
 }
 
 /** US13/UC18 — envio de atestado pelo montador, com foto e acompanhamento da análise. */
-export function Atestados() {
+export function Atestados({ aoAbrirNotificacoes }: Pick<PropsTelaDaAba, 'aoAbrirNotificacoes'>) {
   const { atestados, carregando, erro, recarregar } = useMeusAtestados();
   const [aviso, setAviso] = useState<string | null>(null);
   const [mostrarTodos, setMostrarTodos] = useState<boolean>(false);
@@ -91,6 +93,7 @@ export function Atestados() {
           <View style={{ flex: 1 }}>
             <Texto variante="headlineMd">Atestados Médicos</Texto>
           </View>
+          <BotaoNotificacoes aoPressionar={aoAbrirNotificacoes} />
           <BotaoSincronizacao aoSincronizar={() => void recarregar()} />
         </View>
 

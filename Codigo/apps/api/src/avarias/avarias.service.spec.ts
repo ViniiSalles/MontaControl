@@ -1,6 +1,7 @@
 import {
   BadGatewayException,
   ConflictException,
+  Logger,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
@@ -12,6 +13,7 @@ import { AvariasStorageGateway } from '../supabase/avarias-storage.gateway';
 import { AvariasRepository } from './avarias.repository';
 import { AvariasService } from './avarias.service';
 import { TiposAvariaRepository } from './tipos-avaria.repository';
+import { NotificacoesService } from '../notificacoes/notificacoes.service';
 
 const UM_PIXEL_PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
@@ -67,6 +69,7 @@ describe('AvariasService', () => {
   let pecas: { buscarPorId: jest.Mock };
   let pedidos: { montadorVinculado: jest.Mock };
   let storage: { enviar: jest.Mock; gerarUrlAssinada: jest.Mock; remover: jest.Mock };
+  let notificacoes: { notificar: jest.Mock };
   let service: AvariasService;
 
   beforeEach(() => {
@@ -88,12 +91,16 @@ describe('AvariasService', () => {
       gerarUrlAssinada: jest.fn().mockResolvedValue('https://storage.local/assinada'),
       remover: jest.fn(),
     };
+    // As falhas simuladas de notificar são logadas pelo service; sem ruído no output.
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    notificacoes = { notificar: jest.fn().mockResolvedValue(undefined) };
     service = new AvariasService(
       avarias as unknown as AvariasRepository,
       tipos as unknown as TiposAvariaRepository,
       pecas as unknown as PecasRepository,
       pedidos as unknown as PedidosRepository,
       storage as unknown as AvariasStorageGateway,
+      notificacoes as unknown as NotificacoesService,
     );
   });
 
@@ -182,6 +189,45 @@ describe('AvariasService', () => {
       ).rejects.toThrow('banco fora');
       expect(storage.remover).toHaveBeenCalledTimes(1);
     });
+
+    it('reportar notifica GESTORes com chaveOrigem avaria:{id}:reportada', async () => {
+      await service.reportar(usuario(Perfil.DEPOSITO), corpoReporte());
+
+      expect(notificacoes.notificar).toHaveBeenCalledTimes(1);
+      expect(notificacoes.notificar).toHaveBeenCalledWith({
+        perfis: [Perfil.GESTOR],
+        tipo: 'AVARIA_REPORTADA',
+        titulo: 'Avaria reportada',
+        mensagem: expect.stringContaining('789'),
+        referencia: { tipo: 'AVARIA', id: 3 },
+        chaveOrigem: 'avaria:3:reportada',
+      });
+    });
+
+    it('reportar idempotente (jaCriada) não notifica', async () => {
+      avarias.buscarPorIdCliente.mockResolvedValue(avariaReportada);
+
+      await service.reportar(usuario(Perfil.MONTADOR), corpoReporte());
+
+      expect(notificacoes.notificar).not.toHaveBeenCalled();
+    });
+
+    it('reportar com falha ao gravar não notifica', async () => {
+      avarias.criar.mockRejectedValue(new Error('banco fora'));
+
+      await expect(service.reportar(usuario(Perfil.DEPOSITO), corpoReporte())).rejects.toThrow(
+        'banco fora',
+      );
+      expect(notificacoes.notificar).not.toHaveBeenCalled();
+    });
+
+    it('falha de notificar não faz a operação lançar', async () => {
+      notificacoes.notificar.mockRejectedValue(new Error('socket fora'));
+
+      await expect(service.reportar(usuario(Perfil.DEPOSITO), corpoReporte())).resolves.toBe(
+        avariaReportada,
+      );
+    });
   });
 
   describe('atualizarStatus', () => {
@@ -240,12 +286,41 @@ describe('AvariasService', () => {
       );
     });
 
-    it('perder a corrida para outro gestor é 409', async () => {
+    it('perder a corrida para outro gestor é 409 e não notifica', async () => {
       avarias.buscarPorId.mockResolvedValue(avariaReportada);
       avarias.analisar.mockResolvedValue(null);
 
       await expect(service.atualizarStatus(3, 99, StatusAvaria.EM_ANALISE)).rejects.toThrow(
         ConflictException,
+      );
+      expect(notificacoes.notificar).not.toHaveBeenCalled();
+    });
+
+    it('atualizarStatus notifica quem registrou com avaria:{id}:{status}', async () => {
+      avarias.buscarPorId.mockResolvedValue(avariaReportada);
+      avarias.analisar.mockResolvedValue({ ...avariaReportada, status: StatusAvaria.EM_ANALISE });
+
+      await service.atualizarStatus(3, 99, StatusAvaria.EM_ANALISE);
+
+      expect(notificacoes.notificar).toHaveBeenCalledTimes(1);
+      expect(notificacoes.notificar).toHaveBeenCalledWith({
+        usuarioIds: [7],
+        tipo: 'AVARIA_ATUALIZADA',
+        titulo: 'Atualização da avaria',
+        mensagem: expect.stringContaining('em análise'),
+        referencia: { tipo: 'AVARIA', id: 3 },
+        chaveOrigem: 'avaria:3:EM_ANALISE',
+      });
+    });
+
+    it('atualizarStatus: falha de notificar não faz a operação lançar', async () => {
+      avarias.buscarPorId.mockResolvedValue(avariaReportada);
+      const atualizada = { ...avariaReportada, status: StatusAvaria.EM_ANALISE };
+      avarias.analisar.mockResolvedValue(atualizada);
+      notificacoes.notificar.mockRejectedValue(new Error('socket fora'));
+
+      await expect(service.atualizarStatus(3, 99, StatusAvaria.EM_ANALISE)).resolves.toBe(
+        atualizada,
       );
     });
 

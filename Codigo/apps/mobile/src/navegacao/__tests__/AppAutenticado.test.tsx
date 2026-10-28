@@ -5,7 +5,11 @@ jest.mock('../../auth/armazenamentoSessao', () => ({
 jest.mock('../../banco-horas/clienteBancoHoras');
 jest.mock('../../avarias/clienteAvarias');
 jest.mock('../../atestados/clienteAtestados');
+jest.mock('../../notificacoes/clienteNotificacoes');
+// O canal de tempo real é coberto em iniciarSocket.test.ts; aqui não abre socket de verdade.
+jest.mock('../../sincronizacao/useSocketDoApp');
 
+import { BackHandler } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { DatabaseProvider } from '@nozbe/watermelondb/react';
 import { useAuth } from '../../auth/AuthContext';
@@ -15,9 +19,12 @@ import { enviarAvaria } from '../../avarias/clienteAvarias';
 import { buscarBancoHoras } from '../../banco-horas/clienteBancoHoras';
 import { periodoAtual } from '../../banco-horas/periodo';
 import { AcaoPendente } from '../../db/AcaoPendente';
-import { criarBancoDeTeste, pullSemMudancas } from '../../db/__tests__/apoio';
+import { criarBancoDeTeste, gravarLinhasNaReplica, pullSemMudancas } from '../../db/__tests__/apoio';
 import { useSincronizacaoStore } from '../../estado/sincronizacaoStore';
+import { marcarNotificacaoLida } from '../../notificacoes/clienteNotificacoes';
+import { linhaDeNotificacao } from '../../notificacoes/__tests__/apoioNotificacoes';
 import { instalarGatilhosFalsos } from '../../sincronizacao/__tests__/gatilhosFalsos';
+import { useSocketDoApp } from '../../sincronizacao/useSocketDoApp';
 import { AppAutenticado } from '../AppAutenticado';
 
 const { mes: MES, ano: ANO } = periodoAtual(new Date().toISOString());
@@ -214,4 +221,158 @@ test('sem ponto aberto, "Ir para a Jornada" na Bipagem troca para a aba Jornada'
   await fireEvent.press(screen.getByText('Ir para a Jornada'));
 
   await waitFor(() => expect(screen.getByText('Jornada de Trabalho')).toBeTruthy());
+});
+
+test('liga o canal de tempo real junto com a sincronização do app autenticado', async () => {
+  await render(arvore());
+
+  expect(useSocketDoApp).toHaveBeenCalled();
+});
+
+describe('notificações', () => {
+  const ROTULO_DO_SINO = /^Notificações, \d+ não lidas?$/;
+
+  /** Captura os ouvintes do voltar do Android; o último registrado é o que o sistema chamaria primeiro. */
+  function espionarVoltarDoAndroid() {
+    type Ouvinte = Parameters<typeof BackHandler.addEventListener>[1];
+    const ouvintes: Ouvinte[] = [];
+    jest.spyOn(BackHandler, 'addEventListener').mockImplementation((_evento, ouvinte) => {
+      ouvintes.push(ouvinte);
+      return { remove: () => ouvintes.splice(ouvintes.indexOf(ouvinte), 1) };
+    });
+    return () => ouvintes[ouvintes.length - 1]({} as Parameters<Ouvinte>[0]);
+  }
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  test('o sino aparece no cabeçalho das quatro abas', async () => {
+    await render(arvore());
+
+    for (const aba of ['Jornada', 'Bipagem', 'Avarias', 'Atestados']) {
+      await irParaAba(aba);
+      expect(screen.getByLabelText(ROTULO_DO_SINO)).toBeTruthy();
+    }
+  });
+
+  test('o sino abre a tela de notificações e o voltar do Android fecha, de volta à aba de origem', async () => {
+    const voltarDoAndroid = espionarVoltarDoAndroid();
+    await render(arvore());
+    await irParaAba('Avarias');
+    await waitFor(() => expect(screen.getByText('MEUS REPORTES')).toBeTruthy());
+
+    await fireEvent.press(screen.getByLabelText(ROTULO_DO_SINO));
+
+    await waitFor(() => expect(screen.getByText('Nenhuma mensagem nova')).toBeTruthy());
+    expect(screen.queryByText('MEUS REPORTES')).toBeNull();
+    // A barra inferior segue visível.
+    expect(screen.getAllByText('Atestados').length).toBeGreaterThan(0);
+
+    await act(async () => {
+      expect(voltarDoAndroid()).toBe(true);
+    });
+
+    await waitFor(() => expect(screen.getByText('MEUS REPORTES')).toBeTruthy());
+    expect(screen.queryByText('Nenhuma mensagem nova')).toBeNull();
+  });
+
+  test('o botão de voltar da tela fecha e mantém a aba ativa', async () => {
+    await render(arvore());
+    await irParaAba('Atestados');
+    await fireEvent.press(screen.getByLabelText(ROTULO_DO_SINO));
+    await waitFor(() => expect(screen.getByText('Nenhuma mensagem nova')).toBeTruthy());
+
+    await fireEvent.press(screen.getByLabelText('Voltar'));
+
+    await waitFor(() => expect(screen.getByText('HISTÓRICO RECENTE')).toBeTruthy());
+  });
+
+  test('tocar em uma aba da barra com a tela aberta fecha a tela e troca de aba', async () => {
+    await render(arvore());
+    await fireEvent.press(screen.getByLabelText(ROTULO_DO_SINO));
+    await waitFor(() => expect(screen.getByText('Nenhuma mensagem nova')).toBeTruthy());
+
+    await irParaAba('Avarias');
+
+    await waitFor(() => expect(screen.getByText('MEUS REPORTES')).toBeTruthy());
+    expect(screen.queryByText('Nenhuma mensagem nova')).toBeNull();
+  });
+
+  test('"Ver detalhes" de uma avaria fecha a tela e abre a aba Avarias', async () => {
+    jest.mocked(marcarNotificacaoLida).mockResolvedValue(undefined);
+    await gravarLinhasNaReplica(database, 'notificacoes', [
+      linhaDeNotificacao({ tipo: 'AVARIA_ATUALIZADA', titulo: 'Avaria em análise' }),
+    ]);
+    await render(arvore());
+    await fireEvent.press(screen.getByLabelText(ROTULO_DO_SINO));
+    await waitFor(() => expect(screen.getByText('Avaria em análise')).toBeTruthy());
+
+    await fireEvent.press(screen.getByText('Ver detalhes'));
+
+    await waitFor(() => expect(screen.getByText('MEUS REPORTES')).toBeTruthy());
+    expect(screen.queryByText('Avaria em análise')).toBeNull();
+  });
+});
+
+describe('aba preservada sob as notificações', () => {
+  const ROTULO_DO_SINO = /^Notificações, \d+ não lidas?$/;
+  type Ouvinte = Parameters<typeof BackHandler.addEventListener>[1];
+
+  /** Mantém a lista dos ouvintes do voltar do Android ainda registrados (remover tira da lista). */
+  function espionarVoltarDoAndroid() {
+    const registrados: Ouvinte[] = [];
+    jest.spyOn(BackHandler, 'addEventListener').mockImplementation((_evento, ouvinte) => {
+      registrados.push(ouvinte);
+      return { remove: () => void registrados.splice(registrados.indexOf(ouvinte), 1) };
+    });
+    return registrados;
+  }
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  test('abrir notificações mantém a aba ativa montada (estado preservado)', async () => {
+    await render(arvore());
+    await irParaAba('Atestados');
+    await fireEvent.changeText(screen.getByPlaceholderText('Descreva brevemente o motivo…'), 'Consulta de rotina');
+
+    await fireEvent.press(screen.getByLabelText(ROTULO_DO_SINO));
+
+    await waitFor(() => expect(screen.getByText('Nenhuma mensagem nova')).toBeTruthy());
+    // Escondida, não desmontada: o formulário (não persistido, com dados de saúde) segue de pé.
+    expect(screen.queryByPlaceholderText('Descreva brevemente o motivo…')).toBeNull();
+    expect(screen.getByPlaceholderText('Descreva brevemente o motivo…', { includeHiddenElements: true })).toBeTruthy();
+
+    await fireEvent.press(screen.getByLabelText('Voltar'));
+
+    await waitFor(() => expect(screen.getByDisplayValue('Consulta de rotina')).toBeTruthy());
+  });
+
+  test('voltar do Android fecha as notificações sem acionar a pilha da aba oculta', async () => {
+    const registrados = espionarVoltarDoAndroid();
+    await render(arvore());
+    // A pilha da Jornada abre o histórico (registra o voltar dela) e volta.
+    await fireEvent.press(screen.getByText('Histórico de pontos'));
+    await waitFor(() => expect(registrados).toHaveLength(1));
+    await act(async () => {
+      registrados[0]({} as Parameters<Ouvinte>[0]);
+    });
+    await waitFor(() => expect(screen.getByText('Jornada de Trabalho')).toBeTruthy());
+    expect(registrados).toHaveLength(0);
+
+    await fireEvent.press(screen.getByLabelText(ROTULO_DO_SINO));
+    await waitFor(() => expect(screen.getByText('Nenhuma mensagem nova')).toBeTruthy());
+
+    // Só o ouvinte das notificações está ativo; a pilha (montada, oculta) não compete por ele.
+    expect(registrados).toHaveLength(1);
+    await act(async () => {
+      expect(registrados[0]({} as Parameters<Ouvinte>[0])).toBe(true);
+    });
+
+    await waitFor(() => expect(screen.getByText('Jornada de Trabalho')).toBeTruthy());
+    expect(screen.queryByText('Nenhuma mensagem nova')).toBeNull();
+    expect(registrados).toHaveLength(0);
+  });
 });

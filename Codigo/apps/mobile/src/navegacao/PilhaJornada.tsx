@@ -4,6 +4,7 @@ import { Historico } from '../telas/Historico';
 import { Jornada } from '../telas/Jornada';
 import { ModalPontoEmAtraso } from '../telas/jornada/ModalPontoEmAtraso';
 import { useVoltarDoAndroid } from './useVoltarDoAndroid';
+import type { PropsTelaDaAba } from './telaDaAba';
 
 type Vista = 'jornada' | 'historico' | 'bancoHoras';
 
@@ -16,7 +17,7 @@ type Vista = 'jornada' | 'historico' | 'bancoHoras';
  * três vistas (jornada, histórico, banco de horas) e uma folha modal, e
  * `BarraNavInferior` já resolve o nível de cima.
  */
-export function PilhaJornada() {
+export function PilhaJornada({ aoAbrirNotificacoes }: PropsTelaDaAba) {
   const [vista, setVista] = useState<Vista>('jornada');
   // `null` = folha fechada. Aberta, `data` é o dia que o card do histórico
   // mandou, ou `null` quando veio do botão solto da tela de jornada.
@@ -39,6 +40,7 @@ export function PilhaJornada() {
           aoAbrirHistorico={() => setVista('historico')}
           aoAbrirBancoHoras={() => setVista('bancoHoras')}
           aoLancarEmAtraso={() => setPontoEmAtraso({ data: null })}
+          aoAbrirNotificacoes={aoAbrirNotificacoes}
         />
       )}
 

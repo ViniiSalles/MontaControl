@@ -227,7 +227,33 @@ export const syncPullFixture: SyncPullResponse = {
       ],
       deleted: [],
     },
+    notificacoes: {
+      created: [],
+      updated: [
+        {
+          id: '55',
+          tipo: 'ATESTADO_REJEITADO',
+          titulo: 'Atestado rejeitado',
+          mensagem: 'Seu atestado de 22/09 a 23/09 foi rejeitado: documento ilegível.',
+          referencia_tipo: 'ATESTADO',
+          referencia_id: '9',
+          lida: true,
+          criada_em: '2026-09-25T13:00:00.000Z',
+        },
+        {
+          id: '61',
+          tipo: 'AVARIA_ATUALIZADA',
+          titulo: 'Avaria em análise',
+          mensagem: 'Sua avaria da peça Porta de correr 2,10m está em análise.',
+          referencia_tipo: 'AVARIA',
+          referencia_id: '77',
+          lida: false,
+          criada_em: '2026-10-16T15:00:00.000Z',
+        },
+      ],
+      deleted: [],
+    },
   },
-  // Logo após a última linha do fixture (avaria 77, criada em 2026-10-16T14:20Z).
+  // Logo após a última linha do fixture (notificação 61, criada em 2026-10-16T15:00Z).
   timestamp: Date.parse('2026-10-16T21:00:00.000Z'),
 };

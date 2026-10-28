@@ -1,8 +1,14 @@
-import { BadGatewayException, ConflictException, UnprocessableEntityException } from '@nestjs/common';
-import { StatusAtestado } from '../../generated/prisma';
+import {
+  BadGatewayException,
+  ConflictException,
+  Logger,
+  UnprocessableEntityException,
+} from '@nestjs/common';
+import { Perfil, StatusAtestado } from '../../generated/prisma';
 import { SupabaseStorageGateway } from '../supabase/supabase-storage.gateway';
 import { AtestadosRepository } from './atestados.repository';
 import { AtestadosService } from './atestados.service';
+import { NotificacoesService } from '../notificacoes/notificacoes.service';
 
 const UM_PIXEL_PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
@@ -42,6 +48,7 @@ describe('AtestadosService', () => {
     analisar: jest.Mock;
   };
   let storage: { enviar: jest.Mock; gerarUrlAssinada: jest.Mock; remover: jest.Mock };
+  let notificacoes: { notificar: jest.Mock };
   let service: AtestadosService;
 
   beforeEach(() => {
@@ -59,9 +66,13 @@ describe('AtestadosService', () => {
       gerarUrlAssinada: jest.fn().mockResolvedValue('https://storage.local/assinada'),
       remover: jest.fn(),
     };
+    // As falhas simuladas de notificar são logadas pelo service; sem ruído no output.
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    notificacoes = { notificar: jest.fn().mockResolvedValue(undefined) };
     service = new AtestadosService(
       repository as unknown as AtestadosRepository,
       storage as unknown as SupabaseStorageGateway,
+      notificacoes as unknown as NotificacoesService,
     );
   });
 
@@ -133,6 +144,38 @@ describe('AtestadosService', () => {
 
       await expect(service.enviar(7, corpoEnvio())).rejects.toThrow(BadGatewayException);
       expect(repository.criar).not.toHaveBeenCalled();
+      expect(notificacoes.notificar).not.toHaveBeenCalled();
+    });
+
+    it('enviar atestado notifica RHs', async () => {
+      repository.criar.mockResolvedValue(atestadoPendente);
+
+      await service.enviar(7, corpoEnvio());
+
+      expect(notificacoes.notificar).toHaveBeenCalledTimes(1);
+      expect(notificacoes.notificar).toHaveBeenCalledWith({
+        perfis: [Perfil.RH],
+        tipo: 'ATESTADO_ENVIADO',
+        titulo: 'Atestado recebido',
+        mensagem: expect.stringContaining('Montador Um'),
+        referencia: { tipo: 'ATESTADO', id: 5 },
+        chaveOrigem: 'atestado:5:enviado',
+      });
+    });
+
+    it('enviar idempotente (jaCriado) não notifica', async () => {
+      repository.buscarPorIdCliente.mockResolvedValue(atestadoPendente);
+
+      await service.enviar(7, corpoEnvio());
+
+      expect(notificacoes.notificar).not.toHaveBeenCalled();
+    });
+
+    it('falha de notificar não faz a operação lançar', async () => {
+      repository.criar.mockResolvedValue(atestadoPendente);
+      notificacoes.notificar.mockRejectedValue(new Error('socket fora'));
+
+      await expect(service.enviar(7, corpoEnvio())).resolves.toEqual(atestadoPendente);
     });
   });
 
@@ -164,6 +207,62 @@ describe('AtestadosService', () => {
 
       await expect(service.validar(5, 2)).rejects.toThrow(ConflictException);
       expect(repository.analisar).not.toHaveBeenCalled();
+      expect(notificacoes.notificar).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('notificações da análise', () => {
+    it('validar/rejeitar notifica o montador', async () => {
+      repository.buscarPorId.mockResolvedValue({ ...atestadoPendente, fotos: [] });
+      repository.analisar.mockResolvedValueOnce({
+        ...atestadoPendente,
+        status: StatusAtestado.VALIDADO,
+      });
+
+      await service.validar(5, 2);
+
+      expect(notificacoes.notificar).toHaveBeenLastCalledWith({
+        usuarioIds: [7],
+        tipo: 'ATESTADO_VALIDADO',
+        titulo: 'Atestado validado',
+        mensagem: expect.any(String),
+        referencia: { tipo: 'ATESTADO', id: 5 },
+        chaveOrigem: 'atestado:5:validado',
+      });
+
+      repository.analisar.mockResolvedValueOnce({
+        ...atestadoPendente,
+        status: StatusAtestado.REJEITADO,
+        motivoRejeicao: 'Documento ilegível',
+      });
+
+      await service.rejeitar(5, 2, '  Documento ilegível  ');
+
+      expect(notificacoes.notificar).toHaveBeenCalledTimes(2);
+      expect(notificacoes.notificar).toHaveBeenLastCalledWith({
+        usuarioIds: [7],
+        tipo: 'ATESTADO_REJEITADO',
+        titulo: 'Atestado rejeitado',
+        mensagem: expect.stringContaining('Documento ilegível'),
+        referencia: { tipo: 'ATESTADO', id: 5 },
+        chaveOrigem: 'atestado:5:rejeitado',
+      });
+    });
+
+    it('rejeitar com motivo em branco não notifica', async () => {
+      repository.buscarPorId.mockResolvedValue({ ...atestadoPendente, fotos: [] });
+
+      await expect(service.rejeitar(5, 2, '   ')).rejects.toThrow(UnprocessableEntityException);
+      expect(notificacoes.notificar).not.toHaveBeenCalled();
+    });
+
+    it('validar: falha de notificar não faz a operação lançar', async () => {
+      const validado = { ...atestadoPendente, status: StatusAtestado.VALIDADO };
+      repository.buscarPorId.mockResolvedValue({ ...atestadoPendente, fotos: [] });
+      repository.analisar.mockResolvedValue(validado);
+      notificacoes.notificar.mockRejectedValue(new Error('socket fora'));
+
+      await expect(service.validar(5, 2)).resolves.toEqual(validado);
     });
   });
 

@@ -132,5 +132,25 @@ export const migrations = schemaMigrations({
         ),
       ],
     },
+    {
+      toVersion: 4,
+      steps: [
+        // Réplica das notificações do montador. Os índices de `lida` e `criada_em`
+        // saem do `isIndexed` do próprio `createTable`. O primeiro pull após a
+        // migração é completo (ver `pullChanges`).
+        createTable({
+          name: 'notificacoes',
+          columns: [
+            { name: 'tipo', type: 'string' },
+            { name: 'titulo', type: 'string' },
+            { name: 'mensagem', type: 'string' },
+            { name: 'referencia_tipo', type: 'string', isOptional: true },
+            { name: 'referencia_id', type: 'string', isOptional: true },
+            { name: 'lida', type: 'boolean', isIndexed: true },
+            { name: 'criada_em', type: 'string', isIndexed: true },
+          ],
+        }),
+      ],
+    },
   ],
 });

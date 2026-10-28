@@ -13,4 +13,5 @@ export * from './sync/tipos';
 export * from './sync/janelas';
 export * from './sync/fixture';
 export * from './avarias/tipos';
+export * from './notificacoes/tipos';
 export * from './epis/tipos';

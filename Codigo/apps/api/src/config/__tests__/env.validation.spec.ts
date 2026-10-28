@@ -65,3 +65,25 @@ describe('validate — IP do cliente atrás de proxy', () => {
     expect(() => validate({ ...BASE_VALIDA, CLIENT_IP_HEADER: 'x-forwarded-for' })).toThrow();
   });
 });
+
+describe('validate — CORS do gateway WebSocket', () => {
+  it('WS_CORS_ORIGENS é opcional', () => {
+    expect(validate({ ...BASE_VALIDA }).WS_CORS_ORIGENS).toBeUndefined();
+  });
+
+  it('aceita uma lista de origens separadas por vírgula', () => {
+    const origens = 'https://app.montacontrol.com.br, http://localhost:5173';
+    expect(validate({ ...BASE_VALIDA, WS_CORS_ORIGENS: origens }).WS_CORS_ORIGENS).toBe(origens);
+  });
+
+  it.each([
+    '*',
+    'app.montacontrol.com.br',
+    'https://ok.com,,https://b.com',
+    // Origem é esquema+host(+porta): barra final ou caminho nunca casam com o `Origin`.
+    'https://ok.com/',
+    'https://ok.com/app',
+  ])('rejeita WS_CORS_ORIGENS=%s', (valor) => {
+    expect(() => validate({ ...BASE_VALIDA, WS_CORS_ORIGENS: valor })).toThrow();
+  });
+});

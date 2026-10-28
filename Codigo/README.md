@@ -205,6 +205,29 @@ derrubam o boot com `Configuração de ambiente inválida` — de propósito.
 pelo app Mobile, e o Web pelo rewrite — continua recebendo `200`. Se as duas redes recebem `429`
 juntas, o cabeçalho não está chegando e o limite voltou a ser compartilhado.
 
+## WebSocket de notificações
+
+O gateway Socket.io da API fica no path padrão `/socket.io`. A REST do Web passa pelo rewrite
+`/api/*` do site estático, mas o socket não: o rewrite do Render não faz proxy de WebSocket, e
+`/socket.io/...` cairia no `/* → /index.html`. Por isso o Web conecta direto na API, em outro
+origin, e duas variáveis precisam andar juntas:
+
+| Variável | Onde | Efeito |
+| --- | --- | --- |
+| `WS_CORS_ORIGENS` | API (runtime) | Origens do Web liberadas no CORS do handshake, separadas por vírgula, só esquema+host (sem barra final nem caminho). Ausente: nenhuma origem de navegador liberada. |
+| `VITE_WS_URL` | Web (build do Vite) | URL da API onde o socket conecta. Ausente ou vazia: conecta no próprio origin (dev local, pelo proxy `/socket.io` do Vite). |
+
+Valores no `render.yaml`:
+
+| Ambiente | `VITE_WS_URL` (Web) | `WS_CORS_ORIGENS` (API) |
+| --- | --- | --- |
+| production | `https://montacontrol-api.onrender.com` | `https://montacontrol-web.onrender.com` |
+| development | `https://montacontrol-api-dev.onrender.com` | `https://montacontrol-web-dev.onrender.com` |
+
+`VITE_WS_URL` é embutida no bundle no build: mudar o valor exige um novo deploy do Web. O Mobile não
+usa nenhuma das duas — conecta direto na mesma URL da API que usa para a REST (ver
+`apps/mobile/README.md`) e não envia `Origin`, então não passa por CORS.
+
 ## Testes
 
 - Backend: unitários com `Test.createTestingModule` do NestJS e duplos de teste via

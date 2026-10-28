@@ -1,4 +1,4 @@
-import { BadGatewayException, Injectable } from '@nestjs/common';
+import { BadGatewayException, Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type {
   AvariaDTO,
@@ -9,6 +9,8 @@ import type {
 } from '@montacontrol/shared';
 import { Perfil, StatusAvaria } from '../../generated/prisma';
 import type { UsuarioAutenticado } from '../auth/usuario-autenticado';
+import { notificarSemFalhar } from '../notificacoes/notificar-sem-falhar';
+import { NotificacoesService } from '../notificacoes/notificacoes.service';
 import { PecaNaoEncontradaException } from '../pecas/exceptions/peca-nao-encontrada.exception';
 import { PecasRepository } from '../pecas/pecas.repository';
 import { PedidosRepository } from '../pedidos/pedidos.repository';
@@ -44,14 +46,25 @@ const EXIGEM_PARECER = new Set<StatusAvaria>([
   StatusAvaria.RESOLVIDA,
 ]);
 
+/** Como o status aparece na mensagem para quem registrou a avaria. */
+const ROTULO_STATUS: Record<StatusAvaria, string> = {
+  [StatusAvaria.REPORTADA]: 'reportada',
+  [StatusAvaria.EM_ANALISE]: 'em análise',
+  [StatusAvaria.REPOSICAO_SOLICITADA]: 'com reposição solicitada',
+  [StatusAvaria.RESOLVIDA]: 'resolvida',
+};
+
 @Injectable()
 export class AvariasService {
+  private readonly logger = new Logger(AvariasService.name);
+
   constructor(
     private readonly avarias: AvariasRepository,
     private readonly tipos: TiposAvariaRepository,
     private readonly pecas: PecasRepository,
     private readonly pedidos: PedidosRepository,
     private readonly storage: AvariasStorageGateway,
+    private readonly notificacoes: NotificacoesService,
   ) {}
 
   async listarTipos(): Promise<TipoAvariaDTO[]> {
@@ -88,8 +101,9 @@ export class AvariasService {
       enviadas.push(await this.subirFoto(usuario.id, foto, enviadas));
     }
 
+    let criada: AvariaDTO;
     try {
-      return await this.avarias.criar({
+      criada = await this.avarias.criar({
         pecaId: dados.pecaId,
         tipoAvariaId: dados.tipoAvariaId,
         registradaPor: usuario.id,
@@ -102,6 +116,20 @@ export class AvariasService {
       for (const foto of enviadas) await this.storage.remover(foto.storagePath);
       throw erro;
     }
+
+    await notificarSemFalhar(
+      this.notificacoes,
+      {
+        perfis: [Perfil.GESTOR],
+        tipo: 'AVARIA_REPORTADA',
+        titulo: 'Avaria reportada',
+        mensagem: `${usuario.nome} reportou avaria na peça ${criada.codigoBarras} (${criada.numeroPedido}).`,
+        referencia: { tipo: 'AVARIA', id: criada.id },
+        chaveOrigem: `avaria:${criada.id}:reportada`,
+      },
+      this.logger,
+    );
+    return criada;
   }
 
   async listar(filtro: FiltroListagemAvarias): Promise<AvariaDTO[]> {
@@ -159,6 +187,19 @@ export class AvariasService {
     });
     // Outro gestor mudou o status entre a leitura e a escrita.
     if (!atualizada) throw new TransicaoStatusAvariaInvalidaException(de, para);
+
+    await notificarSemFalhar(
+      this.notificacoes,
+      {
+        usuarioIds: [avaria.registradaPor],
+        tipo: 'AVARIA_ATUALIZADA',
+        titulo: 'Atualização da avaria',
+        mensagem: `A avaria da peça ${avaria.codigoBarras} está ${ROTULO_STATUS[para]}.`,
+        referencia: { tipo: 'AVARIA', id },
+        chaveOrigem: `avaria:${id}:${para}`,
+      },
+      this.logger,
+    );
     return atualizada;
   }
 

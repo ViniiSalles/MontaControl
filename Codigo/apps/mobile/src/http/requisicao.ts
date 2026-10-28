@@ -3,7 +3,7 @@ import { urlBaseApi } from '../config/api';
 import { lerErro } from './erroApi';
 
 interface OpcoesRequisicao {
-  metodo?: 'GET' | 'POST';
+  metodo?: 'GET' | 'POST' | 'PATCH';
   /** Serializado como JSON. */
   corpo?: unknown;
   /** Geração da sessão a que a requisição pertence (ver `comTokenRenovado`); a fila de ações passa a sua. */

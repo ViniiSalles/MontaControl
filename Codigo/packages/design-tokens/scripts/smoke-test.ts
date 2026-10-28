@@ -83,6 +83,8 @@ assert.equal(preset.colors.ancora, cores.ancora);
 assert.equal(preset.colors['on-ancora-variant'], cores.onAncoraVariant);
 assert.equal(espacamentoNomeado.larguraBarraLateral, 256);
 assert.equal(espacamentoNomeado.larguraPainelLateral, 440);
+assert.equal(espacamentoNomeado.larguraGavetaNotificacoes, 450);
+assert.equal(preset.spacing.larguraGavetaNotificacoes, '450px');
 assert.equal(espacamentoNomeado.alturaGrafico, 160);
 // PainelLateral sticky (Task 6, fix round 1): altura da prévia do
 // documento e o topo do `sticky` = alturaBarraSuperior (64) + paddingTelaWeb (32).

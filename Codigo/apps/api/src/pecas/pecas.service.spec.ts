@@ -1,9 +1,10 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
-import { StatusPeca, StatusPedido } from '../../generated/prisma';
+import { ConflictException, Logger, NotFoundException } from '@nestjs/common';
+import { Perfil, StatusPeca, StatusPedido } from '../../generated/prisma';
 import { AmbientesRepository } from '../ambientes/ambientes.repository';
 import { PedidosRepository } from '../pedidos/pedidos.repository';
 import { PecasRepository } from './pecas.repository';
 import { PecasService } from './pecas.service';
+import { NotificacoesService } from '../notificacoes/notificacoes.service';
 
 const pedidoAguardando = { id: 3, numeroPedido: 'PED-001', status: StatusPedido.AGUARDANDO, clienteId: 1 };
 
@@ -37,6 +38,7 @@ describe('PecasService', () => {
     marcarEmTriagem: jest.Mock;
     montadorVinculado: jest.Mock;
   };
+  let notificacoes: { notificar: jest.Mock };
   let service: PecasService;
 
   beforeEach(() => {
@@ -54,10 +56,14 @@ describe('PecasService', () => {
       marcarEmTriagem: jest.fn().mockResolvedValue(undefined),
       montadorVinculado: jest.fn().mockResolvedValue(true),
     };
+    // As falhas simuladas de notificar são logadas pelo service; sem ruído no output.
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    notificacoes = { notificar: jest.fn().mockResolvedValue(undefined) };
     service = new PecasService(
       pecas as unknown as PecasRepository,
       ambientes as unknown as AmbientesRepository,
       pedidos as unknown as PedidosRepository,
+      notificacoes as unknown as NotificacoesService,
     );
   });
 
@@ -197,6 +203,49 @@ describe('PecasService', () => {
         StatusPeca.INCONSISTENTE,
         2,
       );
+    });
+
+    it('conferir INCONSISTENTE real notifica GESTORes e retorno repetido sem mudança não notifica', async () => {
+      pecas.buscarParaConferencia.mockResolvedValue({ id: 9, status: StatusPeca.TRIADA, pedidoId: 77 });
+
+      await expect(service.conferir(2, leitura)).resolves.toEqual({ resultado: 'INCONSISTENTE' });
+
+      expect(notificacoes.notificar).toHaveBeenCalledTimes(1);
+      expect(notificacoes.notificar).toHaveBeenCalledWith({
+        perfis: [Perfil.GESTOR],
+        tipo: 'PECA_INCONSISTENTE',
+        titulo: 'Peça na obra errada',
+        mensagem: expect.stringContaining('COD-123'),
+        referencia: { tipo: 'PECA', id: 9 },
+        chaveOrigem: 'peca:9:inconsistente',
+      });
+
+      // Reenvio da mesma leitura: a peça já estava INCONSISTENTE, nada mudou.
+      notificacoes.notificar.mockClear();
+      pecas.buscarParaConferencia.mockResolvedValue({
+        id: 9,
+        status: StatusPeca.INCONSISTENTE,
+        pedidoId: 77,
+      });
+      pecas.registrarConferencia.mockResolvedValue(false);
+
+      await expect(service.conferir(2, leitura)).resolves.toEqual({ resultado: 'INCONSISTENTE' });
+      expect(notificacoes.notificar).not.toHaveBeenCalled();
+    });
+
+    it('conferir CONFERIDA (pedido certo) não notifica', async () => {
+      pecas.buscarParaConferencia.mockResolvedValue({ id: 9, status: StatusPeca.TRIADA, pedidoId: 3 });
+
+      await service.conferir(2, leitura);
+
+      expect(notificacoes.notificar).not.toHaveBeenCalled();
+    });
+
+    it('falha de notificar não faz a operação lançar', async () => {
+      pecas.buscarParaConferencia.mockResolvedValue({ id: 9, status: StatusPeca.TRIADA, pedidoId: 77 });
+      notificacoes.notificar.mockRejectedValue(new Error('socket fora'));
+
+      await expect(service.conferir(2, leitura)).resolves.toEqual({ resultado: 'INCONSISTENTE' });
     });
 
     it('código sem peça triada não muda nada', async () => {

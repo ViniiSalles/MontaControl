@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Perfil } from '../../generated/prisma';
+import { Perfil, type Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsuarioAutenticado } from '../auth/usuario-autenticado';
 import { UsuarioListado } from './usuario-listado';
@@ -117,6 +117,23 @@ export class UsuariosRepository {
     if (ids.length === 0) return [];
     const linhas = await this.prisma.usuario.findMany({
       where: { id: { in: ids }, perfil: Perfil.MONTADOR, ativo: true },
+      select: { id: true },
+    });
+    return linhas.map((linha) => linha.id);
+  }
+
+  /**
+   * Ids dos usuários ativos que são de um dos `perfis` OU estão em `ids`
+   * (destinatários de notificação) — numa só consulta. Ids inativos ou
+   * inexistentes simplesmente não voltam.
+   */
+  async listarIdsAtivos({ perfis, ids }: { perfis: Perfil[]; ids: number[] }): Promise<number[]> {
+    const alternativas: Prisma.UsuarioWhereInput[] = [];
+    if (perfis.length > 0) alternativas.push({ perfil: { in: perfis } });
+    if (ids.length > 0) alternativas.push({ id: { in: ids } });
+    if (alternativas.length === 0) return [];
+    const linhas = await this.prisma.usuario.findMany({
+      where: { ativo: true, OR: alternativas },
       select: { id: true },
     });
     return linhas.map((linha) => linha.id);

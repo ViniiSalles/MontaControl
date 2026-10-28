@@ -9,6 +9,7 @@ import { Peca } from '../Peca';
 import { TipoAvaria } from '../TipoAvaria';
 import { Avaria } from '../Avaria';
 import { Atestado } from '../Atestado';
+import { Notificacao } from '../Notificacao';
 
 describe('réplica local — fixture do contrato de pull (#108)', () => {
   it('grava o fixture em todas as tabelas', async () => {
@@ -137,5 +138,22 @@ describe('réplica local — fixture do contrato de pull (#108)', () => {
     expect(atestado.motivoRejeicao).toBe(atestadoEsperado.motivo_rejeicao);
     expect(atestado.validadoEm).toBe(atestadoEsperado.validado_em);
     expect(atestado.criadoEm).toBe(atestadoEsperado.criado_em);
+  });
+
+  it('notificações: colunas do contrato, incluindo lida e a referência', async () => {
+    const database = criarBancoDeTeste();
+    await gravarPullNaReplica(database, syncPullFixture);
+
+    const [lida, naoLida] = syncPullFixture.changes.notificacoes.updated;
+    const recebida = await database.get<Notificacao>('notificacoes').find(naoLida.id);
+    expect(recebida.tipo).toBe('AVARIA_ATUALIZADA');
+    expect(recebida.titulo).toBe(naoLida.titulo);
+    expect(recebida.mensagem).toBe(naoLida.mensagem);
+    expect(recebida.referenciaTipo).toBe('AVARIA');
+    expect(recebida.referenciaId).toBe('77');
+    expect(recebida.lida).toBe(false);
+    expect(recebida.criadaEm).toBe(naoLida.criada_em);
+
+    expect((await database.get<Notificacao>('notificacoes').find(lida.id)).lida).toBe(true);
   });
 });
