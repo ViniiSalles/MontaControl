@@ -230,11 +230,16 @@ export function LayoutAutenticado({ itemAtivo, titulo, complementoTitulo, childr
         aoFechar={() => setGavetaAberta(false)}
         titulo="Notificações"
         acaoCabecalho={
+          // `aria-disabled` em vez de `disabled`: ao zerar as não lidas, um
+          // botão `disabled` com foco o perderia para o `body`, fora da gaveta, e
+          // o foco preso pararia de funcionar. Assim ele segue focável e inerte.
           <button
             type="button"
-            onClick={() => void marcarTodasComoLidas()}
-            disabled={naoLidas === 0}
-            className="text-label-lg text-primary hover:underline disabled:pointer-events-none disabled:opacity-40"
+            onClick={() => {
+              if (naoLidas > 0) void marcarTodasComoLidas()
+            }}
+            aria-disabled={naoLidas === 0}
+            className="text-label-lg text-primary hover:underline aria-disabled:pointer-events-none aria-disabled:opacity-40"
           >
             Marcar todas como lidas
           </button>

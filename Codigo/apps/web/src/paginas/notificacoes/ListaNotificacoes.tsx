@@ -110,7 +110,7 @@ export function ListaNotificacoes({ aoNavegar }: PropsListaNotificacoes) {
               rota={rota}
               aoMarcarLida={() => void marcarComoLida(notificacao.id)}
               aoVerDetalhes={() => {
-                void marcarComoLida(notificacao.id)
+                if (!notificacao.lida) void marcarComoLida(notificacao.id)
                 if (rota) navigate(rota)
                 aoNavegar?.()
               }}
