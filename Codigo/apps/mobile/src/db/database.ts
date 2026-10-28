@@ -11,6 +11,7 @@ import { Peca } from './Peca';
 import { TipoAvaria } from './TipoAvaria';
 import { Avaria } from './Avaria';
 import { Atestado } from './Atestado';
+import { Notificacao } from './Notificacao';
 import { contarAcoesNaFila, lerDonoNoBanco, registrarDonoNoBanco } from './donoDaFila';
 import { limparBancoCompleto } from './limparBanco';
 import { limparEspelhoLocal } from './limparEspelho';
@@ -39,6 +40,7 @@ export const database = new Database({
     TipoAvaria,
     Avaria,
     Atestado,
+    Notificacao,
   ],
 });
 
