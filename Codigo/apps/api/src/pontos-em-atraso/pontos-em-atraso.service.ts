@@ -1,9 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { comporInstante, diaNoFuso, somarDias } from '@montacontrol/shared';
 import type { SolicitacaoPontoDTO, SolicitarPontoEmAtrasoRequest } from '@montacontrol/shared';
-import { StatusSolicitacaoPonto } from '../../generated/prisma';
+import { Perfil, StatusSolicitacaoPonto } from '../../generated/prisma';
 import { FUSO_OPERACAO } from '../common/fuso';
 import { JornadasRepository } from '../jornadas/jornadas.repository';
+import { notificarSemFalhar } from '../notificacoes/notificar-sem-falhar';
+import { NotificacoesService } from '../notificacoes/notificacoes.service';
 import { PontosEmAtrasoRepository } from './pontos-em-atraso.repository';
 import { MotivoRejeicaoInvalidoException } from './exceptions/motivo-rejeicao-invalido.exception';
 import { PeriodoInvalidoException } from './exceptions/periodo-invalido.exception';
@@ -20,11 +22,19 @@ import { SolicitacaoPendenteNoDiaException } from './exceptions/solicitacao-pend
  */
 const LIMITE_RETROATIVO_DIAS = 30;
 
+/** `2026-09-01` -> `01/09/2026`, para o texto da notificação. */
+function formatarDia(dia: string): string {
+  return dia.split('-').reverse().join('/');
+}
+
 @Injectable()
 export class PontosEmAtrasoService {
+  private readonly logger = new Logger(PontosEmAtrasoService.name);
+
   constructor(
     private readonly solicitacoes: PontosEmAtrasoRepository,
     private readonly jornadas: JornadasRepository,
+    private readonly notificacoes: NotificacoesService,
   ) {}
 
   async solicitar(
@@ -56,7 +66,7 @@ export class PontosEmAtrasoService {
       throw new PeriodoJaRegistradoException();
     }
 
-    return this.solicitacoes.criar({
+    const criada = await this.solicitacoes.criar({
       usuarioId,
       idCliente: dados.idCliente,
       data: dados.data,
@@ -65,6 +75,20 @@ export class PontosEmAtrasoService {
       minutosSolicitados: minutos,
       justificativa: dados.justificativa.trim(),
     });
+
+    await notificarSemFalhar(
+      this.notificacoes,
+      {
+        perfis: [Perfil.GESTOR, Perfil.RH],
+        tipo: 'PONTO_ATRASO_SOLICITADO',
+        titulo: 'Ponto em atraso solicitado',
+        mensagem: `${criada.usuarioNome} solicitou o lançamento de ponto em atraso do dia ${formatarDia(criada.data)}.`,
+        referencia: { tipo: 'PONTO_ATRASO', id: criada.id },
+        chaveOrigem: `ponto-atraso:${criada.id}:solicitado`,
+      },
+      this.logger,
+    );
+    return criada;
   }
 
   /** Detalhe de uma solicitação para a análise do gestor. */
@@ -106,16 +130,44 @@ export class PontosEmAtrasoService {
       throw new PeriodoJaRegistradoException();
     }
 
-    return this.solicitacoes.aprovar(id, analistaId);
+    const aprovada = await this.solicitacoes.aprovar(id, analistaId);
+
+    await notificarSemFalhar(
+      this.notificacoes,
+      {
+        usuarioIds: [solicitacao.usuarioId],
+        tipo: 'PONTO_ATRASO_APROVADO',
+        titulo: 'Ponto em atraso aprovado',
+        mensagem: `Sua solicitação de ponto em atraso do dia ${formatarDia(solicitacao.data)} foi aprovada.`,
+        referencia: { tipo: 'PONTO_ATRASO', id },
+        chaveOrigem: `ponto-atraso:${id}:aprovado`,
+      },
+      this.logger,
+    );
+    return aprovada;
   }
 
   async rejeitar(id: number, analistaId: number, motivo: string): Promise<SolicitacaoPontoDTO> {
-    await this.garantirPendente(id);
+    const solicitacao = await this.garantirPendente(id);
 
     const motivoAparado = motivo.trim();
     if (!motivoAparado) throw new MotivoRejeicaoInvalidoException();
 
-    return this.solicitacoes.rejeitar(id, analistaId, motivoAparado);
+    const rejeitada = await this.solicitacoes.rejeitar(id, analistaId, motivoAparado);
+
+    await notificarSemFalhar(
+      this.notificacoes,
+      {
+        usuarioIds: [solicitacao.usuarioId],
+        tipo: 'PONTO_ATRASO_REJEITADO',
+        titulo: 'Ponto em atraso rejeitado',
+        mensagem: `Sua solicitação de ponto em atraso do dia ${formatarDia(solicitacao.data)} foi rejeitada: ${motivoAparado}`,
+        referencia: { tipo: 'PONTO_ATRASO', id },
+        chaveOrigem: `ponto-atraso:${id}:rejeitado`,
+      },
+      this.logger,
+    );
+    return rejeitada;
   }
 
   private async garantirPendente(id: number): Promise<SolicitacaoPontoDTO> {

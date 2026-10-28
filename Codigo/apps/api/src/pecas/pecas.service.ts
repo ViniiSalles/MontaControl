@@ -1,12 +1,14 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import type {
   ConferenciaPecaDTO,
   ConferirPecaRequest,
   PecaDTO,
   TriarPecaRequest,
 } from '@montacontrol/shared';
-import { StatusPeca } from '../../generated/prisma';
+import { Perfil, StatusPeca } from '../../generated/prisma';
 import { AmbientesRepository } from '../ambientes/ambientes.repository';
+import { notificarSemFalhar } from '../notificacoes/notificar-sem-falhar';
+import { NotificacoesService } from '../notificacoes/notificacoes.service';
 import { PedidoNaoEncontradoException } from '../pedidos/exceptions/pedido-nao-encontrado.exception';
 import { PedidosRepository } from '../pedidos/pedidos.repository';
 import { PecaDuplicadaException } from './exceptions/peca-duplicada.exception';
@@ -21,10 +23,13 @@ const CONFERIVEIS = [...EM_TRANSITO, StatusPeca.INCONSISTENTE] as const;
 
 @Injectable()
 export class PecasService {
+  private readonly logger = new Logger(PecasService.name);
+
   constructor(
     private readonly pecas: PecasRepository,
     private readonly ambientes: AmbientesRepository,
     private readonly pedidos: PedidosRepository,
+    private readonly notificacoes: NotificacoesService,
   ) {}
 
   /**
@@ -83,12 +88,28 @@ export class PecasService {
 
     // Peça já descarregada ou entregue no cliente dela não regride por uma
     // leitura equivocada em outra obra.
-    await this.pecas.registrarConferencia(
+    const mudou = await this.pecas.registrarConferencia(
       peca.id,
       EM_TRANSITO,
       StatusPeca.INCONSISTENTE,
       usuarioId,
     );
+    // O reenvio da mesma leitura (outbox) devolve o mesmo resultado, mas só a
+    // conferência que de fato mudou a peça vira aviso para o gestor.
+    if (mudou) {
+      await notificarSemFalhar(
+        this.notificacoes,
+        {
+          perfis: [Perfil.GESTOR],
+          tipo: 'PECA_INCONSISTENTE',
+          titulo: 'Peça na obra errada',
+          mensagem: `A peça ${dados.codigoBarras} foi lida no pedido #${dados.pedidoId}, mas pertence ao pedido #${peca.pedidoId}.`,
+          referencia: { tipo: 'PECA', id: peca.id },
+          chaveOrigem: `peca:${peca.id}:inconsistente`,
+        },
+        this.logger,
+      );
+    }
     return { resultado: 'INCONSISTENTE' };
   }
 
